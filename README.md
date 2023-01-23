@@ -1,1 +1,3 @@
-# subway
+# Subway
+
+Substrate JSON RPC Gateway

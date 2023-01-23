@@ -1,0 +1,16 @@
+[package]
+name = "subway"
+version = "0.1.0"
+authors = ["Acala Developers <hello@acala.network>"]
+repository = "https://github.com/AcalaNetwork/subway"
+description = "Substrate JSON RPC gateway"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+
+[profile.release]
+codegen-units = 1
+lto = true
