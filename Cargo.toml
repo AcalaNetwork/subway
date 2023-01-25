@@ -14,7 +14,6 @@ clap = { version = "4.1.1", features = ["derive"] }
 enumflags2 = "0.7.5"
 futures = "0.3.25"
 hyper = "0.14.23"
-jsonrpsee = { version = "0.16.0", features = ["full"] }
 log = "0.4.17"
 serde = "1.0.152"
 serde_yaml = "0.9.17"
@@ -23,6 +22,9 @@ tower = { version = "0.4.13", features = ["full"] }
 tower-http = { version = "0.3.5", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+
+governor ={ version = "0.5.1", path = "./vendor/governor/governor" }
+jsonrpsee = { version = "0.16.0", path = "./vendor/jsonrpsee/jsonrpsee", features = ["full"] }
 
 [dev-dependencies]
 
