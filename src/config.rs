@@ -39,7 +39,7 @@ pub struct RpcSubscription {
     pub name: String,
 
     #[serde(default)]
-    pub merge: bool
+    pub merge: bool,
 }
 
 #[derive(Deserialize, Debug)]
@@ -53,9 +53,9 @@ pub fn read_config() -> Result<Config, String> {
     let cmd = Command::parse();
 
     let config =
-        fs::read_to_string(cmd.config).map_err(|e| format!("Unable to read config file: {}", e))?;
+        fs::read_to_string(cmd.config).map_err(|e| format!("Unable to read config file: {e}"))?;
     let config: Config =
-        serde_yaml::from_str(&config).map_err(|e| format!("Unable to parse config file: {}", e))?;
+        serde_yaml::from_str(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
 
     Ok(config)
 }

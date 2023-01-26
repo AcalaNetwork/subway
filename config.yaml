@@ -1,6 +1,6 @@
 endpoints:
-  - wss://acala-rpc.dwellir.com
-  - wss://acala-rpc-0.aca-api.network
+  - wss://acala-rpc.dwellir.com:443
+  - wss://acala-rpc-0.aca-api.network:443
 port: 9944
 listen_address: '0.0.0.0'
 

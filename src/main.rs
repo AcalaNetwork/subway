@@ -1,5 +1,4 @@
-use crate::{config::read_config, server::start_server};
-
+mod client;
 mod config;
 mod server;
 
@@ -13,17 +12,18 @@ async fn main() -> anyhow::Result<()> {
         .try_init()
         .expect("setting default subscriber failed");
 
-    let config = match read_config() {
+    let config = match config::read_config() {
         Ok(config) => config,
         Err(e) => {
             return Err(anyhow::anyhow!(e));
         }
     };
 
-    let (addr, handle) = start_server(config)
-    .await?;
+    let client = client::create_client(&config).await?;
 
-    tracing::info!("Server running at {}", addr);
+    let (addr, handle) = server::start_server(&config, client).await?;
+
+    tracing::info!("Server running at {addr}");
 
     handle.await?;
 
