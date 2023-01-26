@@ -6,8 +6,9 @@ mod server;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(tracing::Level::INFO.into())
+                .from_env_lossy(),
         )
         .try_init()
         .expect("setting default subscriber failed");
