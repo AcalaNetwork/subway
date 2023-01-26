@@ -1,13 +1,11 @@
 use futures::TryFutureExt;
 
-use jsonrpsee::types::Params;
-pub use jsonrpsee::{
+use jsonrpsee::{
     core::{
         client::{ClientT, Subscription, SubscriptionClientT},
-        params::BatchRequestBuilder,
-        Error, JsonValue, RpcResult,
+        Error, JsonValue,
     },
-    rpc_params,
+    types::Params,
     ws_client::{WsClient, WsClientBuilder},
 };
 
