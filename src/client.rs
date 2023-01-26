@@ -45,6 +45,16 @@ impl Client {
         let params: Vec<JsonValue> = params.parse()?;
         self.ws.request(method, params).await
     }
+
+    pub async fn subscribe(
+        &self,
+        subscribe: &str,
+        params: Params<'_>,
+        unsubscribe: &str,
+    ) -> Result<Subscription<JsonValue>, Error> {
+        let params: Vec<JsonValue> = params.parse()?;
+        self.ws.subscribe(subscribe, params, unsubscribe).await
+    }
 }
 
 pub async fn create_client(config: &Config) -> anyhow::Result<Client> {

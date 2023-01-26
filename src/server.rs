@@ -30,6 +30,41 @@ pub async fn start_server(
         })?;
     }
 
+    for subscription in &config.rpcs.subscriptions {
+        let subscribe_name = string_to_static_str(subscription.subscribe.clone());
+        let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
+        let name = string_to_static_str(subscription.name.clone());
+        module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, mut sink, ctx| {
+            let params = params.into_owned();
+            tokio::spawn(async move {
+                let Ok(mut subscription) = ctx.subscribe(subscribe_name, params, unsubscribe_name).await else {
+                    return
+                };
+                while let Some(result) = subscription.next().await {
+                    tracing::debug!("Got subscription result: {:?}", result);
+                    let Ok(result) = result else {
+                        return
+                    };
+                    match sink.send(&result) {
+                        Ok(true) => {
+                            // sent successfully
+                        }
+                        Ok(false) => {
+                            tracing::debug!("Subscription sink closed");
+                            // TODO: unsubscribe
+                            return
+                        }
+                        Err(e) => {
+                            tracing::debug!("Subscription sink error: {}", e);
+                            return
+                        }
+                    }
+                }
+            });
+            Ok(())
+        })?;
+    }
+
     let addr = server.local_addr()?;
     let handle = server.start(module)?;
 
