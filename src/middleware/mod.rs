@@ -21,6 +21,8 @@ pub trait Middleware {
     async fn call(&self, request: Request) -> Result<Self::Response, Self::Error>;
 }
 
+// TODO: figure out how to setup middleware for subscriptions
+
 pub struct LogMiddleware<Next> {
     count: AtomicU32,
     next: Next,
