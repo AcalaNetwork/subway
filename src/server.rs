@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use futures::FutureExt;
-use jsonrpsee::server::{RpcModule, ServerBuilder, RandomStringIdProvider};
+use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use tokio::task::JoinHandle;
 
 use crate::{

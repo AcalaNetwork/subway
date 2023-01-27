@@ -5,14 +5,29 @@ use jsonrpsee::{
         client::{ClientT, Subscription, SubscriptionClientT},
         Error, JsonValue,
     },
-    types::Params,
-    ws_client::{WsClient, WsClientBuilder},
+    types::{error::CallError, Params},
+    ws_client::WsClientBuilder,
 };
 
 use crate::config::Config;
 
 pub struct Client {
-    ws: WsClient,
+    sender: tokio::sync::mpsc::Sender<Message>,
+}
+
+#[derive(Debug)]
+enum Message {
+    Request {
+        method: String,
+        params: Vec<JsonValue>,
+        response: tokio::sync::oneshot::Sender<Result<JsonValue, Error>>,
+    },
+    Subscribe {
+        subscribe: String,
+        params: Vec<JsonValue>,
+        unsubscribe: String,
+        response: tokio::sync::oneshot::Sender<Result<Subscription<JsonValue>, Error>>,
+    },
 }
 
 impl Client {
@@ -26,22 +41,64 @@ impl Client {
             return Err("No endpoints provided".into());
         }
 
-        let url = endpoints[0].clone();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(100);
 
-        let ws = WsClientBuilder::default()
-            .request_timeout(std::time::Duration::from_secs(60))
-            .connection_timeout(std::time::Duration::from_secs(30))
-            .max_notifs_per_subscription(1024)
-            .build(&url)
-            .map_err(|e| format!("Unable to connect to endpoint {url}: {e}"))
-            .await?;
+        tokio::spawn(async move {
+            let url = endpoints[0].clone();
+            let ws = WsClientBuilder::default()
+                .request_timeout(std::time::Duration::from_secs(60))
+                .connection_timeout(std::time::Duration::from_secs(30))
+                .max_notifs_per_subscription(1024)
+                .build(&url)
+                .map_err(|e| format!("Unable to connect to endpoint {url}: {e}"))
+                .await
+                .unwrap();
 
-        Ok(Self { ws })
+            loop {
+                let message = rx.recv().await.unwrap();
+
+                match message {
+                    Message::Request {
+                        method,
+                        params,
+                        response,
+                    } => {
+                        let res = ws.request(&method, params).await;
+                        if response.send(res).is_err() {
+                            log::warn!("Unable to send response");
+                        }
+                    }
+                    Message::Subscribe {
+                        subscribe,
+                        params,
+                        unsubscribe,
+                        response,
+                    } => {
+                        let res = ws.subscribe(&subscribe, params, &unsubscribe).await;
+                        if response.send(res).is_err() {
+                            log::warn!("Unable to send response");
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(Self { sender: tx })
     }
 
     pub async fn request(&self, method: &str, params: Params<'_>) -> Result<JsonValue, Error> {
         let params: Vec<JsonValue> = params.parse()?;
-        self.ws.request(method, params).await
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(Message::Request {
+                method: method.into(),
+                params,
+                response: tx,
+            })
+            .await
+            .map_err(|e| CallError::Failed(e.into()))?;
+
+        rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
     pub async fn subscribe(
@@ -51,7 +108,18 @@ impl Client {
         unsubscribe: &str,
     ) -> Result<Subscription<JsonValue>, Error> {
         let params: Vec<JsonValue> = params.parse()?;
-        self.ws.subscribe(subscribe, params, unsubscribe).await
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(Message::Subscribe {
+                subscribe: subscribe.into(),
+                params,
+                unsubscribe: unsubscribe.into(),
+                response: tx,
+            })
+            .await
+            .map_err(|e| CallError::Failed(e.into()))?;
+
+        rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 }
 
