@@ -27,7 +27,8 @@ pub async fn start_server(
 
     let server = ServerBuilder::default()
         .set_middleware(service_builder)
-        .build((config.listen_address.as_str(), config.port))
+        .max_connections(config.server.max_connections)
+        .build((config.server.listen_address.as_str(), config.server.port))
         .await?;
 
     let mut module = RpcModule::new(());

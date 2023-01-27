@@ -13,9 +13,15 @@ struct Command {
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub endpoints: Vec<String>,
-    pub port: u16,
-    pub listen_address: String,
+    pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ServerConfig {
+    pub listen_address: String,
+    pub port: u16,
+    pub max_connections: u32,
 }
 
 #[derive(Deserialize, Debug)]
