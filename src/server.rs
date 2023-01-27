@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 use crate::{
     client::Client,
     config::Config,
-    middleware::{LogMiddleware, Middlewares, Request, UpstreamMiddleware},
+    middleware::{Middlewares, call::{CallRequest, UpstreamMiddleware}},
 };
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/985
@@ -30,11 +30,12 @@ pub async fn start_server(
 
     let client = Arc::new(client);
 
+    let upstream = Arc::new(UpstreamMiddleware::new(client.clone()));
+
     for method in &config.rpcs.methods {
         let middlewares = Arc::new(Middlewares::new(
             vec![
-                Arc::new(LogMiddleware::new()),
-                Arc::new(UpstreamMiddleware::new(client.clone())),
+                upstream.clone(),
             ],
             Arc::new(|_| {
                 async {
@@ -54,7 +55,7 @@ pub async fn start_server(
             let middlewares = middlewares.clone();
             async move {
                 middlewares
-                    .call(Request {
+                    .call(CallRequest {
                         method: method_name.into(),
                         params: params.into_owned(),
                     })
