@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use futures::FutureExt;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, ServerBuilder, RandomStringIdProvider};
 use tokio::task::JoinHandle;
 
 use crate::{
@@ -28,6 +28,7 @@ pub async fn start_server(
     let server = ServerBuilder::default()
         .set_middleware(service_builder)
         .max_connections(config.server.max_connections)
+        .set_id_provider(RandomStringIdProvider::new(16))
         .build((config.server.listen_address.as_str(), config.server.port))
         .await?;
 
