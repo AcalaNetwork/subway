@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 use crate::{
     client::Client,
     config::Config,
-    middleware::{Middlewares, call::{CallRequest, UpstreamMiddleware}},
+    middleware::{Middlewares, call::{self, CallRequest}, subscription::{self, SubscriptionRequest}},
 };
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/985
@@ -30,7 +30,7 @@ pub async fn start_server(
 
     let client = Arc::new(client);
 
-    let upstream = Arc::new(UpstreamMiddleware::new(client.clone()));
+    let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 
     for method in &config.rpcs.methods {
         let middlewares = Arc::new(Middlewares::new(
@@ -97,39 +97,44 @@ pub async fn start_server(
         })
     })?;
 
+    let upstream = Arc::new(subscription::UpstreamMiddleware::new(client.clone()));
+
     for subscription in &config.rpcs.subscriptions {
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());
         let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
         let name = string_to_static_str(subscription.name.clone());
 
-        let client = client.clone();
+        let middlewares = Arc::new(Middlewares::new(
+            vec![
+                upstream.clone(),
+            ],
+            Arc::new(|_| {
+                async {
+                    Err(
+                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
+                            "Bad configuration",
+                        ))
+                        .into(),
+                    )
+                }
+                .boxed()
+            }),
+        ));
 
-        module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, mut sink, _| {
+        module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
             let params = params.into_owned();
-            let client = client.clone();
+            
+            let middlewares = middlewares.clone();
+
             tokio::spawn(async move {
-                let Ok(mut subscription) = client.subscribe(subscribe_name, params, unsubscribe_name).await else {
-                    return
-                };
-                while let Some(result) = subscription.next().await {
-                    tracing::debug!("Got subscription result: {:?}", result);
-                    let Ok(result) = result else {
-                        return
-                    };
-                    match sink.send(&result) {
-                        Ok(true) => {
-                            // sent successfully
-                        }
-                        Ok(false) => {
-                            tracing::debug!("Subscription sink closed");
-                            // TODO: unsubscribe
-                            return
-                        }
-                        Err(e) => {
-                            tracing::debug!("Subscription sink error: {}", e);
-                            return
-                        }
-                    }
+                let res = middlewares.call(SubscriptionRequest {
+                    subscribe: subscribe_name.into(),
+                    params: params.clone(),
+                    unsubscribe: unsubscribe_name.into(),
+                    sink,
+                }).await;
+                if let Err(e) = res {
+                    log::error!("Error while handling subscription: {}", e);
                 }
             });
             Ok(())
