@@ -7,7 +7,11 @@ use tokio::task::JoinHandle;
 use crate::{
     client::Client,
     config::Config,
-    middleware::{Middlewares, call::{self, CallRequest}, subscription::{self, SubscriptionRequest}},
+    middleware::{
+        call::{self, CallRequest},
+        subscription::{self, SubscriptionRequest},
+        Middlewares,
+    },
 };
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/985
@@ -34,9 +38,7 @@ pub async fn start_server(
 
     for method in &config.rpcs.methods {
         let middlewares = Arc::new(Middlewares::new(
-            vec![
-                upstream.clone(),
-            ],
+            vec![upstream.clone()],
             Arc::new(|_| {
                 async {
                     Err(
@@ -105,9 +107,7 @@ pub async fn start_server(
         let name = string_to_static_str(subscription.name.clone());
 
         let middlewares = Arc::new(Middlewares::new(
-            vec![
-                upstream.clone(),
-            ],
+            vec![upstream.clone()],
             Arc::new(|_| {
                 async {
                     Err(
@@ -121,24 +121,31 @@ pub async fn start_server(
             }),
         ));
 
-        module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
-            let params = params.into_owned();
-            
-            let middlewares = middlewares.clone();
+        module.register_subscription(
+            subscribe_name,
+            name,
+            unsubscribe_name,
+            move |params, sink, _| {
+                let params = params.into_owned();
 
-            tokio::spawn(async move {
-                let res = middlewares.call(SubscriptionRequest {
-                    subscribe: subscribe_name.into(),
-                    params: params.clone(),
-                    unsubscribe: unsubscribe_name.into(),
-                    sink,
-                }).await;
-                if let Err(e) = res {
-                    log::error!("Error while handling subscription: {}", e);
-                }
-            });
-            Ok(())
-        })?;
+                let middlewares = middlewares.clone();
+
+                tokio::spawn(async move {
+                    let res = middlewares
+                        .call(SubscriptionRequest {
+                            subscribe: subscribe_name.into(),
+                            params: params.clone(),
+                            unsubscribe: unsubscribe_name.into(),
+                            sink,
+                        })
+                        .await;
+                    if let Err(e) = res {
+                        log::error!("Error while handling subscription: {}", e);
+                    }
+                });
+                Ok(())
+            },
+        )?;
     }
 
     for (alias_old, alias_new) in &config.rpcs.aliases {
