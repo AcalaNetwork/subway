@@ -1,12 +1,13 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use futures::FutureExt;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use tokio::task::JoinHandle;
 
 use crate::{
     client::Client,
     config::Config,
-    middleware::{LogMiddleware, UpstreamMiddleware, Middleware, Request},
+    middleware::{LogMiddleware, Middlewares, Request, UpstreamMiddleware},
 };
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/985
@@ -30,15 +31,34 @@ pub async fn start_server(
     let client = Arc::new(client);
 
     for method in &config.rpcs.methods {
-        let middlewares = UpstreamMiddleware::new(client.clone());
-        let middlewares = LogMiddleware::new(middlewares);
-        let middlewares = Arc::new(middlewares);
+        let middlewares = Arc::new(Middlewares::new(
+            vec![
+                Arc::new(LogMiddleware::new()),
+                Arc::new(UpstreamMiddleware::new(client.clone())),
+            ],
+            Arc::new(|_| {
+                async {
+                    Err(
+                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
+                            "Bad configuration",
+                        ))
+                        .into(),
+                    )
+                }
+                .boxed()
+            }),
+        ));
 
         let method_name = string_to_static_str(method.method.clone());
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
             async move {
-                middlewares.call(Request { method: method_name.into(), params: params.into_owned() }).await
+                middlewares
+                    .call(Request {
+                        method: method_name.into(),
+                        params: params.into_owned(),
+                    })
+                    .await
             }
         })?;
     }
@@ -80,7 +100,7 @@ pub async fn start_server(
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());
         let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
         let name = string_to_static_str(subscription.name.clone());
-        
+
         let client = client.clone();
 
         module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, mut sink, _| {

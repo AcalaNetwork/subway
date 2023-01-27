@@ -1,7 +1,7 @@
 mod client;
 mod config;
-mod server;
 mod middleware;
+mod server;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
