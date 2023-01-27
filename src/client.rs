@@ -1,4 +1,4 @@
-use futures::TryFutureExt;
+use std::sync::atomic::AtomicUsize;
 
 use jsonrpsee::{
     core::{
@@ -44,42 +44,68 @@ impl Client {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(100);
 
         tokio::spawn(async move {
-            let url = endpoints[0].clone();
-            let ws = WsClientBuilder::default()
-                .request_timeout(std::time::Duration::from_secs(60))
-                .connection_timeout(std::time::Duration::from_secs(30))
-                .max_notifs_per_subscription(1024)
-                .build(&url)
-                .map_err(|e| format!("Unable to connect to endpoint {url}: {e}"))
-                .await
-                .unwrap();
+            let current_endpoint = AtomicUsize::new(0);
 
-            loop {
-                let message = rx.recv().await.unwrap();
+            let build_ws = || async {
+                let build = || {
+                    let current_endpoint = current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let url = &endpoints[current_endpoint % endpoints.len()];
+                    WsClientBuilder::default()
+                        .request_timeout(std::time::Duration::from_secs(60))
+                        .connection_timeout(std::time::Duration::from_secs(30))
+                        .max_notifs_per_subscription(1024)
+                        .build(url)
+                };
 
-                match message {
-                    Message::Request {
-                        method,
-                        params,
-                        response,
-                    } => {
-                        let res = ws.request(&method, params).await;
-                        if response.send(res).is_err() {
-                            log::warn!("Unable to send response");
-                        }
-                    }
-                    Message::Subscribe {
-                        subscribe,
-                        params,
-                        unsubscribe,
-                        response,
-                    } => {
-                        let res = ws.subscribe(&subscribe, params, &unsubscribe).await;
-                        if response.send(res).is_err() {
-                            log::warn!("Unable to send response");
+                loop {
+                    match build().await {
+                        Ok(ws) => break ws,
+                        Err(e) => {
+                            log::debug!("Unable to connect to endpoint: {}", e);
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                     }
                 }
+            };
+
+            let mut ws = build_ws().await;
+
+            loop {
+                tokio::select! {
+                    _ = ws.on_disconnect() => {
+                        log::debug!("Disconnected from endpoint");
+                        ws = build_ws().await;
+                    }
+                    message = rx.recv() => {
+                        match message {
+                            Some(Message::Request {
+                                method,
+                                params,
+                                response,
+                            }) => {
+                                let res = ws.request(&method, params).await;
+                                if response.send(res).is_err() {
+                                    log::warn!("Unable to send response");
+                                }
+                            }
+                            Some(Message::Subscribe {
+                                subscribe,
+                                params,
+                                unsubscribe,
+                                response,
+                            }) => {
+                                let res = ws.subscribe(&subscribe, params, &unsubscribe).await;
+                                if response.send(res).is_err() {
+                                    log::warn!("Unable to send response");
+                                }
+                            }
+                            None => {
+                                log::debug!("Client dropped");
+                                break;
+                            }
+                        }
+                    },
+                };
             }
         });
 
