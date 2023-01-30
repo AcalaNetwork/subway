@@ -101,7 +101,7 @@ pub async fn start_server(
         })
     })?;
 
-    let upstream = Arc::new(subscription::UpstreamMiddleware::new(client.clone()));
+    let upstream = Arc::new(subscription::UpstreamMiddleware::new(client));
 
     for subscription in &config.rpcs.subscriptions {
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());

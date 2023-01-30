@@ -30,12 +30,12 @@ impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
     }
 
     pub async fn call(&self, request: Request) -> Result {
-        let mut iter = self.middlewares.iter().rev();
+        let iter = self.middlewares.iter().rev();
         let fallback = self.fallback.clone();
         let mut next: Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync> =
             Box::new(move |request| (fallback)(request));
 
-        while let Some(middleware) = iter.next() {
+        for middleware in iter {
             let middleware = middleware.clone();
             let next2 = next;
             next = Box::new(move |request| {
