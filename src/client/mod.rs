@@ -11,6 +11,9 @@ use jsonrpsee::{
 
 use crate::config::Config;
 
+#[cfg(test)]
+mod tests;
+
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
 }
@@ -41,6 +44,8 @@ impl Client {
             return Err("No endpoints provided".into());
         }
 
+        tracing::debug!("New client with endpoints: {:?}", endpoints);
+
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(100);
 
         tokio::spawn(async move {
@@ -51,6 +56,8 @@ impl Client {
                     let current_endpoint =
                         current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let url = &endpoints[current_endpoint % endpoints.len()];
+
+                    log::debug!("Connecting to endpoint: {}", url);
 
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(60))
