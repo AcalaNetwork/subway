@@ -5,13 +5,13 @@ mod server;
 
 fn enable_logger() {
     tracing_subscriber::FmtSubscriber::builder()
-    .with_env_filter(
-        tracing_subscriber::EnvFilter::builder()
-            .with_default_directive(tracing::Level::INFO.into())
-            .from_env_lossy(),
-    )
-    .try_init()
-    .expect("setting default subscriber failed");
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(tracing::Level::INFO.into())
+                .from_env_lossy(),
+        )
+        .try_init()
+        .expect("setting default subscriber failed");
 }
 
 #[tokio::main]

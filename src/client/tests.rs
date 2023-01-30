@@ -22,9 +22,9 @@ async fn dummy_server(module: impl Into<Methods>) -> (SocketAddr, ServerHandle) 
 
 fn echo_module() -> RpcModule<()> {
     let mut module = RpcModule::new(());
-    module.register_method("echo", |params, _| {
-        Ok(params.parse::<JsonValue>().unwrap())
-    }).unwrap();
+    module
+        .register_method("echo", |params, _| Ok(params.parse::<JsonValue>().unwrap()))
+        .unwrap();
     module
 }
 
@@ -34,7 +34,10 @@ async fn test_basic() {
 
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
 
-    let result = client.request("echo", Params::new(Some("[1]"))).await.unwrap();
+    let result = client
+        .request("echo", Params::new(Some("[1]")))
+        .await
+        .unwrap();
 
     assert_eq!(result.to_string(), "[1]");
 
