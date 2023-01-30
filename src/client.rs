@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicUsize;
+use std::sync::{atomic::AtomicUsize, Arc};
 
 use jsonrpsee::{
     core::{
@@ -6,7 +6,7 @@ use jsonrpsee::{
         Error, JsonValue,
     },
     types::{error::CallError, Params},
-    ws_client::WsClientBuilder,
+    ws_client::{WsClient, WsClientBuilder},
 };
 
 use crate::config::Config;
@@ -48,8 +48,10 @@ impl Client {
 
             let build_ws = || async {
                 let build = || {
-                    let current_endpoint = current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let current_endpoint =
+                        current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let url = &endpoints[current_endpoint % endpoints.len()];
+
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(60))
                         .connection_timeout(std::time::Duration::from_secs(30))
@@ -59,7 +61,7 @@ impl Client {
 
                 loop {
                     match build().await {
-                        Ok(ws) => break ws,
+                        Ok(ws) => break Arc::new(ws),
                         Err(e) => {
                             log::debug!("Unable to connect to endpoint: {}", e);
                             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -70,6 +72,36 @@ impl Client {
 
             let mut ws = build_ws().await;
 
+            let handle_message = |message: Message, ws: Arc<WsClient>| {
+                tokio::spawn(async move {
+                    match message {
+                        Message::Request {
+                            method,
+                            params,
+                            response,
+                        } => {
+                            let result = ws.request(&method, params);
+                            if let Err(e) = response.send(result.await) {
+                                // TODO: retry error / timeout
+                                log::warn!("Failed to send response: {:?}", e);
+                            }
+                        }
+                        Message::Subscribe {
+                            subscribe,
+                            params,
+                            unsubscribe,
+                            response,
+                        } => {
+                            let result = ws.subscribe(&subscribe, params, &unsubscribe);
+                            if let Err(e) = response.send(result.await) {
+                                // TODO: retry error / timeout
+                                log::warn!("Failed to send response: {:?}", e);
+                            }
+                        }
+                    }
+                });
+            };
+
             loop {
                 tokio::select! {
                     _ = ws.on_disconnect() => {
@@ -78,27 +110,7 @@ impl Client {
                     }
                     message = rx.recv() => {
                         match message {
-                            Some(Message::Request {
-                                method,
-                                params,
-                                response,
-                            }) => {
-                                let res = ws.request(&method, params).await;
-                                if response.send(res).is_err() {
-                                    log::warn!("Unable to send response");
-                                }
-                            }
-                            Some(Message::Subscribe {
-                                subscribe,
-                                params,
-                                unsubscribe,
-                                response,
-                            }) => {
-                                let res = ws.subscribe(&subscribe, params, &unsubscribe).await;
-                                if response.send(res).is_err() {
-                                    log::warn!("Unable to send response");
-                                }
-                            }
+                            Some(message) => handle_message(message, ws.clone()),
                             None => {
                                 log::debug!("Client dropped");
                                 break;
