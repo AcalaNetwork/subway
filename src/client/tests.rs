@@ -132,12 +132,8 @@ async fn multiple_endpoints() {
     let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
                            n: u32| {
         tokio::spawn(async move {
-            loop {
-                if let Some((_, resp_tx)) = rx.recv().await {
-                    resp_tx.send(JsonValue::Number(n.into())).unwrap();
-                } else {
-                    break;
-                }
+            while let Some((_, resp_tx)) = rx.recv().await {
+                resp_tx.send(JsonValue::Number(n.into())).unwrap();
             }
         })
     };
