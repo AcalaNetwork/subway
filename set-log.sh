@@ -1,0 +1,1 @@
+export RUST_LOG=trace,rustls=warn,soketto=warn,hyper=warn,jsonrpsee_server::transport=debug,mio=warn

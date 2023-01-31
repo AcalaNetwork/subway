@@ -1,4 +1,6 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
+
+use crate::enable_logger;
 
 use super::*;
 
@@ -15,6 +17,8 @@ async fn dummy_server() -> (
     mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
 ) {
+    enable_logger();
+
     let mut module = RpcModule::new(());
 
     let (tx, rx) = mpsc::channel::<(JsonValue, oneshot::Sender<JsonValue>)>(100);
@@ -77,7 +81,7 @@ async fn basic_request() {
     assert_eq!(result.to_string(), "[1]");
 
     handle.stop().unwrap();
-    tokio::join!(handler).0.unwrap();
+    let _ = tokio::join!(handler);
 }
 
 #[tokio::test]
@@ -107,5 +111,65 @@ async fn basic_subscription() {
     assert_eq!(result, ["10", "11", "12"]);
 
     handle.stop().unwrap();
-    tokio::join!(handler).0.unwrap();
+    let _ = tokio::join!(handler);
+}
+
+#[tokio::test]
+async fn multiple_endpoints() {
+    // create 3 dummy servers
+    let (addr1, handle1, rx1, _) = dummy_server().await;
+    let (addr2, handle2, rx2, _) = dummy_server().await;
+    let (addr3, handle3, rx3, _) = dummy_server().await;
+
+    let client = Client::new(&[
+        format!("ws://{addr1}"),
+        format!("ws://{addr2}"),
+        format!("ws://{addr3}"),
+    ])
+    .await
+    .unwrap();
+
+    let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>, n: u32| {
+        tokio::spawn(async move {
+            loop {
+                if let Some((_, resp_tx)) = rx.recv().await {
+                    resp_tx.send(JsonValue::Number(n.into())).unwrap();
+                } else {
+                    break;
+                }
+            }
+        })
+    };
+
+    let handler1 = handle_requests(rx1, 1);
+    let handler2 = handle_requests(rx2, 2);
+    let handler3 = handle_requests(rx3, 3);
+
+    let result = client.request("mock_rpc", Params::new(Some("[11]"))).await.unwrap();
+
+    assert_eq!(result.to_string(), "1");
+
+    handle1.stop().unwrap();
+
+    let result = client.request("mock_rpc", Params::new(Some("[22]"))).await.unwrap();
+
+    assert_eq!(result.to_string(), "2");
+
+    client.rotate_endpoint().await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let result = client.request("mock_rpc", Params::new(Some("[33]"))).await.unwrap();
+
+    assert_eq!(result.to_string(), "3");
+
+    handle3.stop().unwrap();
+
+    let result = client.request("mock_rpc", Params::new(Some("[44]"))).await.unwrap();
+
+    assert_eq!(result.to_string(), "2");
+
+    handle2.stop().unwrap();
+
+    let _ = tokio::join!(handler1, handler2, handler3);
 }

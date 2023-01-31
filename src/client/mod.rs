@@ -31,6 +31,7 @@ enum Message {
         unsubscribe: String,
         response: tokio::sync::oneshot::Sender<Result<Subscription<JsonValue>, Error>>,
     },
+    RotateEndpoint,
 }
 
 impl Client {
@@ -48,7 +49,13 @@ impl Client {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(100);
 
+        let tx2 = tx.clone();
+
+        let (disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel::<()>(10);
+
         tokio::spawn(async move {
+            let tx = tx2;
+
             let current_endpoint = AtomicUsize::new(0);
 
             let build_ws = || async {
@@ -60,15 +67,28 @@ impl Client {
                     log::debug!("Connecting to endpoint: {}", url);
 
                     WsClientBuilder::default()
-                        .request_timeout(std::time::Duration::from_secs(60))
-                        .connection_timeout(std::time::Duration::from_secs(30))
+                        .request_timeout(std::time::Duration::from_secs(30))
+                        .connection_timeout(std::time::Duration::from_secs(10))
                         .max_notifs_per_subscription(1024)
                         .build(url)
                 };
 
+                let disconnect_tx = disconnect_tx.clone();
+
                 loop {
                     match build().await {
-                        Ok(ws) => break Arc::new(ws),
+                        Ok(ws) => {
+                            let ws = Arc::new(ws);
+                            let ws2 = ws.clone();
+
+                            tokio::spawn(async move {
+                                ws2.on_disconnect().await;
+                                if let Err(e) = disconnect_tx.send(()).await {
+                                    log::debug!("Unable to send disconnect: {}", e);
+                                }
+                            });
+                            break ws;
+                        }
                         Err(e) => {
                             log::debug!("Unable to connect to endpoint: {}", e);
                             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -80,6 +100,8 @@ impl Client {
             let mut ws = build_ws().await;
 
             let handle_message = |message: Message, ws: Arc<WsClient>| {
+                let tx = tx.clone();
+
                 tokio::spawn(async move {
                     match message {
                         Message::Request {
@@ -87,10 +109,62 @@ impl Client {
                             params,
                             response,
                         } => {
-                            let result = ws.request(&method, params);
-                            if let Err(e) = response.send(result.await) {
-                                // TODO: retry error / timeout
-                                log::warn!("Failed to send response: {:?}", e);
+                            let result = ws.request(&method, params.clone()).await;
+                            match result {
+                                result @ Ok(_) => {
+                                    if let Err(e) = response.send(result) {
+                                        log::warn!("Failed to send response: {:?}", e);
+                                    }
+                                }
+                                Err(err) => {
+                                    log::debug!("Request failed: {:?}", err);
+                                    match err {
+                                        Error::RequestTimeout => {
+                                            if let Err(e) = tx.send(Message::RotateEndpoint).await {
+                                                log::warn!(
+                                                    "Failed to send rotate message: {:?}",
+                                                    e
+                                                );
+                                            }
+                                            if let Err(e) = tx
+                                                .send(Message::Request {
+                                                    method,
+                                                    params,
+                                                    response,
+                                                })
+                                                .await
+                                            {
+                                                log::warn!(
+                                                    "Failed to send request message: {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::Internal(_) => {
+                                            if let Err(e) = tx
+                                                .send(Message::Request {
+                                                    method,
+                                                    params,
+                                                    response,
+                                                })
+                                                .await
+                                            {
+                                                log::warn!(
+                                                    "Failed to send request message: {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        err => {
+                                            // not something we can handle, send it back to the caller
+                                            if let Err(e) = response.send(Err(err)) {
+                                                log::warn!("Failed to send response: {:?}", e);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         Message::Subscribe {
@@ -99,11 +173,14 @@ impl Client {
                             unsubscribe,
                             response,
                         } => {
-                            let result = ws.subscribe(&subscribe, params, &unsubscribe);
-                            if let Err(e) = response.send(result.await) {
+                            let result = ws.subscribe(&subscribe, params, &unsubscribe).await;
+                            if let Err(e) = response.send(result) {
                                 // TODO: retry error / timeout
                                 log::warn!("Failed to send response: {:?}", e);
                             }
+                        }
+                        Message::RotateEndpoint => {
+                            unreachable!()
                         }
                     }
                 });
@@ -111,12 +188,16 @@ impl Client {
 
             loop {
                 tokio::select! {
-                    _ = ws.on_disconnect() => {
+                    _ = disconnect_rx.recv() => {
                         log::debug!("Disconnected from endpoint");
                         ws = build_ws().await;
                     }
                     message = rx.recv() => {
+                        log::info!("Received message {message:?}");
                         match message {
+                            Some(Message::RotateEndpoint) => {
+                                ws = build_ws().await;
+                            }
                             Some(message) => handle_message(message, ws.clone()),
                             None => {
                                 log::debug!("Client dropped");
@@ -165,6 +246,13 @@ impl Client {
             .map_err(|e| CallError::Failed(e.into()))?;
 
         rx.await.map_err(|e| CallError::Failed(e.into()))?
+    }
+
+    pub async fn rotate_endpoint(&self) -> Result<(), ()> {
+        self.sender
+            .send(Message::RotateEndpoint)
+            .await
+            .map_err(|_| ())
     }
 }
 
