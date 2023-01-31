@@ -113,7 +113,7 @@ fn get_number(val: &JsonValue) -> anyhow::Result<u64> {
     let number = val["number"]
         .as_str()
         .and_then(|s| s.strip_prefix("0x"))
-        .ok_or(anyhow::Error::msg("Invalid number"))?;
+        .ok_or_else(|| anyhow::Error::msg("Invalid number"))?;
     let number = u64::from_str_radix(number, 16)?;
     Ok(number)
 }

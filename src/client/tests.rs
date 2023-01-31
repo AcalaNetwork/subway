@@ -74,7 +74,7 @@ async fn basic_request() {
     });
 
     let result = client
-        .request("mock_rpc", Params::new(Some("[1]")))
+        .request("mock_rpc", vec![1.into()])
         .await
         .unwrap();
 
@@ -99,7 +99,7 @@ async fn basic_subscription() {
     });
 
     let result = client
-        .subscribe("mock_sub", Params::new(Some("[123]")), "mock_unsub")
+        .subscribe("mock_sub", vec![123.into()], "mock_unsub")
         .await
         .unwrap();
 
@@ -144,7 +144,7 @@ async fn multiple_endpoints() {
     let handler3 = handle_requests(rx3, 3);
 
     let result = client
-        .request("mock_rpc", Params::new(Some("[11]")))
+        .request("mock_rpc", vec![11.into()])
         .await
         .unwrap();
 
@@ -153,7 +153,7 @@ async fn multiple_endpoints() {
     handle1.stop().unwrap();
 
     let result = client
-        .request("mock_rpc", Params::new(Some("[22]")))
+        .request("mock_rpc", vec![22.into()])
         .await
         .unwrap();
 
@@ -164,7 +164,7 @@ async fn multiple_endpoints() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     let result = client
-        .request("mock_rpc", Params::new(Some("[33]")))
+        .request("mock_rpc", vec![33.into()])
         .await
         .unwrap();
 
@@ -173,7 +173,7 @@ async fn multiple_endpoints() {
     handle3.stop().unwrap();
 
     let result = client
-        .request("mock_rpc", Params::new(Some("[44]")))
+        .request("mock_rpc", vec![44.into()])
         .await
         .unwrap();
 
@@ -200,9 +200,9 @@ async fn concurrent_requests() {
         tx3.send(JsonValue::from_str("3").unwrap()).unwrap();
     });
 
-    let res1 = client.request("mock_rpc", Params::new(Some("[]")));
-    let res2 = client.request("mock_rpc", Params::new(Some("[]")));
-    let res3 = client.request("mock_rpc", Params::new(Some("[]")));
+    let res1 = client.request("mock_rpc", vec![]);
+    let res2 = client.request("mock_rpc", vec![]);
+    let res3 = client.request("mock_rpc", vec![]);
 
     let res = tokio::join!(res1, res2, res3);
 
