@@ -72,6 +72,8 @@ rpcs:
       cache: true
       with_block_hash: true
 
+    - method: system_accountNextIndex
+
   subscriptions:
     - subscribe: author_submitAndWatchExtrinsic
       unsubscribe: author_unwatchExtrinsic

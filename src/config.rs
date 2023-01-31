@@ -6,7 +6,7 @@ use std::fs;
 #[command(version, about)]
 struct Command {
     /// The config file to use
-    #[arg(short, long, default_value = "./config.yaml")]
+    #[arg(short, long, default_value = "./config.yml")]
     config: String,
 }
 
