@@ -105,6 +105,7 @@ async fn basic_subscription() {
 
     let result = result
         .map(|v| v.unwrap().to_string())
+        .take(3)
         .collect::<Vec<_>>()
         .await;
 
