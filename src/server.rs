@@ -5,6 +5,7 @@ use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use tokio::task::JoinHandle;
 
 use crate::{
+    api::Api,
     client::Client,
     config::Config,
     middleware::{
@@ -35,6 +36,7 @@ pub async fn start_server(
     let mut module = RpcModule::new(());
 
     let client = Arc::new(client);
+    let _api = Api::new(client.clone());
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 

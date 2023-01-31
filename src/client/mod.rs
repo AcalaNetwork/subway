@@ -5,7 +5,7 @@ use jsonrpsee::{
         client::{ClientT, Subscription, SubscriptionClientT},
         Error, JsonValue,
     },
-    types::{error::CallError, Params},
+    types::error::CallError,
     ws_client::{WsClient, WsClientBuilder},
 };
 
@@ -58,6 +58,7 @@ impl Client {
 
             let current_endpoint = AtomicUsize::new(0);
 
+            // TODO: record pending requests & subscriptions and resend them on reconnect
             let build_ws = || async {
                 let build = || {
                     let current_endpoint =
@@ -212,8 +213,7 @@ impl Client {
         Ok(Self { sender: tx })
     }
 
-    pub async fn request(&self, method: &str, params: Params<'_>) -> Result<JsonValue, Error> {
-        let params: Vec<JsonValue> = params.parse()?;
+    pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, Error> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
             .send(Message::Request {
@@ -230,10 +230,9 @@ impl Client {
     pub async fn subscribe(
         &self,
         subscribe: &str,
-        params: Params<'_>,
+        params: Vec<JsonValue>,
         unsubscribe: &str,
     ) -> Result<Subscription<JsonValue>, Error> {
-        let params: Vec<JsonValue> = params.parse()?;
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
             .send(Message::Subscribe {

@@ -32,6 +32,8 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for UpstreamMiddleware {
         request: CallRequest,
         _next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        self.client.request(&request.method, request.params).await
+        self.client
+            .request(&request.method, request.params.parse()?)
+            .await
     }
 }

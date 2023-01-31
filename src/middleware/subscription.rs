@@ -33,7 +33,11 @@ impl Middleware<SubscriptionRequest, Result<(), Error>> for UpstreamMiddleware {
     ) -> Result<(), Error> {
         let sub = self
             .client
-            .subscribe(&request.subscribe, request.params, &request.unsubscribe)
+            .subscribe(
+                &request.subscribe,
+                request.params.parse()?,
+                &request.unsubscribe,
+            )
             .await?;
         request.sink.pipe_from_try_stream(sub).await;
         Ok(())
