@@ -129,7 +129,8 @@ async fn multiple_endpoints() {
     .await
     .unwrap();
 
-    let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>, n: u32| {
+    let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+                           n: u32| {
         tokio::spawn(async move {
             loop {
                 if let Some((_, resp_tx)) = rx.recv().await {
@@ -145,13 +146,19 @@ async fn multiple_endpoints() {
     let handler2 = handle_requests(rx2, 2);
     let handler3 = handle_requests(rx3, 3);
 
-    let result = client.request("mock_rpc", Params::new(Some("[11]"))).await.unwrap();
+    let result = client
+        .request("mock_rpc", Params::new(Some("[11]")))
+        .await
+        .unwrap();
 
     assert_eq!(result.to_string(), "1");
 
     handle1.stop().unwrap();
 
-    let result = client.request("mock_rpc", Params::new(Some("[22]"))).await.unwrap();
+    let result = client
+        .request("mock_rpc", Params::new(Some("[22]")))
+        .await
+        .unwrap();
 
     assert_eq!(result.to_string(), "2");
 
@@ -159,13 +166,19 @@ async fn multiple_endpoints() {
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let result = client.request("mock_rpc", Params::new(Some("[33]"))).await.unwrap();
+    let result = client
+        .request("mock_rpc", Params::new(Some("[33]")))
+        .await
+        .unwrap();
 
     assert_eq!(result.to_string(), "3");
 
     handle3.stop().unwrap();
 
-    let result = client.request("mock_rpc", Params::new(Some("[44]"))).await.unwrap();
+    let result = client
+        .request("mock_rpc", Params::new(Some("[44]")))
+        .await
+        .unwrap();
 
     assert_eq!(result.to_string(), "2");
 
