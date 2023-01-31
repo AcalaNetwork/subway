@@ -73,10 +73,7 @@ async fn basic_request() {
         resp_tx.send(JsonValue::from_str("[1]").unwrap()).unwrap();
     });
 
-    let result = client
-        .request("mock_rpc", vec![1.into()])
-        .await
-        .unwrap();
+    let result = client.request("mock_rpc", vec![1.into()]).await.unwrap();
 
     assert_eq!(result.to_string(), "[1]");
 
@@ -143,19 +140,13 @@ async fn multiple_endpoints() {
     let handler2 = handle_requests(rx2, 2);
     let handler3 = handle_requests(rx3, 3);
 
-    let result = client
-        .request("mock_rpc", vec![11.into()])
-        .await
-        .unwrap();
+    let result = client.request("mock_rpc", vec![11.into()]).await.unwrap();
 
     assert_eq!(result.to_string(), "1");
 
     handle1.stop().unwrap();
 
-    let result = client
-        .request("mock_rpc", vec![22.into()])
-        .await
-        .unwrap();
+    let result = client.request("mock_rpc", vec![22.into()]).await.unwrap();
 
     assert_eq!(result.to_string(), "2");
 
@@ -163,19 +154,13 @@ async fn multiple_endpoints() {
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let result = client
-        .request("mock_rpc", vec![33.into()])
-        .await
-        .unwrap();
+    let result = client.request("mock_rpc", vec![33.into()]).await.unwrap();
 
     assert_eq!(result.to_string(), "3");
 
     handle3.stop().unwrap();
 
-    let result = client
-        .request("mock_rpc", vec![44.into()])
-        .await
-        .unwrap();
+    let result = client.request("mock_rpc", vec![44.into()]).await.unwrap();
 
     assert_eq!(result.to_string(), "2");
 
