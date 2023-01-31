@@ -183,3 +183,33 @@ async fn multiple_endpoints() {
 
     let _ = tokio::join!(handler1, handler2, handler3);
 }
+
+#[tokio::test]
+async fn concurrent_requests() {
+    let (addr, handle, mut rx, _) = dummy_server().await;
+
+    let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+
+    let handler = tokio::spawn(async move {
+        let (_, tx1) = rx.recv().await.unwrap();
+        let (_, tx2) = rx.recv().await.unwrap();
+        let (_, tx3) = rx.recv().await.unwrap();
+
+        tx1.send(JsonValue::from_str("1").unwrap()).unwrap();
+        tx2.send(JsonValue::from_str("2").unwrap()).unwrap();
+        tx3.send(JsonValue::from_str("3").unwrap()).unwrap();
+    });
+
+    let res1 = client.request("mock_rpc", Params::new(Some("[]")));
+    let res2 = client.request("mock_rpc", Params::new(Some("[]")));
+    let res3 = client.request("mock_rpc", Params::new(Some("[]")));
+
+    let res = tokio::join!(res1, res2, res3);
+
+    assert_eq!(res.0.unwrap().to_string(), "1");
+    assert_eq!(res.1.unwrap().to_string(), "2");
+    assert_eq!(res.2.unwrap().to_string(), "3");
+
+    handle.stop().unwrap();
+    let _ = tokio::join!(handler);
+}

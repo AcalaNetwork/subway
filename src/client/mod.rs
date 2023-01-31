@@ -193,7 +193,7 @@ impl Client {
                         ws = build_ws().await;
                     }
                     message = rx.recv() => {
-                        log::info!("Received message {message:?}");
+                        log::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
                                 ws = build_ws().await;
