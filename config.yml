@@ -86,7 +86,7 @@ rpcs:
       
     - subscribe: chain_subscribeFinalizedHeads
       unsubscribe: chain_unsubscribeFinalizedHeads
-      name: chain_newFinalizedHead
+      name: chain_finalizedHead
       merge: true
 
     - subscribe: state_subscribeRuntimeVersion
