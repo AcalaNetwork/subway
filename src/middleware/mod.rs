@@ -7,8 +7,7 @@ use jsonrpsee::types::Params;
 use jsonrpsee::SubscriptionSink;
 
 pub mod cache;
-pub mod call;
-pub mod subscription;
+pub mod upstream;
 
 pub enum Request {
     Call {

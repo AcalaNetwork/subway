@@ -5,8 +5,7 @@ use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use tokio::task::JoinHandle;
 
 use crate::middleware::cache::CacheMiddleware;
-use crate::middleware::call::CallMiddleware;
-use crate::middleware::subscription::SubscriptionMiddleware;
+use crate::middleware::upstream::UpstreamMiddleware;
 use crate::{
     api::Api,
     client::Client,
@@ -48,8 +47,7 @@ pub async fn start_server(
     let middlewares = Arc::new(Middlewares::new(
         vec![
             Arc::new(CacheMiddleware::new(cached_methods, 2048)),
-            Arc::new(CallMiddleware::new(&client)),
-            Arc::new(SubscriptionMiddleware::new(&client)),
+            Arc::new(UpstreamMiddleware::new(&client)),
         ],
         Arc::new(|_| {
             async {

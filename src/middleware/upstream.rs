@@ -1,16 +1,15 @@
 use crate::client::Client;
 use async_trait::async_trait;
-use jsonrpsee::core::Error;
-use jsonrpsee::core::JsonValue;
+use jsonrpsee::core::{Error, JsonValue};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn, Request};
 
-pub struct SubscriptionMiddleware {
+pub struct UpstreamMiddleware {
     client: Arc<Client>,
 }
 
-impl SubscriptionMiddleware {
+impl UpstreamMiddleware {
     pub fn new(client: &Arc<Client>) -> Self {
         Self {
             client: client.clone(),
@@ -19,13 +18,14 @@ impl SubscriptionMiddleware {
 }
 
 #[async_trait]
-impl Middleware for SubscriptionMiddleware {
+impl Middleware for UpstreamMiddleware {
     async fn call(
         &self,
         request: Request,
-        next: NextFn<Request, Result<JsonValue, Error>>,
+        _next: NextFn<Request, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
         match request {
+            Request::Call { method, params } => self.client.request(&method, params.parse()?).await,
             Request::Subscription {
                 subscribe,
                 params,
@@ -39,7 +39,6 @@ impl Middleware for SubscriptionMiddleware {
                 sink.pipe_from_try_stream(sub).await;
                 Ok(().into())
             }
-            _ => next(request).await,
         }
     }
 }
