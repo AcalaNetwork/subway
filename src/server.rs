@@ -39,7 +39,7 @@ pub async fn start_server(
     for method in &config.rpcs.methods {
         let mut list: Vec<Arc<dyn Middleware>> = vec![];
         if method.cache {
-            list.push(Arc::new(CacheMiddleware::new(2048)));
+            list.push(Arc::new(CacheMiddleware::new(config.cache_size)));
         }
         list.push(Arc::new(UpstreamMiddleware::new(&client.clone())));
         let method_name = string_to_static_str(method.method.clone());

@@ -12,6 +12,7 @@ struct Command {
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
+    pub cache_size: u32,
     pub endpoints: Vec<String>,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,

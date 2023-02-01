@@ -2,6 +2,8 @@ endpoints:
   - wss://acala-rpc.dwellir.com:443
   - wss://acala-rpc-0.aca-api.network:443
 
+cache_size: 2048
+
 server:
   port: 9944
   listen_address: '0.0.0.0'
