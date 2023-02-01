@@ -35,6 +35,7 @@ impl Middleware for CacheMiddleware {
                 if let Some(value) = map.get(&key) {
                     return Ok(value.clone());
                 }
+                drop(map);
                 let resp = next(request).await;
                 if let Ok(ref value) = resp {
                     let mut map = self.map.lock().await;

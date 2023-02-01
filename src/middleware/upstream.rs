@@ -1,6 +1,9 @@
 use crate::client::Client;
 use async_trait::async_trait;
-use jsonrpsee::core::{Error, JsonValue};
+use jsonrpsee::{
+    core::{error::SubscriptionClosed, Error, JsonValue},
+    types::ErrorObjectOwned,
+};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn, Request};
@@ -36,7 +39,17 @@ impl Middleware for UpstreamMiddleware {
                     .client
                     .subscribe(&subscribe, params.parse()?, &unsubscribe)
                     .await?;
-                sink.pipe_from_try_stream(sub).await;
+                match sink.pipe_from_try_stream(sub).await {
+                    SubscriptionClosed::Success => {
+                        let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
+                        sink.close(err_obj);
+                    }
+                    // we don't want to send close reason when the client is unsubscribed or disconnected.
+                    SubscriptionClosed::RemotePeerAborted => (),
+                    SubscriptionClosed::Failed(e) => {
+                        sink.close(e);
+                    }
+                }
                 Ok(().into())
             }
         }
