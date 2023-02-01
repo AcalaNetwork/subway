@@ -49,13 +49,11 @@ impl Client {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(100);
 
-        let tx2 = tx.clone();
+        let sender = tx.clone();
 
         let (disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel::<()>(10);
 
         tokio::spawn(async move {
-            let tx = tx2;
-
             let current_endpoint = AtomicUsize::new(0);
 
             // TODO: record pending requests & subscriptions and resend them on reconnect
@@ -210,7 +208,7 @@ impl Client {
             }
         });
 
-        Ok(Self { sender: tx })
+        Ok(Self { sender })
     }
 
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, Error> {

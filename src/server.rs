@@ -4,15 +4,14 @@ use futures::FutureExt;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use tokio::task::JoinHandle;
 
+use crate::middleware::cache::CacheMiddleware;
+use crate::middleware::call::CallMiddleware;
+use crate::middleware::subscription::SubscriptionMiddleware;
 use crate::{
     api::Api,
     client::Client,
     config::Config,
-    middleware::{
-        call::{self, CallRequest},
-        subscription::{self, SubscriptionRequest},
-        Middlewares,
-    },
+    middleware::{Middlewares, Request},
 };
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/985
@@ -35,33 +34,44 @@ pub async fn start_server(
 
     let mut module = RpcModule::new(());
 
+    let cached_methods = config
+        .rpcs
+        .methods
+        .iter()
+        .filter(|m| m.cache)
+        .map(|m| m.method.clone())
+        .collect::<Vec<String>>();
+
     let client = Arc::new(client);
     let _api = Api::new(client.clone());
 
-    let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
+    let middlewares = Arc::new(Middlewares::new(
+        vec![
+            Arc::new(CacheMiddleware::new(cached_methods, 2048)),
+            Arc::new(CallMiddleware::new(&client)),
+            Arc::new(SubscriptionMiddleware::new(&client)),
+        ],
+        Arc::new(|_| {
+            async {
+                Err(
+                    jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
+                        "Bad configuration",
+                    ))
+                    .into(),
+                )
+            }
+            .boxed()
+        }),
+    ));
 
     for method in &config.rpcs.methods {
-        let middlewares = Arc::new(Middlewares::new(
-            vec![upstream.clone()],
-            Arc::new(|_| {
-                async {
-                    Err(
-                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
-                            "Bad configuration",
-                        ))
-                        .into(),
-                    )
-                }
-                .boxed()
-            }),
-        ));
-
         let method_name = string_to_static_str(method.method.clone());
+        let middlewares = middlewares.clone();
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
             async move {
                 middlewares
-                    .call(CallRequest {
+                    .call(Request::Call {
                         method: method_name.into(),
                         params: params.into_owned(),
                     })
@@ -95,36 +105,21 @@ pub async fn start_server(
     module.register_method("rpc_methods", move |_, _| {
         #[derive(serde::Serialize)]
         struct RpcMethodsResp {
+            version: u32,
             methods: Vec<String>,
         }
 
         Ok(RpcMethodsResp {
+            version: 1,
             methods: rpc_methods.clone(),
         })
     })?;
-
-    let upstream = Arc::new(subscription::UpstreamMiddleware::new(client));
 
     for subscription in &config.rpcs.subscriptions {
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());
         let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
         let name = string_to_static_str(subscription.name.clone());
-
-        let middlewares = Arc::new(Middlewares::new(
-            vec![upstream.clone()],
-            Arc::new(|_| {
-                async {
-                    Err(
-                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
-                            "Bad configuration",
-                        ))
-                        .into(),
-                    )
-                }
-                .boxed()
-            }),
-        ));
-
+        let middlewares = middlewares.clone();
         module.register_subscription(
             subscribe_name,
             name,
@@ -136,7 +131,7 @@ pub async fn start_server(
 
                 tokio::spawn(async move {
                     let res = middlewares
-                        .call(SubscriptionRequest {
+                        .call(Request::Subscription {
                             subscribe: subscribe_name.into(),
                             params: params.clone(),
                             unsubscribe: unsubscribe_name.into(),

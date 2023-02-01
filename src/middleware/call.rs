@@ -1,39 +1,32 @@
+use crate::client::Client;
+use async_trait::async_trait;
+use jsonrpsee::core::{Error, JsonValue};
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use jsonrpsee::{
-    core::{Error, JsonValue},
-    types::Params,
-};
+use super::{Middleware, NextFn, Request};
 
-use crate::client::Client;
-
-use super::{Middleware, NextFn};
-
-pub struct CallRequest {
-    pub method: String,
-    pub params: Params<'static>,
-}
-
-pub struct UpstreamMiddleware {
+pub struct CallMiddleware {
     client: Arc<Client>,
 }
 
-impl UpstreamMiddleware {
-    pub fn new(client: Arc<Client>) -> Self {
-        Self { client }
+impl CallMiddleware {
+    pub fn new(client: &Arc<Client>) -> Self {
+        Self {
+            client: client.clone(),
+        }
     }
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, Error>> for UpstreamMiddleware {
+impl Middleware for CallMiddleware {
     async fn call(
         &self,
-        request: CallRequest,
-        _next: NextFn<CallRequest, Result<JsonValue, Error>>,
+        request: Request,
+        next: NextFn<Request, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        self.client
-            .request(&request.method, request.params.parse()?)
-            .await
+        match request {
+            Request::Call { method, params } => self.client.request(&method, params.parse()?).await,
+            _ => next(request).await,
+        }
     }
 }

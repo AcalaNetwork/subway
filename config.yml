@@ -39,6 +39,14 @@ rpcs:
       cache: true
       with_block_hash: true
 
+    - method: state_getStorageAt
+      cache: true
+      with_block_hash: true
+
+    - method: state_getKeysPagedAt
+      cache: true
+      with_block_hash: true
+
     - method: state_getKeysPaged
       cache: true
       with_block_hash: true
