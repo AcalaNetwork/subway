@@ -41,7 +41,7 @@ pub async fn start_server(
         if method.cache {
             list.push(Arc::new(CacheMiddleware::new(config.cache_size)));
         }
-        list.push(Arc::new(UpstreamMiddleware::new(&client.clone())));
+        list.push(Arc::new(UpstreamMiddleware::new(&client)));
         let method_name = string_to_static_str(method.method.clone());
         let middlewares = Arc::new(Middlewares::new(
             list,
