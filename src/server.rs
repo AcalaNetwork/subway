@@ -10,7 +10,7 @@ use crate::{
     api::Api,
     client::Client,
     config::Config,
-    middleware::{Middlewares, Request},
+    middleware::{Middleware, Middlewares, Request},
 };
 
 // TODO: https://github.com/paritytech/jsonrpsee/issues/985
@@ -33,38 +33,30 @@ pub async fn start_server(
 
     let mut module = RpcModule::new(());
 
-    let cached_methods = config
-        .rpcs
-        .methods
-        .iter()
-        .filter(|m| m.cache)
-        .map(|m| m.method.clone())
-        .collect::<Vec<String>>();
-
     let client = Arc::new(client);
     let _api = Api::new(client.clone());
 
-    let middlewares = Arc::new(Middlewares::new(
-        vec![
-            Arc::new(CacheMiddleware::new(cached_methods, 2048)),
-            Arc::new(UpstreamMiddleware::new(&client)),
-        ],
-        Arc::new(|_| {
-            async {
-                Err(
-                    jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
-                        "Bad configuration",
-                    ))
-                    .into(),
-                )
-            }
-            .boxed()
-        }),
-    ));
-
     for method in &config.rpcs.methods {
+        let mut list: Vec<Arc<dyn Middleware>> =
+            vec![Arc::new(UpstreamMiddleware::new(&client.clone()))];
+        if method.cache {
+            list.insert(0, Arc::new(CacheMiddleware::new(2048)));
+        }
         let method_name = string_to_static_str(method.method.clone());
-        let middlewares = middlewares.clone();
+        let middlewares = Arc::new(Middlewares::new(
+            list,
+            Arc::new(|_| {
+                async {
+                    Err(
+                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
+                            "Bad configuration",
+                        ))
+                        .into(),
+                    )
+                }
+                .boxed()
+            }),
+        ));
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
             async move {
@@ -114,10 +106,23 @@ pub async fn start_server(
     })?;
 
     for subscription in &config.rpcs.subscriptions {
+        let middlewares = Arc::new(Middlewares::new(
+            vec![Arc::new(UpstreamMiddleware::new(&client))],
+            Arc::new(|_| {
+                async {
+                    Err(
+                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
+                            "Bad configuration",
+                        ))
+                        .into(),
+                    )
+                }
+                .boxed()
+            }),
+        ));
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());
         let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
         let name = string_to_static_str(subscription.name.clone());
-        let middlewares = middlewares.clone();
         module.register_subscription(
             subscribe_name,
             name,
