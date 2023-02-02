@@ -141,8 +141,7 @@ impl Client {
                                                 );
                                             }
                                         }
-                                       Error::Transport(_)
-                                        | Error::RestartNeeded(_) => {
+                                        Error::Transport(_) | Error::RestartNeeded(_) => {
                                             if let Err(e) = tx
                                                 .send(Message::Request {
                                                     method,
