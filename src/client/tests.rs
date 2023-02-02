@@ -33,7 +33,7 @@ async fn dummy_server() -> (
                     .await
                     .unwrap();
                 let res = resp_rx.await;
-                Ok::<JsonValue, jsonrpsee::core::Error>(res.unwrap())
+                res.map_err(|e| -> Error { CallError::Failed(e.into()).into() })
             }
         })
         .unwrap();
@@ -67,7 +67,7 @@ async fn basic_request() {
 
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
 
-    let handler = tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let (params, resp_tx) = rx.recv().await.unwrap();
         assert_eq!(params.to_string(), "[1]");
         resp_tx.send(JsonValue::from_str("[1]").unwrap()).unwrap();
@@ -78,7 +78,7 @@ async fn basic_request() {
     assert_eq!(result.to_string(), "[1]");
 
     handle.stop().unwrap();
-    let _ = tokio::join!(handler);
+    task.await.unwrap();
 }
 
 #[tokio::test]
@@ -87,7 +87,7 @@ async fn basic_subscription() {
 
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
 
-    let handler = tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let (params, mut sink) = rx.recv().await.unwrap();
         assert_eq!(params.to_string(), "[123]");
         sink.send(&JsonValue::from_str("10").unwrap()).unwrap();
@@ -109,7 +109,7 @@ async fn basic_subscription() {
     assert_eq!(result, ["10", "11", "12"]);
 
     handle.stop().unwrap();
-    let _ = tokio::join!(handler);
+    task.await.unwrap();
 }
 
 #[tokio::test]
@@ -166,7 +166,10 @@ async fn multiple_endpoints() {
 
     handle2.stop().unwrap();
 
-    let _ = tokio::join!(handler1, handler2, handler3);
+    let (r1, r2, r3) = tokio::join!(handler1, handler2, handler3);
+    r1.unwrap();
+    r2.unwrap();
+    r3.unwrap();
 }
 
 #[tokio::test]
@@ -175,7 +178,7 @@ async fn concurrent_requests() {
 
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
 
-    let handler = tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let (_, tx1) = rx.recv().await.unwrap();
         let (_, tx2) = rx.recv().await.unwrap();
         let (_, tx3) = rx.recv().await.unwrap();
@@ -196,5 +199,39 @@ async fn concurrent_requests() {
     assert_eq!(res.2.unwrap().to_string(), "3");
 
     handle.stop().unwrap();
-    let _ = tokio::join!(handler);
+    task.await.unwrap();
+}
+
+#[tokio::test]
+async fn retry_endpoints() {
+    let (addr1, handle1, mut rx1, _) = dummy_server().await;
+    let (addr2, handle2, mut rx2, _) = dummy_server().await;
+
+    let client = Client::new(&[format!("ws://{addr1}"), format!("ws://{addr2}")])
+        .await
+        .unwrap();
+
+    let h1 = tokio::spawn(async move {
+        let (_, tx) = rx1.recv().await.unwrap();
+        // stop server after received request
+        handle1.stop().unwrap();
+        // still send a valid response to avoid this become a call error
+        tx.send(JsonValue::from_str("2").unwrap()).unwrap();
+    });
+
+    let h2 = tokio::spawn(async move {
+        let (_, tx) = rx2.recv().await.unwrap();
+        tx.send(JsonValue::from_str("1").unwrap()).unwrap();
+    });
+
+    let h3 = tokio::spawn(async move {
+        let res = client.request("mock_rpc", vec![11.into()]).await.unwrap();
+        assert_eq!(res.to_string(), "1");
+    });
+
+    h3.await.unwrap();
+    h2.await.unwrap();
+    h1.await.unwrap();
+
+    handle2.stop().unwrap();
 }

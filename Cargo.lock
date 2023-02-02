@@ -692,7 +692,6 @@ dependencies = [
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
- "webpki-roots",
 ]
 
 [[package]]
@@ -821,6 +820,7 @@ dependencies = [
  "soketto",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "wasm-bindgen-futures",
 ]
@@ -839,6 +839,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tower",
  "tracing",
 ]
 
