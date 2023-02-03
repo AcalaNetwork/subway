@@ -58,7 +58,6 @@ impl Client {
 
             let current_endpoint = AtomicUsize::new(0);
 
-            // TODO: record pending requests & subscriptions and resend them on reconnect
             let build_ws = || async {
                 let build = || {
                     let current_endpoint =
@@ -172,10 +171,63 @@ impl Client {
                             unsubscribe,
                             response,
                         } => {
-                            let result = ws.subscribe(&subscribe, params, &unsubscribe).await;
-                            if let Err(e) = response.send(result) {
-                                // TODO: retry error / timeout
-                                log::warn!("Failed to send response: {:?}", e);
+                            let result =
+                                ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
+                            match result {
+                                result @ Ok(_) => {
+                                    if let Err(e) = response.send(result) {
+                                        log::warn!("Failed to send response: {:?}", e);
+                                    }
+                                }
+                                Err(err) => {
+                                    log::debug!("Subscribe failed: {:?}", err);
+                                    match err {
+                                        Error::RequestTimeout => {
+                                            if let Err(e) = tx.send(Message::RotateEndpoint).await {
+                                                log::warn!(
+                                                    "Failed to send rotate message: {:?}",
+                                                    e
+                                                );
+                                            }
+                                            if let Err(e) = tx
+                                                .send(Message::Subscribe {
+                                                    subscribe,
+                                                    params,
+                                                    unsubscribe,
+                                                    response,
+                                                })
+                                                .await
+                                            {
+                                                log::warn!(
+                                                    "Failed to send subscribe message: {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        Error::Transport(_) | Error::RestartNeeded(_) => {
+                                            if let Err(e) = tx
+                                                .send(Message::Subscribe {
+                                                    subscribe,
+                                                    params,
+                                                    unsubscribe,
+                                                    response,
+                                                })
+                                                .await
+                                            {
+                                                log::warn!(
+                                                    "Failed to send subscribe message: {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        err => {
+                                            // not something we can handle, send it back to the caller
+                                            if let Err(e) = response.send(Err(err)) {
+                                                log::warn!("Failed to send response: {:?}", e);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         Message::RotateEndpoint => {

@@ -203,7 +203,7 @@ async fn concurrent_requests() {
 }
 
 #[tokio::test]
-async fn retry_endpoints() {
+async fn retry_requests() {
     let (addr1, handle1, mut rx1, _) = dummy_server().await;
     let (addr2, handle2, mut rx2, _) = dummy_server().await;
 
@@ -225,7 +225,7 @@ async fn retry_endpoints() {
     });
 
     let h3 = tokio::spawn(async move {
-        let res = client.request("mock_rpc", vec![11.into()]).await.unwrap();
+        let res = client.request("mock_rpc", vec![]).await.unwrap();
         assert_eq!(res.to_string(), "1");
     });
 
