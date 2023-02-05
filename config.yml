@@ -28,11 +28,11 @@ rpcs:
     - method: chain_getFinalizedHead
 
     - method: state_getRuntimeVersion
-      cache: 10
+      cache: 2000
       with_block_hash: 0
 
     - method: state_getMetadata
-      cache: 10
+      cache: 2000
       with_block_hash: 0
 
     - method: state_getStorage
