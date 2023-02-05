@@ -25,7 +25,13 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
             return next(request).await;
         }
 
-        let key = format!("{}::{:?}", request.method, request.params);
+        let params_joined = request
+            .params
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let key = format!("{}::[{}]", request.method, params_joined);
         if let Some(value) = self.cache.get(&key).await {
             log::debug!("Found cache for {}", key);
             return Ok(value);
