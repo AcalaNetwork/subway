@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use jsonrpsee::{
-    core::{Error, JsonValue, __reexports::serde_json},
-    types::Params,
-};
+use jsonrpsee::core::{Error, JsonValue};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
@@ -21,6 +18,13 @@ pub struct InjectParamsMiddleware {
 impl InjectParamsMiddleware {
     pub fn new(api: Arc<Api>, inject: Inject) -> Self {
         Self { api, inject }
+    }
+
+    fn get_index(&self) -> usize {
+        match self.inject {
+            Inject::BlockHashAt(index) => index,
+            Inject::BlockNumberAt(index) => index,
+        }
     }
 
     async fn needs_to_inject(&self, params_len: usize) -> Option<JsonValue> {
@@ -49,17 +53,18 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
         mut request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        let params = request.params.parse::<JsonValue>()?;
-
-        if let Some(params) = params.to_owned().as_array_mut() {
-            if let Some(param) = self.needs_to_inject(params.len()).await {
-                log::debug!("Injected param {} to method {}", &param, request.method);
-                params.push(param);
-                request.params =
-                    Params::new(Some(serde_json::to_string(&params)?.as_str())).into_owned();
-            }
+        if request.params.len() == self.get_index() + 1 {
+            // request params is completed
+            return next(request).await;
         }
 
+        if let Some(param) = self.needs_to_inject(request.params.len()).await {
+            log::debug!("Injected param {} to method {}", &param, request.method);
+            request.params.push(param);
+            return next(request).await;
+        }
+
+        request.skip_caching = true;
         next(request).await
     }
 }

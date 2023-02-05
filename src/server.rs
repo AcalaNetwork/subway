@@ -1,14 +1,17 @@
-use std::{net::SocketAddr, sync::Arc};
-
 use futures::FutureExt;
+use jsonrpsee::core::JsonValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
+use jsonrpsee::types::error::CallError;
+use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 use tokio::task::JoinHandle;
 
 use crate::{
     api::Api,
+    cache::Cache,
     client::Client,
     config::Config,
     middleware::{
+        cache::CacheMiddleware,
         call::{self, CallRequest},
         inject_params::{Inject, InjectParamsMiddleware},
         subscription::{self, SubscriptionRequest},
@@ -57,6 +60,11 @@ pub async fn start_server(
             )));
         }
 
+        if method.cache > 0 {
+            // each method has it's own cache
+            let cache_size = NonZeroUsize::new(method.cache).expect("qed;");
+            list.push(Arc::new(CacheMiddleware::new(Cache::new(cache_size))));
+        }
         list.push(upstream.clone());
 
         let middlewares = Arc::new(Middlewares::new(
@@ -78,11 +86,15 @@ pub async fn start_server(
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
             async move {
+                let params = params
+                    .parse::<JsonValue>()?
+                    .as_array()
+                    .ok_or(CallError::InvalidParams(anyhow::Error::msg(
+                        "invalid params",
+                    )))?
+                    .to_owned();
                 middlewares
-                    .call(CallRequest {
-                        method: method_name.into(),
-                        params: params.into_owned(),
-                    })
+                    .call(CallRequest::new(method_name.into(), params))
                     .await
             }
         })?;

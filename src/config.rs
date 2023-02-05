@@ -29,7 +29,7 @@ pub struct RpcMethod {
     pub method: String,
 
     #[serde(default)]
-    pub cache: bool,
+    pub cache: usize,
 
     pub with_block_hash: Option<usize>,
     pub with_block_number: Option<usize>,
