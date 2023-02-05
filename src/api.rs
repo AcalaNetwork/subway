@@ -12,6 +12,24 @@ pub struct Api {
 }
 
 impl Api {
+    pub async fn get_block_number(&self) -> Option<JsonValue> {
+        self.head
+            .read()
+            .await
+            .as_ref()
+            .map(|(_, number)| JsonValue::from(*number))
+    }
+
+    pub async fn get_block_hash(&self) -> Option<JsonValue> {
+        self.head
+            .read()
+            .await
+            .as_ref()
+            .map(|(hash, _)| hash.clone())
+    }
+}
+
+impl Api {
     pub fn new(client: Arc<Client>) -> Self {
         let this = Self {
             client,

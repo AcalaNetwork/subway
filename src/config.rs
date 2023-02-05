@@ -31,11 +31,8 @@ pub struct RpcMethod {
     #[serde(default)]
     pub cache: bool,
 
-    #[serde(default)]
-    pub with_block_hash: bool,
-
-    #[serde(default)]
-    pub with_block_number: bool,
+    pub with_block_hash: Option<usize>,
+    pub with_block_number: Option<usize>,
 }
 
 #[derive(Deserialize, Debug)]

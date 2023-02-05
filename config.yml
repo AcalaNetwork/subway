@@ -15,41 +15,41 @@ rpcs:
 
     - method: chain_getBlockHash
       cache: true
-      with_block_number: true
+      with_block_number: 0
       
     - method: chain_getHeader
       cache: true
-      with_block_hash: true
+      with_block_hash: 0
 
     - method: chain_getBlock
       cache: true
-      with_block_hash: true
+      with_block_hash: 0
 
     - method: chain_getFinalizedHead
 
     - method: state_getRuntimeVersion
       cache: true
-      with_block_hash: true
+      with_block_hash: 0
 
     - method: state_getMetadata
       cache: true
-      with_block_hash: true
+      with_block_hash: 0
 
     - method: state_getStorage
       cache: true
-      with_block_hash: true
+      with_block_hash: 1
 
     - method: state_getKeysPaged
       cache: true
-      with_block_hash: true
+      with_block_hash: 3
 
     - method: state_queryStorageAt
       cache: true
-      with_block_hash: true
+      with_block_hash: 1
 
     - method: state_call
       cache: true
-      with_block_hash: true
+      with_block_hash: 2
 
     - method: system_chain
       cache: true
@@ -70,7 +70,7 @@ rpcs:
 
     - method: system_dryRun
       cache: true
-      with_block_hash: true
+      with_block_hash: 1
 
     - method: system_accountNextIndex
 

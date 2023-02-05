@@ -10,8 +10,9 @@ use crate::{
     config::Config,
     middleware::{
         call::{self, CallRequest},
+        inject_params::{Inject, InjectParamsMiddleware},
         subscription::{self, SubscriptionRequest},
-        Middlewares,
+        Middleware, Middlewares,
     },
 };
 
@@ -36,13 +37,30 @@ pub async fn start_server(
     let mut module = RpcModule::new(());
 
     let client = Arc::new(client);
-    let _api = Api::new(client.clone());
+    let api = Arc::new(Api::new(client.clone()));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 
     for method in &config.rpcs.methods {
+        let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
+
+        if let Some(hash_index) = method.with_block_hash {
+            list.push(Arc::new(InjectParamsMiddleware::new(
+                api.clone(),
+                Inject::BlockHashAt(hash_index),
+            )));
+        }
+        if let Some(number_index) = method.with_block_number {
+            list.push(Arc::new(InjectParamsMiddleware::new(
+                api.clone(),
+                Inject::BlockNumberAt(number_index),
+            )));
+        }
+
+        list.push(upstream.clone());
+
         let middlewares = Arc::new(Middlewares::new(
-            vec![upstream.clone()],
+            list,
             Arc::new(|_| {
                 async {
                     Err(

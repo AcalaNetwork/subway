@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
 
 pub mod call;
+pub mod inject_params;
 pub mod subscription;
 
 type NextFn<Request, Result> = Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync>;
