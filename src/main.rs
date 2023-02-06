@@ -1,4 +1,5 @@
 mod api;
+mod cache;
 mod client;
 mod config;
 mod middleware;

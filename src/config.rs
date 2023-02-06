@@ -29,13 +29,10 @@ pub struct RpcMethod {
     pub method: String,
 
     #[serde(default)]
-    pub cache: bool,
+    pub cache: usize,
 
-    #[serde(default)]
-    pub with_block_hash: bool,
-
-    #[serde(default)]
-    pub with_block_number: bool,
+    pub with_block_hash: Option<usize>,
+    pub with_block_number: Option<usize>,
 }
 
 #[derive(Deserialize, Debug)]
