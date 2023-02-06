@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use jsonrpsee::core::{Error, JsonValue};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 
 use super::{Middleware, NextFn};
 use crate::{cache::Cache, middleware::call::CallRequest};
@@ -25,8 +27,14 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
             return next(request).await;
         }
 
-        let mut key = vec![request.method.to_owned()];
-        key.extend(request.params.iter().map(|x| x.to_string()));
+        let mut hasher = DefaultHasher::new();
+        hasher.write(request.method.as_bytes());
+        request
+            .params
+            .iter()
+            .map(|x| x.to_string())
+            .for_each(|x| hasher.write(x.as_bytes()));
+        let key = hasher.finish();
 
         if let Some(value) = self.cache.get(&key).await {
             return Ok(value);
