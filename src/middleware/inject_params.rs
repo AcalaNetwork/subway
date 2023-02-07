@@ -3,46 +3,42 @@ use jsonrpsee::core::{Error, JsonValue};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
-use crate::{api::Api, middleware::call::CallRequest};
+use crate::{
+    api::{Api, ValueHandle},
+    middleware::call::CallRequest,
+};
 
-pub enum Inject {
+pub enum InjectType {
     BlockHashAt(usize),
     BlockNumberAt(usize),
 }
 
 pub struct InjectParamsMiddleware {
-    api: Arc<Api>,
-    inject: Inject,
+    head: ValueHandle<(JsonValue, u64)>,
+    inject: InjectType,
 }
 
 impl InjectParamsMiddleware {
-    pub fn new(api: Arc<Api>, inject: Inject) -> Self {
-        Self { api, inject }
+    pub fn new(api: Arc<Api>, inject: InjectType) -> Self {
+        Self {
+            head: api.get_head(),
+            inject,
+        }
     }
 
     fn get_index(&self) -> usize {
         match self.inject {
-            Inject::BlockHashAt(index) => index,
-            Inject::BlockNumberAt(index) => index,
+            InjectType::BlockHashAt(index) => index,
+            InjectType::BlockNumberAt(index) => index,
         }
     }
 
-    async fn needs_to_inject(&self, params_len: usize) -> Option<JsonValue> {
+    async fn get_parameter(&self) -> JsonValue {
+        let res = self.head.read().await;
         match self.inject {
-            Inject::BlockHashAt(hash_index) => {
-                if params_len == hash_index {
-                    // block hash is missing
-                    return self.api.get_block_hash().await;
-                }
-            }
-            Inject::BlockNumberAt(number_index) => {
-                if params_len == number_index {
-                    // block number is missing
-                    return self.api.get_block_number().await;
-                }
-            }
+            InjectType::BlockHashAt(_) => res.0,
+            InjectType::BlockNumberAt(_) => res.1.into(),
         }
-        None
     }
 }
 
@@ -53,18 +49,23 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
         mut request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        if request.params.len() == self.get_index() + 1 {
-            // request params is completed
-            return next(request).await;
+        let idx = self.get_index();
+        match request.params.len() {
+            len if len == idx + 1 => {
+                // full params with current block
+                return next(request).await;
+            }
+            len if len == idx => {
+                // without current block
+                let to_inject = self.get_parameter().await;
+                log::debug!("Injected param {} to method {}", &to_inject, request.method);
+                request.params.push(to_inject);
+                return next(request).await;
+            }
+            _ => {
+                // unexpected number of params
+                next(request).await
+            }
         }
-
-        if let Some(param) = self.needs_to_inject(request.params.len()).await {
-            log::debug!("Injected param {} to method {}", &param, request.method);
-            request.params.push(param);
-            return next(request).await;
-        }
-
-        request.skip_caching = true;
-        next(request).await
     }
 }

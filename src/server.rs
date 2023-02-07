@@ -13,7 +13,7 @@ use crate::{
     middleware::{
         cache::CacheMiddleware,
         call::{self, CallRequest},
-        inject_params::{Inject, InjectParamsMiddleware},
+        inject_params::{InjectParamsMiddleware, InjectType},
         subscription::{self, SubscriptionRequest},
         Middleware, Middlewares,
     },
@@ -50,13 +50,13 @@ pub async fn start_server(
         if let Some(hash_index) = method.with_block_hash {
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
-                Inject::BlockHashAt(hash_index),
+                InjectType::BlockHashAt(hash_index),
             )));
         }
         if let Some(number_index) = method.with_block_number {
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
-                Inject::BlockNumberAt(number_index),
+                InjectType::BlockNumberAt(number_index),
             )));
         }
 

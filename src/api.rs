@@ -1,57 +1,88 @@
 use std::{sync::Arc, time::Duration};
 
 use jsonrpsee::core::JsonValue;
-use tokio::sync::RwLock;
+use tokio::sync::{watch, RwLock};
 
 use crate::client::Client;
 
+pub struct ValueHandle<T> {
+    inner: RwLock<watch::Receiver<Option<T>>>,
+}
+
+impl<T: Clone> ValueHandle<T> {
+    pub async fn read(&self) -> T {
+        let read_guard = self.inner.read().await;
+        let val = (*read_guard).borrow().clone();
+        drop(read_guard);
+
+        if let Some(val) = val {
+            return val;
+        }
+
+        let mut write_guard = self.inner.write().await;
+        if let Err(e) = write_guard.changed().await {
+            log::error!("Changed channel closed: {}", e);
+        }
+
+        let val = (*write_guard)
+            .borrow()
+            .clone()
+            .expect("already awaited changed");
+        val
+    }
+}
+
 pub struct Api {
     client: Arc<Client>,
-    head: Arc<RwLock<Option<(JsonValue, u64)>>>,
-    finalized_head: Arc<RwLock<Option<(JsonValue, u64)>>>,
+    head: watch::Receiver<Option<(JsonValue, u64)>>,
+    finalized_head: watch::Receiver<Option<(JsonValue, u64)>>,
 }
 
 impl Api {
-    pub async fn get_block_number(&self) -> Option<JsonValue> {
-        self.head
-            .read()
-            .await
-            .as_ref()
-            .map(|(_, number)| JsonValue::from(*number))
+    pub fn get_head(&self) -> ValueHandle<(JsonValue, u64)> {
+        ValueHandle {
+            inner: RwLock::new(self.head.clone()),
+        }
     }
 
-    pub async fn get_block_hash(&self) -> Option<JsonValue> {
-        self.head
-            .read()
-            .await
-            .as_ref()
-            .map(|(hash, _)| hash.clone())
+    // TODO use this later
+    #[allow(dead_code)]
+    pub fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
+        ValueHandle {
+            inner: RwLock::new(self.finalized_head.clone()),
+        }
     }
 }
 
 impl Api {
     pub fn new(client: Arc<Client>) -> Self {
+        let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
+        let (finalized_head_tx, finalized_head_rx) =
+            watch::channel::<Option<(JsonValue, u64)>>(None);
+
         let this = Self {
             client,
-            head: Arc::new(RwLock::new(None)),
-            finalized_head: Arc::new(RwLock::new(None)),
+            head: head_rx,
+            finalized_head: finalized_head_rx,
         };
 
-        this.start_background_task();
+        this.start_background_task(head_tx, finalized_head_tx);
 
         this
     }
 
-    fn start_background_task(&self) {
+    fn start_background_task(
+        &self,
+        head_tx: watch::Sender<Option<(JsonValue, u64)>>,
+        finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
+    ) {
         let client = self.client.clone();
-        let head = self.head.clone();
 
         tokio::spawn(async move {
             loop {
                 let client = client.clone();
-                let head = head.clone();
 
-                let run = async move {
+                let run = async {
                     let sub = client
                         .subscribe(
                             "chain_subscribeNewHeads",
@@ -70,7 +101,7 @@ impl Api {
                                 .await?;
 
                             tracing::debug!("New head: {number} {res}");
-                            head.write().await.replace((res, number));
+                            head_tx.send_replace(Some((res, number)));
                         }
                     }
 
@@ -85,14 +116,12 @@ impl Api {
         });
 
         let client = self.client.clone();
-        let finalized_head = self.finalized_head.clone();
 
         tokio::spawn(async move {
             loop {
                 let client = client.clone();
-                let finalized_head = finalized_head.clone();
 
-                let run = async move {
+                let run = async {
                     let sub = client
                         .subscribe(
                             "chain_subscribeFinalizedHeads",
@@ -111,7 +140,7 @@ impl Api {
                                 .await?;
 
                             tracing::debug!("New finalized head: {number} {res}");
-                            finalized_head.write().await.replace((res, number));
+                            finalized_head_tx.send_replace(Some((res, number)));
                         }
                     }
 

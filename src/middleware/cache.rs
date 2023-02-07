@@ -1,7 +1,8 @@
+use std::io::Write;
+
 use async_trait::async_trait;
+use blake2::{Blake2b512, Digest};
 use jsonrpsee::core::{Error, JsonValue};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
 
 use super::{Middleware, NextFn};
 use crate::{cache::Cache, middleware::call::CallRequest};
@@ -23,18 +24,16 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        if request.skip_caching {
-            return next(request).await;
+        let mut hasher = Blake2b512::new();
+        hasher
+            .write(request.method.as_bytes())
+            .expect("should not fail");
+        for p in &request.params {
+            hasher
+                .write(p.to_string().as_bytes())
+                .expect("should not fail");
         }
-
-        let mut hasher = DefaultHasher::new();
-        hasher.write(request.method.as_bytes());
-        request
-            .params
-            .iter()
-            .map(|x| x.to_string())
-            .for_each(|x| hasher.write(x.as_bytes()));
-        let key = hasher.finish();
+        let key: [u8; 64] = hasher.finalize().into();
 
         if let Some(value) = self.cache.get(&key).await {
             return Ok(value);

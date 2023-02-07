@@ -10,16 +10,11 @@ use super::{Middleware, NextFn};
 pub struct CallRequest {
     pub method: String,
     pub params: Vec<JsonValue>,
-    pub skip_caching: bool,
 }
 
 impl CallRequest {
     pub fn new(method: String, params: Vec<JsonValue>) -> Self {
-        Self {
-            method,
-            params,
-            skip_caching: false,
-        }
+        Self { method, params }
     }
 }
 
