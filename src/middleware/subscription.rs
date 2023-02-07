@@ -1,17 +1,17 @@
+use async_trait::async_trait;
+use jsonrpsee::{
+    core::{client::Subscription, Error, JsonValue},
+    types::Params,
+};
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use jsonrpsee::{core::Error, types::Params, SubscriptionSink};
-
-use crate::client::Client;
-
 use super::{Middleware, NextFn};
+use crate::client::Client;
 
 pub struct SubscriptionRequest {
     pub subscribe: String,
     pub params: Params<'static>,
     pub unsubscribe: String,
-    pub sink: SubscriptionSink,
 }
 
 pub struct UpstreamMiddleware {
@@ -25,21 +25,20 @@ impl UpstreamMiddleware {
 }
 
 #[async_trait]
-impl Middleware<SubscriptionRequest, Result<(), Error>> for UpstreamMiddleware {
+impl Middleware<SubscriptionRequest, Result<Subscription<JsonValue>, Error>>
+    for UpstreamMiddleware
+{
     async fn call(
         &self,
-        mut request: SubscriptionRequest,
-        _next: NextFn<SubscriptionRequest, Result<(), Error>>,
-    ) -> Result<(), Error> {
-        let sub = self
-            .client
+        request: SubscriptionRequest,
+        _next: NextFn<SubscriptionRequest, Result<Subscription<JsonValue>, Error>>,
+    ) -> Result<Subscription<JsonValue>, Error> {
+        self.client
             .subscribe(
                 &request.subscribe,
                 request.params.parse()?,
                 &request.unsubscribe,
             )
-            .await?;
-        request.sink.pipe_from_try_stream(sub).await;
-        Ok(())
+            .await
     }
 }
