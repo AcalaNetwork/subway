@@ -98,39 +98,6 @@ pub async fn start_server(
         })?;
     }
 
-    let rpc_methods = config
-        .rpcs
-        .methods
-        .iter()
-        .map(|m| m.method.clone())
-        .chain(
-            config
-                .rpcs
-                .subscriptions
-                .iter()
-                .map(|s| s.subscribe.clone()),
-        )
-        .chain(
-            config
-                .rpcs
-                .subscriptions
-                .iter()
-                .map(|s| s.unsubscribe.clone()),
-        )
-        .chain(config.rpcs.aliases.iter().map(|(_, new)| new.clone()))
-        .collect::<Vec<_>>();
-
-    module.register_method("rpc_methods", move |_, _| {
-        #[derive(serde::Serialize)]
-        struct RpcMethodsResp {
-            methods: Vec<String>,
-        }
-
-        Ok(RpcMethodsResp {
-            methods: rpc_methods.clone(),
-        })
-    })?;
-
     let upstream = Arc::new(subscription::UpstreamMiddleware::new(client));
 
     for subscription in &config.rpcs.subscriptions {
@@ -192,6 +159,24 @@ pub async fn start_server(
         let alias_new = string_to_static_str(alias_new.clone());
         module.register_alias(alias_new, alias_old)?;
     }
+
+    let mut rpc_methods = module
+        .method_names()
+        .map(|x| x.to_owned())
+        .collect::<Vec<_>>();
+
+    rpc_methods.sort();
+
+    module.register_method("rpc_methods", move |_, _| {
+        #[derive(serde::Serialize)]
+        struct RpcMethodsResp {
+            methods: Vec<String>,
+        }
+
+        Ok(RpcMethodsResp {
+            methods: rpc_methods.clone(),
+        })
+    })?;
 
     let addr = server.local_addr()?;
     let handle = server.start(module)?;
