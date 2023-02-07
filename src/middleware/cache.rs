@@ -26,11 +26,11 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
     ) -> Result<JsonValue, Error> {
         let mut hasher = Blake2b512::new();
         hasher
-            .write(request.method.as_bytes())
+            .write_all(request.method.as_bytes())
             .expect("should not fail");
         for p in &request.params {
             hasher
-                .write(p.to_string().as_bytes())
+                .write_all(p.to_string().as_bytes())
                 .expect("should not fail");
         }
         let key: [u8; 64] = hasher.finalize().into();

@@ -89,9 +89,7 @@ pub async fn start_server(
                 let params = params
                     .parse::<JsonValue>()?
                     .as_array()
-                    .ok_or(CallError::InvalidParams(anyhow::Error::msg(
-                        "invalid params",
-                    )))?
+                    .ok_or_else(|| CallError::InvalidParams(anyhow::Error::msg("invalid params")))?
                     .to_owned();
                 middlewares
                     .call(CallRequest::new(method_name.into(), params))
