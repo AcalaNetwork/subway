@@ -1,65 +1,10 @@
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 
-use crate::enable_logger;
-
+use super::mock::*;
 use super::*;
 
 use futures::StreamExt;
-use jsonrpsee::{
-    server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
-    SubscriptionSink,
-};
 use tokio::sync::{mpsc, oneshot};
-
-async fn dummy_server() -> (
-    SocketAddr,
-    ServerHandle,
-    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
-    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-) {
-    enable_logger();
-
-    let mut module = RpcModule::new(());
-
-    let (tx, rx) = mpsc::channel::<(JsonValue, oneshot::Sender<JsonValue>)>(100);
-    let (sub_tx, sub_rx) = mpsc::channel::<(JsonValue, SubscriptionSink)>(100);
-
-    module
-        .register_async_method("mock_rpc", move |params, _| {
-            let tx = tx.clone();
-            async move {
-                let (resp_tx, resp_rx) = oneshot::channel();
-                tx.send((params.parse::<JsonValue>().unwrap(), resp_tx))
-                    .await
-                    .unwrap();
-                let res = resp_rx.await;
-                res.map_err(|e| -> Error { CallError::Failed(e.into()).into() })
-            }
-        })
-        .unwrap();
-
-    module
-        .register_subscription("mock_sub", "sub", "mock_unsub", move |params, sink, _| {
-            let params = params.parse::<JsonValue>().unwrap();
-            let sub_tx = sub_tx.clone();
-            tokio::spawn(async move {
-                sub_tx.send((params, sink)).await.unwrap();
-            });
-            Ok(())
-        })
-        .unwrap();
-
-    let server = ServerBuilder::default()
-        .set_id_provider(RandomStringIdProvider::new(16))
-        .build("0.0.0.0:0")
-        .await
-        .unwrap();
-
-    let addr = server.local_addr().unwrap();
-    let handle = server.start(module).unwrap();
-
-    (addr, handle, rx, sub_rx)
-}
 
 #[tokio::test]
 async fn basic_request() {

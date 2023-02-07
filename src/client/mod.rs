@@ -12,6 +12,8 @@ use jsonrpsee::{
 use crate::config::Config;
 
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
 pub struct Client {
