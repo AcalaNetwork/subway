@@ -178,6 +178,7 @@ pub async fn start_server(
                         }
                         Err(e) => {
                             log::error!("Error while handling subscription: {}", e);
+                            sink.close(e);
                         }
                     }
                 });
