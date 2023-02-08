@@ -5,6 +5,9 @@ use tokio::sync::{watch, RwLock};
 
 use crate::client::Client;
 
+#[cfg(test)]
+mod tests;
+
 pub struct ValueHandle<T> {
     inner: RwLock<watch::Receiver<Option<T>>>,
 }

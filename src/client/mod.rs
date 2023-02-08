@@ -12,7 +12,7 @@ use jsonrpsee::{
 use crate::config::Config;
 
 #[cfg(test)]
-mod mock;
+pub mod mock;
 #[cfg(test)]
 mod tests;
 
