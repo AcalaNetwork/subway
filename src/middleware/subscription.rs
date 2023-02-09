@@ -43,7 +43,7 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>> for 
                 &request.unsubscribe,
             )
             .await
-            .map_err(|e| SubscriptionCallbackError::Some(format!("{e}").into()))?;
+            .map_err(|e| SubscriptionCallbackError::Some(e.to_string()))?;
 
         let sink = sink.accept().await?;
 
