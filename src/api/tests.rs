@@ -1,4 +1,4 @@
-use jsonrpsee::{server::ServerHandle, SubscriptionSink};
+use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
@@ -52,8 +52,11 @@ async fn get_head_finalized_head() {
         assert_eq!(head.read().await, (json!("0xabcd"), 0x1234));
     });
 
-    let (_, mut head_sink) = head_rx.recv().await.unwrap();
-    head_sink.send(&json!({ "number": "0x1234" })).unwrap();
+    let (_, head_sink) = head_rx.recv().await.unwrap();
+    head_sink
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x1234" })).unwrap())
+        .await
+        .unwrap();
 
     {
         let (params, tx) = block_rx.recv().await.unwrap();
@@ -61,9 +64,10 @@ async fn get_head_finalized_head() {
         tx.send(json!("0xabcd")).unwrap();
     }
 
-    let (_, mut finalized_head_sink) = finalized_head_rx.recv().await.unwrap();
+    let (_, finalized_head_sink) = finalized_head_rx.recv().await.unwrap();
     finalized_head_sink
-        .send(&json!({ "number": "0x4321" }))
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x4321" })).unwrap())
+        .await
         .unwrap();
 
     {
@@ -81,7 +85,10 @@ async fn get_head_finalized_head() {
 
     // new head
 
-    head_sink.send(&json!({ "number": "0x1122" })).unwrap();
+    head_sink
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x1122" })).unwrap())
+        .await
+        .unwrap();
 
     {
         let (params, tx) = block_rx.recv().await.unwrap();
@@ -101,10 +108,12 @@ async fn get_head_finalized_head() {
 
     // new finalized head
     finalized_head_sink
-        .send(&json!({ "number": "0x2233" }))
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x2233" })).unwrap())
+        .await
         .unwrap();
     finalized_head_sink
-        .send(&json!({ "number": "0x3344" }))
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x3344" })).unwrap())
+        .await
         .unwrap();
 
     {

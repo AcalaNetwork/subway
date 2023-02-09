@@ -124,32 +124,20 @@ pub async fn start_server(
             subscribe_name,
             name,
             unsubscribe_name,
-            move |params, mut sink, _| {
+            move |params, sink, _| {
                 let params = params.into_owned();
-
                 let middlewares = middlewares.clone();
 
-                tokio::spawn(async move {
-                    let result = middlewares
+                async move {
+                    middlewares
                         .call(SubscriptionRequest {
                             subscribe: subscribe_name.into(),
                             params: params.clone(),
                             unsubscribe: unsubscribe_name.into(),
+                            sink,
                         })
-                        .await;
-
-                    match result {
-                        Ok(subscription) => {
-                            let subscription_closed = sink.pipe_from_try_stream(subscription).await;
-                            log::trace!("Subscription {:?}", subscription_closed);
-                        }
-                        Err(e) => {
-                            log::error!("Error while handling subscription: {}", e);
-                            sink.close(e);
-                        }
-                    }
-                });
-                Ok(())
+                        .await
+                }
             },
         )?;
     }

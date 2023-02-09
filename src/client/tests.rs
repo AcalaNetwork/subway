@@ -4,6 +4,7 @@ use super::mock::*;
 use super::*;
 
 use futures::StreamExt;
+use jsonrpsee::SubscriptionMessage;
 use tokio::sync::{mpsc, oneshot};
 
 #[tokio::test]
@@ -33,11 +34,17 @@ async fn basic_subscription() {
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
 
     let task = tokio::spawn(async move {
-        let (params, mut sink) = rx.recv().await.unwrap();
+        let (params, sink) = rx.recv().await.unwrap();
         assert_eq!(params.to_string(), "[123]");
-        sink.send(&JsonValue::from_str("10").unwrap()).unwrap();
-        sink.send(&JsonValue::from_str("11").unwrap()).unwrap();
-        sink.send(&JsonValue::from_str("12").unwrap()).unwrap();
+        sink.send(SubscriptionMessage::from_json(&10).unwrap())
+            .await
+            .unwrap();
+        sink.send(SubscriptionMessage::from_json(&11).unwrap())
+            .await
+            .unwrap();
+        sink.send(SubscriptionMessage::from_json(&12).unwrap())
+            .await
+            .unwrap();
     });
 
     let result = client

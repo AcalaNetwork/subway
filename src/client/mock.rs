@@ -6,6 +6,7 @@ use crate::enable_logger;
 
 use super::*;
 
+use futures::TryFutureExt;
 use jsonrpsee::{
     server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
     SubscriptionSink,
@@ -56,9 +57,10 @@ impl TestServerBuilder {
                 let tx = tx.clone();
                 let params = params.parse::<JsonValue>().unwrap();
                 tokio::spawn(async move {
+                    let sink = sink.accept().await.unwrap();
                     tx.send((params, sink)).await.unwrap();
-                });
-                Ok(())
+                })
+                .map_err(|_| jsonrpsee::core::SubscriptionCallbackError::None)
             })
             .unwrap();
         rx

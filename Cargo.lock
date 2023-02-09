@@ -830,6 +830,7 @@ dependencies = [
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
+ "tokio",
  "tracing",
 ]
 
@@ -865,7 +866,6 @@ dependencies = [
  "async-lock",
  "async-trait",
  "beef",
- "futures-channel",
  "futures-timer",
  "futures-util",
  "globset",
@@ -917,7 +917,6 @@ dependencies = [
 name = "jsonrpsee-server"
 version = "0.16.2"
 dependencies = [
- "futures-channel",
  "futures-util",
  "http",
  "hyper",
