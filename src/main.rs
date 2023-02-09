@@ -6,13 +6,17 @@ mod middleware;
 mod server;
 
 fn enable_logger() {
-    let _ = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::builder()
-                .with_default_directive(tracing::Level::INFO.into())
-                .from_env_lossy(),
-        )
-        .try_init();
+    let log_format = std::env::var("LOG_FORMAT");
+    let builder = tracing_subscriber::FmtSubscriber::builder().with_env_filter(
+        tracing_subscriber::EnvFilter::builder()
+            .with_default_directive(tracing::Level::INFO.into())
+            .from_env_lossy(),
+    );
+    if log_format.is_ok() && log_format.unwrap().to_lowercase() == "json" {
+        let _ = builder.json().try_init();
+    } else {
+        let _ = builder.try_init();
+    }
 }
 
 #[tokio::main]
