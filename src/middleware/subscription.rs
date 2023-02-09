@@ -48,7 +48,13 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>> for 
         let sink = sink.accept().await?;
 
         while let Some(resp) = sub.next().await {
-            let resp: Result<_, ErrorObjectOwned> = resp.map_err(|e| e.into());
+            let resp = match resp {
+                Ok(resp) => resp,
+                Err(e) => {
+                    log::error!("Subscription error: {}", e);
+                    continue;
+                }
+            };
             let resp = match SubscriptionMessage::from_json(&resp) {
                 Ok(resp) => resp,
                 Err(e) => {
