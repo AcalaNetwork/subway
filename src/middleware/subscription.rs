@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use jsonrpsee::{
-    core::SubscriptionCallbackError,
-    types::{ErrorObjectOwned, Params},
-    PendingSubscriptionSink, SubscriptionMessage,
+    core::SubscriptionCallbackError, types::Params, PendingSubscriptionSink, SubscriptionMessage,
 };
 use std::sync::Arc;
 
