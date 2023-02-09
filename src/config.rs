@@ -57,8 +57,16 @@ pub fn read_config() -> Result<Config, String> {
 
     let config =
         fs::read_to_string(cmd.config).map_err(|e| format!("Unable to read config file: {e}"))?;
-    let config: Config =
+    let mut config: Config =
         serde_yaml::from_str(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
+
+    let env_port = std::env::var("PORT");
+    if let Ok(env_port) = env_port {
+        let port = env_port.parse::<u16>();
+        if let Ok(port) = port {
+            config.server.port = port;
+        }
+    }
 
     Ok(config)
 }
