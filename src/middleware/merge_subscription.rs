@@ -51,14 +51,19 @@ impl MergeSubscriptionMiddleware {
         let client = self.client.clone();
         let upstream_subs = self.upstream_subs.clone();
 
-        tokio::spawn(async move {
-            // this ticker acts like a waker to help cleanup subscriptions
-            let mut interval = tokio::time::interval(Duration::from_secs(60));
+        // this ticker acts like a waker to help cleanup subscriptions
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // The first tick completes immediately
+        interval.tick().await;
 
+        tokio::spawn(async move {
             loop {
                 tokio::select! {
                     resp = subscription.next() => {
                         if tx.receiver_count() == 0 { break; }
+
+                        interval.reset();
 
                         if let Some(Ok(value)) = resp {
                             if let Ok(message) = SubscriptionMessage::from_json(&value) {
@@ -127,20 +132,22 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
 
         let sink = request.sink.accept().await?;
 
-        let current_value = stream.borrow().to_owned();
-        if let Some(current_value) = current_value {
-            sink.send(current_value).await?;
-        }
-
         // subscribe to upstream subscription
         tokio::spawn(async move {
             // this ticker acts like a waker to help cleanup sinks
             let mut interval = tokio::time::interval(Duration::from_secs(30));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            // The first tick completes immediately
+            interval.tick().await;
 
             loop {
                 tokio::select! {
-                    _ = stream.changed() => {
+                    resp = stream.changed() => {
+                        if resp.is_err() { break; }
                         if sink.is_closed() { break; }
+
+                        interval.reset();
+
                         let new_value = stream.borrow().to_owned();
                         if let Some(new_value) = new_value {
                             if (sink.send(new_value).await).is_err() { break; }
