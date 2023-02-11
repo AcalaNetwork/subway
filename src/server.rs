@@ -14,6 +14,7 @@ use crate::{
         cache::CacheMiddleware,
         call::{self, CallRequest},
         inject_params::{InjectParamsMiddleware, InjectType},
+        merge_subscription::MergeSubscriptionMiddleware,
         subscription::{self, SubscriptionRequest},
         Middleware, Middlewares,
     },
@@ -98,15 +99,22 @@ pub async fn start_server(
         })?;
     }
 
-    let upstream = Arc::new(subscription::UpstreamMiddleware::new(client));
+    let upstream = Arc::new(subscription::UpstreamMiddleware::new(client.clone()));
 
     for subscription in &config.rpcs.subscriptions {
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());
         let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
         let name = string_to_static_str(subscription.name.clone());
 
+        let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
+        if subscription.merge {
+            list.push(Arc::new(MergeSubscriptionMiddleware::new(client.clone())));
+        } else {
+            list.push(upstream.clone());
+        }
+
         let middlewares = Arc::new(Middlewares::new(
-            vec![upstream.clone()],
+            list,
             Arc::new(|_| {
                 async {
                     Err(
@@ -125,14 +133,19 @@ pub async fn start_server(
             name,
             unsubscribe_name,
             move |params, sink, _| {
-                let params = params.into_owned();
                 let middlewares = middlewares.clone();
-
                 async move {
+                    let params = params
+                        .parse::<JsonValue>()?
+                        .as_array()
+                        .ok_or_else(|| {
+                            CallError::InvalidParams(anyhow::Error::msg("invalid params"))
+                        })?
+                        .to_owned();
                     middlewares
                         .call(SubscriptionRequest {
                             subscribe: subscribe_name.into(),
-                            params: params.clone(),
+                            params,
                             unsubscribe: unsubscribe_name.into(),
                             sink,
                         })

@@ -97,7 +97,7 @@ rpcs:
     - subscribe: state_subscribeStorage
       unsubscribe: state_unsubscribeStorage
       name: state_storage
-      merge: true
+      # merge: true
 
   aliases:
     - [chain_subscribeNewHeads, chain_subscribeNewHead]
