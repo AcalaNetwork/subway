@@ -35,6 +35,15 @@ pub struct RpcMethod {
     pub with_block_number: Option<usize>,
 }
 
+#[derive(Copy, Clone, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeStrategy {
+    // Replace old value with new value
+    Replace,
+    // Merge old storage changes with new changes
+    MergeStorageChanges,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct RpcSubscription {
     pub subscribe: String,
@@ -42,7 +51,7 @@ pub struct RpcSubscription {
     pub name: String,
 
     #[serde(default)]
-    pub merge: bool,
+    pub merge_strategy: Option<MergeStrategy>,
 }
 
 #[derive(Deserialize, Debug)]

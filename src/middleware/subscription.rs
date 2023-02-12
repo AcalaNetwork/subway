@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use jsonrpsee::{
-    core::SubscriptionCallbackError, types::Params, PendingSubscriptionSink, SubscriptionMessage,
+    core::JsonValue, core::SubscriptionCallbackError, PendingSubscriptionSink, SubscriptionMessage,
 };
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use crate::client::Client;
 
 pub struct SubscriptionRequest {
     pub subscribe: String,
-    pub params: Params<'static>,
+    pub params: Vec<JsonValue>,
     pub unsubscribe: String,
     pub sink: PendingSubscriptionSink,
 }
@@ -35,11 +35,7 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>> for 
 
         let mut sub = self
             .client
-            .subscribe(
-                &request.subscribe,
-                request.params.parse()?,
-                &request.unsubscribe,
-            )
+            .subscribe(&request.subscribe, request.params, &request.unsubscribe)
             .await
             .map_err(|e| SubscriptionCallbackError::Some(e.to_string()))?;
 
