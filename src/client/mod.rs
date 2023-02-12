@@ -66,7 +66,7 @@ impl Client {
                         current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let url = &endpoints[current_endpoint % endpoints.len()];
 
-                    log::debug!("Connecting to endpoint: {}", url);
+                    tracing::debug!("Connecting to endpoint: {}", url);
 
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(30))
@@ -86,13 +86,13 @@ impl Client {
                             tokio::spawn(async move {
                                 ws2.on_disconnect().await;
                                 if let Err(e) = disconnect_tx.send(()).await {
-                                    log::debug!("Unable to send disconnect: {}", e);
+                                    tracing::debug!("Unable to send disconnect: {}", e);
                                 }
                             });
                             break ws;
                         }
                         Err(e) => {
-                            log::debug!("Unable to connect to endpoint: {}", e);
+                            tracing::debug!("Unable to connect to endpoint: {}", e);
                             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                     }
@@ -115,15 +115,15 @@ impl Client {
                             match result {
                                 result @ Ok(_) => {
                                     if let Err(e) = response.send(result) {
-                                        log::warn!("Failed to send response: {:?}", e);
+                                        tracing::warn!("Failed to send response: {:?}", e);
                                     }
                                 }
                                 Err(err) => {
-                                    log::debug!("Request failed: {:?}", err);
+                                    tracing::debug!("Request failed: {:?}", err);
                                     match err {
                                         Error::RequestTimeout => {
                                             if let Err(e) = tx.send(Message::RotateEndpoint).await {
-                                                log::warn!(
+                                                tracing::warn!(
                                                     "Failed to send rotate message: {:?}",
                                                     e
                                                 );
@@ -136,7 +136,7 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                log::warn!(
+                                                tracing::warn!(
                                                     "Failed to send request message: {:?}",
                                                     e
                                                 );
@@ -151,7 +151,7 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                log::warn!(
+                                                tracing::warn!(
                                                     "Failed to send request message: {:?}",
                                                     e
                                                 );
@@ -160,7 +160,7 @@ impl Client {
                                         err => {
                                             // not something we can handle, send it back to the caller
                                             if let Err(e) = response.send(Err(err)) {
-                                                log::warn!("Failed to send response: {:?}", e);
+                                                tracing::warn!("Failed to send response: {:?}", e);
                                             }
                                         }
                                     }
@@ -178,15 +178,15 @@ impl Client {
                             match result {
                                 result @ Ok(_) => {
                                     if let Err(e) = response.send(result) {
-                                        log::warn!("Failed to send response: {:?}", e);
+                                        tracing::warn!("Failed to send response: {:?}", e);
                                     }
                                 }
                                 Err(err) => {
-                                    log::debug!("Subscribe failed: {:?}", err);
+                                    tracing::debug!("Subscribe failed: {:?}", err);
                                     match err {
                                         Error::RequestTimeout => {
                                             if let Err(e) = tx.send(Message::RotateEndpoint).await {
-                                                log::warn!(
+                                                tracing::warn!(
                                                     "Failed to send rotate message: {:?}",
                                                     e
                                                 );
@@ -200,7 +200,7 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                log::warn!(
+                                                tracing::warn!(
                                                     "Failed to send subscribe message: {:?}",
                                                     e
                                                 );
@@ -216,7 +216,7 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                log::warn!(
+                                                tracing::warn!(
                                                     "Failed to send subscribe message: {:?}",
                                                     e
                                                 );
@@ -225,7 +225,7 @@ impl Client {
                                         err => {
                                             // not something we can handle, send it back to the caller
                                             if let Err(e) = response.send(Err(err)) {
-                                                log::warn!("Failed to send response: {:?}", e);
+                                                tracing::warn!("Failed to send response: {:?}", e);
                                             }
                                         }
                                     }
@@ -242,18 +242,18 @@ impl Client {
             loop {
                 tokio::select! {
                     _ = disconnect_rx.recv() => {
-                        log::debug!("Disconnected from endpoint");
+                        tracing::debug!("Disconnected from endpoint");
                         ws = build_ws().await;
                     }
                     message = rx.recv() => {
-                        log::trace!("Received message {message:?}");
+                        tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
                                 ws = build_ws().await;
                             }
                             Some(message) => handle_message(message, ws.clone()),
                             None => {
-                                log::debug!("Client dropped");
+                                tracing::debug!("Client dropped");
                                 break;
                             }
                         }

@@ -45,19 +45,19 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>> for 
             let resp = match resp {
                 Ok(resp) => resp,
                 Err(e) => {
-                    log::error!("Subscription error: {}", e);
+                    tracing::error!("Subscription error: {}", e);
                     continue;
                 }
             };
             let resp = match SubscriptionMessage::from_json(&resp) {
                 Ok(resp) => resp,
                 Err(e) => {
-                    log::error!("Failed to serialize subscription response: {}", e);
+                    tracing::error!("Failed to serialize subscription response: {}", e);
                     continue;
                 }
             };
             if let Err(e) = sink.send(resp).await {
-                log::debug!("Failed to send subscription response: {}", e);
+                tracing::debug!("Failed to send subscription response: {}", e);
                 break;
             }
         }

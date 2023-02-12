@@ -91,11 +91,11 @@ impl MergeSubscriptionMiddleware {
         unsubscribe: String,
     ) -> Result<broadcast::Receiver<SubscriptionMessage>, SubscriptionCallbackError> {
         if let Some(tx) = self.upstream_subs.read().await.get(&key).cloned() {
-            log::trace!("Found existing upstream subscription for {}", &subscribe);
+            tracing::trace!("Found existing upstream subscription for {}", &subscribe);
             return Ok(tx.subscribe());
         }
 
-        log::trace!("Create new upstream subscription for {}", &subscribe);
+        tracing::trace!("Create new upstream subscription for {}", &subscribe);
 
         let mut subscription = self
             .client
@@ -133,7 +133,7 @@ impl MergeSubscriptionMiddleware {
                             // broadcast value change
                             if let Ok(message) = SubscriptionMessage::from_json(&value) {
                                 if let Err(err) = tx.send(message.clone()) {
-                                    log::error!("Failed to send message: {}", err);
+                                    tracing::error!("Failed to send message: {}", err);
                                     break;
                                 }
                             }
@@ -143,7 +143,7 @@ impl MergeSubscriptionMiddleware {
                                     subscription = new_subscription;
                                 }
                                 Err(err) => {
-                                    log::error!("failed to resubscribe {:?}", err);
+                                    tracing::error!("failed to resubscribe {:?}", err);
                                     break;
                                 }
                             }
@@ -159,7 +159,7 @@ impl MergeSubscriptionMiddleware {
             upstream_subs.write().await.remove(&key);
             current_values.write().await.remove(&key);
             if let Err(err) = subscription.unsubscribe().await {
-                log::error!("Failed to unsubscription {:?}", err);
+                tracing::error!("Failed to unsubscription {:?}", err);
             }
         });
 
@@ -209,26 +209,27 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
 
         // broadcast new values
         tokio::spawn(async move {
-            // this ticker acts like a waker to help cleanup sinks
-            let mut interval = tokio::time::interval(Duration::from_secs(30));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            // The first tick completes immediately
-            interval.tick().await;
-
             loop {
                 tokio::select! {
                     resp = stream.recv() => {
-                        if sink.is_closed() { break; }
                         match resp {
-                            Err(_) => { break; }
                             Ok(new_value) => {
-                                interval.reset();
-                                if (sink.send(new_value).await).is_err() { break; }
+                                if let Err(e) = sink.send(new_value).await {
+                                    // subscription sink closed?
+                                    tracing::trace!("subscription sink send error {e:?}");
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                // this should never happen
+                                tracing::error!("subscription stream error {e:?}");
+                                unreachable!("subscription stream error {e:?}");
                             }
                         }
                     }
-                    _ = interval.tick() => {
-                        if sink.is_closed() { break; }
+                    _ = sink.closed() => {
+                        tracing::trace!("subscription sink closed");
+                        break;
                     }
                 }
             }
