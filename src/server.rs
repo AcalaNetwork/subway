@@ -100,7 +100,6 @@ pub async fn start_server(
     }
 
     let upstream = Arc::new(subscription::UpstreamMiddleware::new(client.clone()));
-    let merge_subscription = Arc::new(MergeSubscriptionMiddleware::new(client));
 
     for subscription in &config.rpcs.subscriptions {
         let subscribe_name = string_to_static_str(subscription.subscribe.clone());
@@ -108,11 +107,13 @@ pub async fn start_server(
         let name = string_to_static_str(subscription.name.clone());
 
         let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
-        if subscription.merge {
-            list.push(merge_subscription.clone());
-        } else {
-            list.push(upstream.clone());
-        }
+        match subscription.merge_strategy {
+            Some(merge_strategy) => list.push(Arc::new(MergeSubscriptionMiddleware::new(
+                client.clone(),
+                merge_strategy,
+            ))),
+            None => list.push(upstream.clone()),
+        };
 
         let middlewares = Arc::new(Middlewares::new(
             list,

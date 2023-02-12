@@ -82,22 +82,22 @@ rpcs:
     - subscribe: chain_subscribeNewHeads
       unsubscribe: chain_unsubscribeNewHeads
       name: chain_newHead
-      merge: true
+      merge_strategy: replace
       
     - subscribe: chain_subscribeFinalizedHeads
       unsubscribe: chain_unsubscribeFinalizedHeads
       name: chain_finalizedHead
-      merge: true
+      merge_strategy: replace
 
     - subscribe: state_subscribeRuntimeVersion
       unsubscribe: state_unsubscribeRuntimeVersion
       name: state_runtimeVersion
-      merge: true
+      merge_strategy: replace
 
     - subscribe: state_subscribeStorage
       unsubscribe: state_unsubscribeStorage
       name: state_storage
-      # merge: true
+      merge_strategy: merge_storage_changes
 
   aliases:
     - [chain_subscribeNewHeads, chain_subscribeNewHead]
