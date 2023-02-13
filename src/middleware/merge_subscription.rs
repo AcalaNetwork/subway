@@ -91,10 +91,13 @@ impl MergeSubscriptionMiddleware {
         subscribe: String,
         params: Vec<JsonValue>,
         unsubscribe: String,
-    ) -> Result<broadcast::Receiver<SubscriptionMessage>, SubscriptionCallbackError> {
+    ) -> Result<
+        Box<dyn FnOnce() -> broadcast::Receiver<SubscriptionMessage> + Sync + Send + 'static>,
+        SubscriptionCallbackError,
+    > {
         if let Some(tx) = self.upstream_subs.read().await.get(&key).cloned() {
             tracing::trace!("Found existing upstream subscription for {}", &subscribe);
-            return Ok(tx.subscribe());
+            return Ok(Box::new(move || tx.subscribe()));
         }
 
         tracing::trace!("Create new upstream subscription for {}", &subscribe);
@@ -105,7 +108,8 @@ impl MergeSubscriptionMiddleware {
             .await
             .map_err(|e| SubscriptionCallbackError::Some(e.to_string()))?;
 
-        let (tx, rx) = broadcast::channel(1);
+        let (tx, _) = broadcast::channel(1);
+
         self.upstream_subs
             .write()
             .await
@@ -116,59 +120,65 @@ impl MergeSubscriptionMiddleware {
         let upstream_subs = self.upstream_subs.clone();
         let current_values = self.current_values.clone();
 
-        tokio::spawn(async move {
-            // this ticker acts like a waker to help cleanup subscriptions
-            let mut interval = tokio::time::interval(Duration::from_secs(60));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            // The first tick completes immediately
-            interval.tick().await;
+        let subscribe = Box::new(move || {
+            let rx = tx.subscribe();
 
-            loop {
-                tokio::select! {
-                    resp = subscription.next() => {
-                        if tx.receiver_count() == 0 { break; }
+            tokio::spawn(async move {
+                // this ticker acts like a waker to help cleanup subscriptions
+                let mut interval = tokio::time::interval(Duration::from_secs(60));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                // The first tick completes immediately
+                interval.tick().await;
 
-                        interval.reset();
+                loop {
+                    tokio::select! {
+                        resp = subscription.next() => {
+                            // break if no receiver
+                            if tx.receiver_count() == 0 { break; }
 
-                        if let Some(Ok(value)) = resp {
-                            // update current value
-                            let current_value = current_values.read().await.get(&key).cloned();
-                            current_values.write().await.insert(key.clone(), handle_value_change(merge_strategy, current_value, value.clone()));
+                            interval.reset();
 
-                            // broadcast value change
-                            if let Ok(message) = SubscriptionMessage::from_json(&value) {
-                                if let Err(err) = tx.send(message.clone()) {
-                                    tracing::error!("Failed to send message: {}", err);
-                                    break;
+                            if let Some(Ok(value)) = resp {
+                                // update current value
+                                let current_value = current_values.read().await.get(&key).cloned();
+                                current_values.write().await.insert(key.clone(), handle_value_change(merge_strategy, current_value, value.clone()));
+
+                                if let Ok(message) = SubscriptionMessage::from_json(&value) {
+                                    if let Err(err) = tx.send(message.clone()) {
+                                        tracing::error!("Failed to send message: {}", err);
+                                        break;
+                                    }
                                 }
-                            }
-                        } else {
-                            match client.subscribe(&subscribe, params.clone(), &unsubscribe).await {
-                                Ok(new_subscription) => {
-                                    subscription = new_subscription;
-                                }
-                                Err(err) => {
-                                    tracing::error!("failed to resubscribe {:?}", err);
-                                    break;
+                            } else {
+                                match client.subscribe(&subscribe, params.clone(), &unsubscribe).await {
+                                    Ok(new_subscription) => {
+                                        subscription = new_subscription;
+                                    }
+                                    Err(err) => {
+                                        tracing::error!("failed to resubscribe {:?}", err);
+                                        break;
+                                    }
                                 }
                             }
                         }
-                    }
-                    _ = interval.tick() => {
-                        // break if no other receiver than the one on hash map
-                        if tx.receiver_count() == 0 { break; }
+                        _ = interval.tick() => {
+                            // break if no receiver
+                            if tx.receiver_count() == 0 { break; }
+                        }
                     }
                 }
-            }
 
-            upstream_subs.write().await.remove(&key);
-            current_values.write().await.remove(&key);
-            if let Err(err) = subscription.unsubscribe().await {
-                tracing::error!("Failed to unsubscription {:?}", err);
-            }
+                upstream_subs.write().await.remove(&key);
+                current_values.write().await.remove(&key);
+                if let Err(err) = subscription.unsubscribe().await {
+                    tracing::error!("Failed to unsubscription {:?}", err);
+                }
+            });
+
+            rx
         });
 
-        Ok(rx)
+        Ok(subscribe)
     }
 }
 
@@ -185,16 +195,21 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
 
         let sink = request.sink.accept().await?;
 
-        // send current value
-        if let Some(current) = self.current_values.read().await.get(&key) {
-            if let Ok(message) = SubscriptionMessage::from_json(&current) {
-                if (sink.send(message).await).is_err() {
-                    return Ok(());
-                }
+        if let Some(current_value) = self
+            .current_values
+            .read()
+            .await
+            .get(&key)
+            .map(|x| SubscriptionMessage::from_json(&x).ok())
+            .unwrap_or(None)
+        {
+            if let Err(e) = sink.send(current_value).await {
+                tracing::trace!("subscription sink closed {e:?}");
+                return Ok(());
             }
         }
 
-        let mut stream = self
+        let subscribe = self
             .get_upstream_subscription(
                 key,
                 request.subscribe.to_owned(),
@@ -205,14 +220,16 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
 
         // broadcast new values
         tokio::spawn(async move {
+            // create receiver inside task to avoid msg been broadcast before stream.recv() is hit
+            let mut stream = subscribe();
+
             loop {
                 tokio::select! {
                     resp = stream.recv() => {
                         match resp {
                             Ok(new_value) => {
                                 if let Err(e) = sink.send(new_value).await {
-                                    // subscription sink closed?
-                                    tracing::trace!("subscription sink send error {e:?}");
+                                    tracing::trace!("subscription sink closed {e:?}");
                                     break;
                                 }
                             }
