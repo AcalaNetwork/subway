@@ -1,18 +1,19 @@
-use std::io::Write;
-
 use async_trait::async_trait;
-use blake2::{Blake2b512, Digest};
+use blake2::Blake2b512;
 use jsonrpsee::core::{Error, JsonValue};
 
 use super::{Middleware, NextFn};
-use crate::{cache::Cache, middleware::call::CallRequest};
+use crate::{
+    cache::{Cache, CacheKey},
+    middleware::call::CallRequest,
+};
 
 pub struct CacheMiddleware {
-    cache: Cache,
+    cache: Cache<Blake2b512>,
 }
 
 impl CacheMiddleware {
-    pub fn new(cache: Cache) -> Self {
+    pub fn new(cache: Cache<Blake2b512>) -> Self {
         Self { cache }
     }
 }
@@ -24,16 +25,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        let mut hasher = Blake2b512::new();
-        hasher
-            .write_all(request.method.as_bytes())
-            .expect("should not fail");
-        for p in &request.params {
-            hasher
-                .write_all(p.to_string().as_bytes())
-                .expect("should not fail");
-        }
-        let key: [u8; 64] = hasher.finalize().into();
+        let key = CacheKey::<Blake2b512>::new(&request.method, &request.params);
 
         if let Some(value) = self.cache.get(&key).await {
             return Ok(value);
@@ -42,9 +34,113 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         let result = next(request).await;
 
         if let Ok(ref value) = result {
-            self.cache.put(key, value.clone());
+            let cache = self.cache.clone();
+            let value = value.clone();
+            tokio::spawn(async move {
+                cache.put(key, value).await;
+            });
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::FutureExt;
+    use serde_json::json;
+    use std::num::NonZeroUsize;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn handle_ok_resp() {
+        let middleware = CacheMiddleware::new(Cache::new(NonZeroUsize::new(3).unwrap()));
+
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test".into(),
+                    params: vec![json!(11)],
+                },
+                Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // wait for cache write
+        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+
+        // cache hit
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test".into(),
+                    params: vec![json!(11)],
+                },
+                Box::new(move |_| async move { panic!() }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // cache miss with different params
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test".into(),
+                    params: vec![json!(22)],
+                },
+                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(2));
+
+        // cache miss with different method
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test2".into(),
+                    params: vec![json!(22)],
+                },
+                Box::new(move |_| async move { Ok(json!(3)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(3));
+
+        // cache hit and update prune priority
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test".into(),
+                    params: vec![json!(11)],
+                },
+                Box::new(move |_| async move { panic!() }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // cache override oldest entry
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test2".into(),
+                    params: vec![json!(33)],
+                },
+                Box::new(move |_| async move { Ok(json!(4)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(4));
+
+        // cache miss due to entry pruned
+        let res = middleware
+            .call(
+                CallRequest {
+                    method: "test".into(),
+                    params: vec![json!(22)],
+                },
+                Box::new(move |_| async move { Ok(json!(5)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(5));
     }
 }
