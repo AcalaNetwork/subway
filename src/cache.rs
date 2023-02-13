@@ -1,5 +1,4 @@
-use blake2::digest::Output;
-use blake2::Digest;
+use blake2::{digest::Output, Digest};
 use jsonrpsee::core::JsonValue;
 use lru::LruCache;
 use std::num::NonZeroUsize;

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use blake2::{Blake2b512, Digest};
+use blake2::Blake2b512;
 use jsonrpsee::{
     core::{JsonValue, SubscriptionCallbackError},
     SubscriptionMessage,
@@ -7,14 +7,16 @@ use jsonrpsee::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
-    io::Write,
     sync::Arc,
     time::Duration,
 };
 use tokio::sync::{broadcast, RwLock};
 
 use super::{Middleware, NextFn};
-use crate::{client::Client, config::MergeStrategy, middleware::subscription::SubscriptionRequest};
+use crate::{
+    cache::CacheKey, client::Client, config::MergeStrategy,
+    middleware::subscription::SubscriptionRequest,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StorageChanges {
@@ -69,8 +71,8 @@ type UpstreamSubscription = broadcast::Sender<SubscriptionMessage>;
 pub struct MergeSubscriptionMiddleware {
     client: Arc<Client>,
     merge_strategy: MergeStrategy,
-    upstream_subs: Arc<RwLock<HashMap<[u8; 64], UpstreamSubscription>>>,
-    current_values: Arc<RwLock<HashMap<[u8; 64], JsonValue>>>,
+    upstream_subs: Arc<RwLock<HashMap<CacheKey<Blake2b512>, UpstreamSubscription>>>,
+    current_values: Arc<RwLock<HashMap<CacheKey<Blake2b512>, JsonValue>>>,
 }
 
 impl MergeSubscriptionMiddleware {
@@ -85,7 +87,7 @@ impl MergeSubscriptionMiddleware {
 
     async fn get_upstream_subscription(
         &self,
-        key: [u8; 64],
+        key: CacheKey<Blake2b512>,
         subscribe: String,
         params: Vec<JsonValue>,
         unsubscribe: String,
@@ -104,7 +106,10 @@ impl MergeSubscriptionMiddleware {
             .map_err(|e| SubscriptionCallbackError::Some(e.to_string()))?;
 
         let (tx, rx) = broadcast::channel(1);
-        self.upstream_subs.write().await.insert(key, tx.clone());
+        self.upstream_subs
+            .write()
+            .await
+            .insert(key.clone(), tx.clone());
 
         let merge_strategy = self.merge_strategy;
         let client = self.client.clone();
@@ -128,7 +133,7 @@ impl MergeSubscriptionMiddleware {
                         if let Some(Ok(value)) = resp {
                             // update current value
                             let current_value = current_values.read().await.get(&key).cloned();
-                            current_values.write().await.insert(key, handle_value_change(merge_strategy, current_value, value.clone()));
+                            current_values.write().await.insert(key.clone(), handle_value_change(merge_strategy, current_value, value.clone()));
 
                             // broadcast value change
                             if let Ok(message) = SubscriptionMessage::from_json(&value) {
@@ -176,16 +181,7 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
         request: SubscriptionRequest,
         _next: NextFn<SubscriptionRequest, Result<(), SubscriptionCallbackError>>,
     ) -> Result<(), SubscriptionCallbackError> {
-        let mut hasher = Blake2b512::new();
-        hasher
-            .write_all(request.subscribe.as_bytes())
-            .expect("should not fail");
-        for p in &request.params {
-            hasher
-                .write_all(p.to_string().as_bytes())
-                .expect("should not fail");
-        }
-        let key: [u8; 64] = hasher.finalize().into();
+        let key = CacheKey::new(&request.subscribe, &request.params);
 
         let sink = request.sink.accept().await?;
 
