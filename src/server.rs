@@ -2,6 +2,7 @@ use futures::FutureExt;
 use jsonrpsee::core::JsonValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use jsonrpsee::types::error::CallError;
+use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 use tokio::task::JoinHandle;
 
@@ -171,14 +172,10 @@ pub async fn start_server(
     rpc_methods.sort();
 
     module.register_method("rpc_methods", move |_, _| {
-        #[derive(serde::Serialize)]
-        struct RpcMethodsResp {
-            methods: Vec<String>,
-        }
-
-        Ok(RpcMethodsResp {
-            methods: rpc_methods.clone(),
-        })
+        Ok(json!({
+            "version": 1,
+            "methods": rpc_methods
+        }))
     })?;
 
     let addr = server.local_addr()?;
