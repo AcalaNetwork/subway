@@ -24,7 +24,7 @@ impl<T: Clone> ValueHandle<T> {
 
         let mut write_guard = self.inner.write().await;
         if let Err(e) = write_guard.changed().await {
-            log::error!("Changed channel closed: {}", e);
+            tracing::error!("Changed channel closed: {}", e);
         }
 
         let val = (*write_guard)

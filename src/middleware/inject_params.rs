@@ -58,7 +58,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
             len if len == idx => {
                 // without current block
                 let to_inject = self.get_parameter().await;
-                log::debug!("Injected param {} to method {}", &to_inject, request.method);
+                tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
                 request.params.push(to_inject);
                 return next(request).await;
             }
