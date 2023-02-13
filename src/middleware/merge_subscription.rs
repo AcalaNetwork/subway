@@ -108,7 +108,7 @@ impl MergeSubscriptionMiddleware {
             .await
             .map_err(|e| SubscriptionCallbackError::Some(e.to_string()))?;
 
-        let (tx, _) = broadcast::channel(1);
+        let (tx, _) = broadcast::channel(1024);
 
         self.upstream_subs
             .write()
