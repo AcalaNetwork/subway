@@ -11,7 +11,7 @@ rpcs:
   methods:
     - method: author_submitExtrinsic
       params:
-        - Bytes
+        - Any
 
     - method: author_pendingExtrinsics
 
@@ -45,28 +45,28 @@ rpcs:
     - method: state_getStorage
       cache: 2000
       params:
-        - StorageKey
+        - Any
         - !at BlockHash
 
     - method: state_getKeysPaged
       cache: 2000
       params:
-        - StorageKey
-        - U32
-        - !optional StorageKey
+        - Any
+        - Any
+        - !optional Any
         - !at BlockHash
 
     - method: state_queryStorageAt
       cache: 2000
       params:
-        - !vec StorageKey
+        - Any
         - !at BlockHash
 
     - method: state_call
       cache: 2000
       params:
-        - String
-        - Bytes
+        - Any
+        - Any
         - !at BlockHash
 
     - method: system_chain
@@ -89,12 +89,12 @@ rpcs:
     - method: system_dryRun
       cache: 100
       params:
-        - Bytes
+        - Any
         - !at BlockHash
 
     - method: system_accountNextIndex
       params:
-        - AccountId
+        - Any
 
   subscriptions:
     - subscribe: author_submitAndWatchExtrinsic

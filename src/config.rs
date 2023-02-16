@@ -46,15 +46,9 @@ impl RpcMethod {
 
 #[derive(Deserialize, Debug, Clone)]
 pub enum ParamType {
-    U32,
-    Bytes,
-    String,
-    AccountId,
+    Any,
     BlockHash,
     BlockNumber,
-    StorageKey,
-    #[serde(rename = "vec")]
-    Vec(Box<ParamType>),
     #[serde(rename = "optional")]
     Optional(Box<ParamType>),
     #[serde(rename = "at")]
