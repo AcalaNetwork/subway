@@ -27,12 +27,39 @@ pub struct ServerConfig {
 #[derive(Deserialize, Debug)]
 pub struct RpcMethod {
     pub method: String,
+    pub params: Vec<MethodParam>,
 
     #[serde(default)]
     pub cache: usize,
+}
 
-    pub with_block_hash: Option<usize>,
-    pub with_block_number: Option<usize>,
+impl RpcMethod {
+    pub fn inject_block_num(&self) -> Option<usize> {
+        self.params.iter().position(|p| {
+            p == &MethodParam {
+                name: "at".to_string(),
+                ty: "BlockNumber".to_string(),
+                is_optional: Some(true),
+            }
+        })
+    }
+
+    pub fn inject_block_hash(&self) -> Option<usize> {
+        self.params.iter().position(|p| {
+            p == &MethodParam {
+                name: "at".to_string(),
+                ty: "BlockHash".to_string(),
+                is_optional: Some(true),
+            }
+        })
+    }
+}
+
+#[derive(Deserialize, Debug, Eq, PartialEq)]
+pub struct MethodParam {
+    pub name: String,
+    pub ty: String,
+    pub is_optional: Option<bool>,
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]

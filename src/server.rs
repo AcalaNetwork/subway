@@ -49,16 +49,17 @@ pub async fn start_server(
     for method in &config.rpcs.methods {
         let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
 
-        if let Some(hash_index) = method.with_block_hash {
+        if let Some(index) = method.inject_block_hash() {
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
-                InjectType::BlockHashAt(hash_index),
+                InjectType::BlockHashAt(index),
+                method.method.clone(),
             )));
-        }
-        if let Some(number_index) = method.with_block_number {
+        } else if let Some(index) = method.inject_block_num() {
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
-                InjectType::BlockNumberAt(number_index),
+                InjectType::BlockNumberAt(index),
+                method.method.clone(),
             )));
         }
 
