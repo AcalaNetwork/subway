@@ -11,139 +11,90 @@ rpcs:
   methods:
     - method: author_submitExtrinsic
       params:
-        - name: extrinsic
-          ty: Bytes
+        - Bytes
 
     - method: author_pendingExtrinsics
-      params: []
 
     - method: chain_getBlockHash
       cache: 2000
       params:
-        - name: blockNumber
-          ty: BlockNumber
-          is_optional: true
-          inject: true
+        - !at BlockNumber
       
     - method: chain_getHeader
       cache: 2000
       params:
-        - name: hash
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - !at BlockHash
 
     - method: chain_getBlock
       cache: 2000
       params:
-        - name: hash
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - !at BlockHash
 
     - method: chain_getFinalizedHead
-      params: []
 
     - method: state_getRuntimeVersion
       cache: 2000
       params:
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - !at BlockHash
 
     - method: state_getMetadata
       cache: 2000
       params:
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - !at BlockHash
 
     - method: state_getStorage
       cache: 2000
       params:
-        - name: key
-          ty: StorageKey
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - StorageKey
+        - !at BlockHash
 
     - method: state_getKeysPaged
       cache: 2000
       params:
-        - name: key
-          ty: StorageKey
-        - name: count
-          ty: u32
-        - name: startKey
-          ty: StorageKey
-          is_optional: true
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - StorageKey
+        - U32
+        - !optional StorageKey
+        - !at BlockHash
 
     - method: state_queryStorageAt
       cache: 2000
       params:
-        - name: keys
-          ty: 'Vec<StorageKey>'
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - !vec StorageKey
+        - !at BlockHash
 
     - method: state_call
       cache: 2000
       params:
-        - name: method
-          ty: String
-        - name: data
-          ty: Bytes
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - String
+        - Bytes
+        - !at BlockHash
 
     - method: system_chain
       cache: 1
-      params: []
 
     - method: system_properties
       cache: 1
-      params: []
 
     - method: system_name
       cache: 1
-      params: []
 
     - method: system_version
       cache: 1
-      params: []
 
     - method: system_chainType
       cache: 1
-      params: []
 
     - method: system_health
-      params: []
 
     - method: system_dryRun
       cache: 100
       params:
-        - name: extrinsic
-          ty: Bytes
-        - name: at
-          ty: BlockHash
-          is_optional: true
-          inject: true
+        - Bytes
+        - !at BlockHash
 
     - method: system_accountNextIndex
       params:
-        - name: accountId
-          ty: AccountId
+        - AccountId
 
   subscriptions:
     - subscribe: author_submitAndWatchExtrinsic

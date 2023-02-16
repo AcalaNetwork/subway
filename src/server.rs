@@ -6,6 +6,7 @@ use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 use tokio::task::JoinHandle;
 
+use crate::config::ParamType;
 use crate::{
     api::Api,
     cache::Cache,
@@ -49,16 +50,21 @@ pub async fn start_server(
     for method in &config.rpcs.methods {
         let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
 
-        if let Some(index) = method.inject_block_hash() {
-            list.push(Arc::new(InjectParamsMiddleware::new(
-                api.clone(),
-                InjectType::BlockHashAt(index),
-            )));
-        } else if let Some(index) = method.inject_block_num() {
-            list.push(Arc::new(InjectParamsMiddleware::new(
-                api.clone(),
-                InjectType::BlockNumberAt(index),
-            )));
+        match method.at() {
+            // TODO: inclue params into middleware and do this inside
+            Some((index, ParamType::BlockHash)) => {
+                list.push(Arc::new(InjectParamsMiddleware::new(
+                    api.clone(),
+                    InjectType::BlockHashAt(index),
+                )));
+            }
+            Some((index, ParamType::BlockNumber)) => {
+                list.push(Arc::new(InjectParamsMiddleware::new(
+                    api.clone(),
+                    InjectType::BlockNumberAt(index),
+                )));
+            }
+            _ => {}
         }
 
         if method.cache > 0 {

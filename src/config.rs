@@ -27,32 +27,38 @@ pub struct ServerConfig {
 #[derive(Deserialize, Debug)]
 pub struct RpcMethod {
     pub method: String,
-    pub params: Vec<MethodParam>,
+
+    #[serde(default)]
+    pub params: Vec<ParamType>,
 
     #[serde(default)]
     pub cache: usize,
 }
 
 impl RpcMethod {
-    pub fn inject_block_num(&self) -> Option<usize> {
+    pub fn at(&self) -> Option<(usize, &ParamType)> {
         self.params
             .iter()
-            .position(|p| p.inject == Some(true) && p.ty == "BlockNumber")
-    }
-
-    pub fn inject_block_hash(&self) -> Option<usize> {
-        self.params
-            .iter()
-            .position(|p| p.inject == Some(true) && p.ty == "BlockHash")
+            .enumerate()
+            .rfind(|(_index, param)| matches!(param, ParamType::At(_)))
     }
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq)]
-pub struct MethodParam {
-    pub name: String,
-    pub ty: String,
-    pub is_optional: Option<bool>,
-    pub inject: Option<bool>,
+#[derive(Deserialize, Debug, Clone)]
+pub enum ParamType {
+    U32,
+    Bytes,
+    String,
+    AccountId,
+    BlockHash,
+    BlockNumber,
+    StorageKey,
+    #[serde(rename = "vec")]
+    Vec(Box<ParamType>),
+    #[serde(rename = "optional")]
+    Optional(Box<ParamType>),
+    #[serde(rename = "at")]
+    At(Box<ParamType>),
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]
@@ -84,10 +90,10 @@ pub struct RpcDefinitions {
 pub fn read_config() -> Result<Config, String> {
     let cmd = Command::parse();
 
-    let config =
-        fs::read_to_string(cmd.config).map_err(|e| format!("Unable to read config file: {e}"))?;
-    let mut config: Config =
-        serde_yaml::from_str(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
+    let config_file =
+        fs::File::open(cmd.config).map_err(|e| format!("Unable to read config file: {e}"))?;
+    let mut config: Config = serde_yaml::from_reader(&config_file)
+        .map_err(|e| format!("Unable to parse config file: {e}"))?;
 
     let env_port = std::env::var("PORT");
     if let Ok(env_port) = env_port {
