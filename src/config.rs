@@ -46,6 +46,7 @@ impl RpcMethod {
 
 #[derive(Deserialize, Debug, Clone)]
 pub enum ParamType {
+    Any,
     U32,
     Bytes,
     String,
