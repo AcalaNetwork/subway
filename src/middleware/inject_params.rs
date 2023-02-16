@@ -16,15 +16,13 @@ pub enum InjectType {
 pub struct InjectParamsMiddleware {
     head: ValueHandle<(JsonValue, u64)>,
     inject: InjectType,
-    method: String,
 }
 
 impl InjectParamsMiddleware {
-    pub fn new(api: Arc<Api>, inject: InjectType, method: String) -> Self {
+    pub fn new(api: Arc<Api>, inject: InjectType) -> Self {
         Self {
             head: api.get_head(),
             inject,
-            method,
         }
     }
 
@@ -51,21 +49,21 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
         mut request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        if request.method != self.method {
-            return next(request).await;
-        }
-
         let idx = self.get_index();
         match request.params.len() {
             len if len == idx + 1 => {
                 // full params with current block
                 return next(request).await;
             }
-            len if len == idx => {
+            len if len <= idx => {
                 // without current block
                 let to_inject = self.get_parameter().await;
                 tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
-                request.params.insert(idx, to_inject);
+                while request.params.len() < idx {
+                    request.params.push(JsonValue::Null);
+                }
+                request.params.push(to_inject);
+
                 return next(request).await;
             }
             _ => {

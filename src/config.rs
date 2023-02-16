@@ -35,23 +35,15 @@ pub struct RpcMethod {
 
 impl RpcMethod {
     pub fn inject_block_num(&self) -> Option<usize> {
-        self.params.iter().position(|p| {
-            p == &MethodParam {
-                name: "at".to_string(),
-                ty: "BlockNumber".to_string(),
-                is_optional: Some(true),
-            }
-        })
+        self.params
+            .iter()
+            .position(|p| p.inject == Some(true) && p.ty == "BlockNumber")
     }
 
     pub fn inject_block_hash(&self) -> Option<usize> {
-        self.params.iter().position(|p| {
-            p == &MethodParam {
-                name: "at".to_string(),
-                ty: "BlockHash".to_string(),
-                is_optional: Some(true),
-            }
-        })
+        self.params
+            .iter()
+            .position(|p| p.inject == Some(true) && p.ty == "BlockHash")
     }
 }
 
@@ -60,6 +52,7 @@ pub struct MethodParam {
     pub name: String,
     pub ty: String,
     pub is_optional: Option<bool>,
+    pub inject: Option<bool>,
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]

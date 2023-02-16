@@ -53,13 +53,11 @@ pub async fn start_server(
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
                 InjectType::BlockHashAt(index),
-                method.method.clone(),
             )));
         } else if let Some(index) = method.inject_block_num() {
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
                 InjectType::BlockNumberAt(index),
-                method.method.clone(),
             )));
         }
 

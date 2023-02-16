@@ -23,6 +23,7 @@ rpcs:
         - name: blockNumber
           ty: BlockNumber
           is_optional: true
+          inject: true
       
     - method: chain_getHeader
       cache: 2000
@@ -30,6 +31,7 @@ rpcs:
         - name: hash
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: chain_getBlock
       cache: 2000
@@ -37,6 +39,7 @@ rpcs:
         - name: hash
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: chain_getFinalizedHead
       params: []
@@ -47,6 +50,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: state_getMetadata
       cache: 2000
@@ -54,6 +58,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: state_getStorage
       cache: 2000
@@ -63,6 +68,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: state_getKeysPaged
       cache: 2000
@@ -77,6 +83,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: state_queryStorageAt
       cache: 2000
@@ -86,6 +93,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: state_call
       cache: 2000
@@ -97,6 +105,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: system_chain
       cache: 1
@@ -129,6 +138,7 @@ rpcs:
         - name: at
           ty: BlockHash
           is_optional: true
+          inject: true
 
     - method: system_accountNextIndex
       params:
