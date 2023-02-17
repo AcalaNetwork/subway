@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use blake2::Blake2b512;
 use jsonrpsee::core::{Error, JsonValue};
@@ -30,7 +28,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         let key = CacheKey::<Blake2b512>::new(&request.method, &request.params);
 
         if let Some(value) = self.cache.get(&key) {
-            return Ok((*value).clone());
+            return Ok(value);
         }
 
         let result = next(request).await;
@@ -39,7 +37,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
             let cache = self.cache.clone();
             let value = value.clone();
             tokio::spawn(async move {
-                cache.insert(key, Arc::new(value)).await;
+                cache.insert(key, value).await;
             });
         }
 

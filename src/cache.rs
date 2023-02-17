@@ -1,7 +1,6 @@
 use blake2::{digest::Output, Digest};
 use jsonrpsee::core::JsonValue;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
@@ -33,7 +32,7 @@ impl<D: Digest> std::hash::Hash for CacheKey<D> {
     }
 }
 
-pub type Cache<D> = moka::future::Cache<CacheKey<D>, Arc<JsonValue>>;
+pub type Cache<D> = moka::future::Cache<CacheKey<D>, JsonValue>;
 
 pub fn new_cache<D: Digest + 'static>(size: NonZeroUsize, ttl: Option<Duration>) -> Cache<D> {
     let size = size.get();
