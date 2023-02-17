@@ -28,26 +28,32 @@ fn enable_logger() {
 
         let log_layer = registry.with(console_layer);
 
-        match log_format.as_str() {
-            "json" => log_layer.with(fmt_layer.json().with_filter(filter)).init(),
+        let _ = match log_format.as_str() {
+            "json" => log_layer
+                .with(fmt_layer.json().with_filter(filter))
+                .try_init(),
             "pretty" => log_layer
                 .with(fmt_layer.pretty().with_filter(filter))
-                .init(),
+                .try_init(),
             "compact" => log_layer
                 .with(fmt_layer.compact().with_filter(filter))
-                .init(),
-            _ => log_layer.with(fmt_layer.with_filter(filter)).init(),
+                .try_init(),
+            _ => log_layer.with(fmt_layer.with_filter(filter)).try_init(),
         };
     }
 
     #[cfg(not(tokio_unstable))]
-    match log_format.as_str() {
-        "json" => registry.with(fmt_layer.json().with_filter(filter)).init(),
-        "pretty" => registry.with(fmt_layer.pretty().with_filter(filter)).init(),
+    let _ = match log_format.as_str() {
+        "json" => registry
+            .with(fmt_layer.json().with_filter(filter))
+            .try_init(),
+        "pretty" => registry
+            .with(fmt_layer.pretty().with_filter(filter))
+            .try_init(),
         "compact" => registry
             .with(fmt_layer.compact().with_filter(filter))
-            .init(),
-        _ => registry.with(fmt_layer.with_filter(filter)).init(),
+            .try_init(),
+        _ => registry.with(fmt_layer.with_filter(filter)).try_init(),
     };
 }
 
