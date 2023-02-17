@@ -1,9 +1,7 @@
 use blake2::{digest::Output, Digest};
 use jsonrpsee::core::JsonValue;
-use lru::LruCache;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct CacheKey<D: Digest>(pub Output<D>);
@@ -34,23 +32,17 @@ impl<D: Digest> std::hash::Hash for CacheKey<D> {
     }
 }
 
-#[derive(Clone)]
-pub struct Cache<D: Digest> {
-    map: Arc<Mutex<LruCache<CacheKey<D>, JsonValue>>>,
-}
+pub type Cache<D> = moka::future::Cache<CacheKey<D>, JsonValue>;
 
-impl<D: Digest + 'static> Cache<D> {
-    pub fn new(size: NonZeroUsize) -> Self {
-        Self {
-            map: Arc::new(Mutex::new(LruCache::new(size))),
-        }
+pub fn new_cache<D: Digest + 'static>(size: NonZeroUsize, ttl: Option<Duration>) -> Cache<D> {
+    let size = size.get();
+    let mut builder = Cache::<D>::builder()
+        .max_capacity(size as u64)
+        .initial_capacity(size);
+
+    if let Some(ttl) = ttl {
+        builder = builder.time_to_live(ttl);
     }
 
-    pub async fn get(&self, key: &CacheKey<D>) -> Option<JsonValue> {
-        self.map.lock().await.get(key).cloned()
-    }
-
-    pub async fn put(&self, key: CacheKey<D>, value: JsonValue) {
-        self.map.lock().await.put(key, value);
-    }
+    builder.build()
 }

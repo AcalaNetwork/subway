@@ -27,7 +27,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
     ) -> Result<JsonValue, Error> {
         let key = CacheKey::<Blake2b512>::new(&request.method, &request.params);
 
-        if let Some(value) = self.cache.get(&key).await {
+        if let Some(value) = self.cache.get(&key) {
             return Ok(value);
         }
 
@@ -37,7 +37,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
             let cache = self.cache.clone();
             let value = value.clone();
             tokio::spawn(async move {
-                cache.put(key, value).await;
+                cache.insert(key, value).await;
             });
         }
 
@@ -49,13 +49,12 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
 mod tests {
     use futures::FutureExt;
     use serde_json::json;
-    use std::num::NonZeroUsize;
 
     use super::*;
 
     #[tokio::test]
     async fn handle_ok_resp() {
-        let middleware = CacheMiddleware::new(Cache::new(NonZeroUsize::new(3).unwrap()));
+        let middleware = CacheMiddleware::new(Cache::new(3));
 
         let res = middleware
             .call(
