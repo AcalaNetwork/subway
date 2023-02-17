@@ -7,7 +7,7 @@ use super::*;
 use crate::client::mock::TestServerBuilder;
 
 async fn create_client() -> (
-    Api,
+    Client,
     ServerHandle,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
@@ -32,14 +32,26 @@ async fn create_client() -> (
     let (addr, server) = builder.build().await;
 
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-    let api = Api::new(Arc::new(client));
+
+    (client, server, head_rx, finalized_head_rx, block_hash_rx)
+}
+
+async fn create_api() -> (
+    Api,
+    ServerHandle,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+) {
+    let (client, server, head_rx, finalized_head_rx, block_hash_rx) = create_client().await;
+    let api = Api::new(Arc::new(client), Duration::from_secs(100));
 
     (api, server, head_rx, finalized_head_rx, block_hash_rx)
 }
 
 #[tokio::test]
 async fn get_head_finalized_head() {
-    let (api, server, mut head_rx, mut finalized_head_rx, mut block_rx) = create_client().await;
+    let (api, server, mut head_rx, mut finalized_head_rx, mut block_rx) = create_api().await;
 
     let head = api.get_head();
     let finalized_head = api.get_finalized_head();

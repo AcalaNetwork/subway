@@ -1,10 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use jsonrpsee::core::JsonValue;
-use tokio::{
-    sync::{watch, RwLock},
-    time::interval,
-};
+use tokio::sync::{watch, RwLock};
 
 use crate::client::Client;
 
@@ -88,13 +85,15 @@ impl Api {
         let stale_timeout = self.stale_timeout;
 
         tokio::spawn(async move {
-            let mut heartbeat = interval(stale_timeout);
+            let mut interval = tokio::time::interval(stale_timeout);
+            // The first tick completes immediately
+            interval.tick().await;
 
             loop {
                 let client = client.clone();
 
                 let run = async {
-                    let sub = client
+                    let mut sub = client
                         .subscribe(
                             "chain_subscribeNewHeads",
                             [].into(),
@@ -102,28 +101,29 @@ impl Api {
                         )
                         .await?;
 
-                    let mut sub = sub;
-
                     loop {
                         tokio::select! {
-                            Some(Ok(val)) = sub.next() => {
-                                heartbeat.reset();
+                            val = sub.next() => {
+                                if let Some(Ok(val)) = val {
+                                    interval.reset();
 
-                                let number = get_number(&val)?;
+                                    let number = get_number(&val)?;
 
-                                let res = client
-                                    .request("chain_getBlockHash", vec![number.into()])
-                                    .await?;
+                                    let res = client
+                                        .request("chain_getBlockHash", vec![number.into()])
+                                        .await?;
 
-                                tracing::debug!("New head: {number} {res}");
-                                head_tx.send_replace(Some((res, number)));
+                                    tracing::debug!("New head: {number} {res}");
+                                    head_tx.send_replace(Some((res, number)));
+                                } else {
+                                    break;
+                                }
                             }
-                            _ = heartbeat.tick() => {
-                                tracing::warn!("No new blocks for {stale_timeout} seconds, rotating endpoint");
+                            _ = interval.tick() => {
+                                tracing::warn!("No new blocks for {stale_timeout:?} seconds, rotating endpoint");
                                 client.rotate_endpoint().await.expect("Failed to rotate endpoint");
                                 break;
                             }
-                            else => break,
                         }
                     }
 
@@ -153,17 +153,15 @@ impl Api {
                         .await?;
 
                     let mut sub = sub;
-                    while let Some(val) = sub.next().await {
-                        if let Ok(val) = val {
-                            let number = get_number(&val)?;
+                    while let Some(Ok(val)) = sub.next().await {
+                        let number = get_number(&val)?;
 
-                            let res = client
-                                .request("chain_getBlockHash", vec![number.into()])
-                                .await?;
+                        let res = client
+                            .request("chain_getBlockHash", vec![number.into()])
+                            .await?;
 
-                            tracing::debug!("New finalized head: {number} {res}");
-                            finalized_head_tx.send_replace(Some((res, number)));
-                        }
+                        tracing::debug!("New finalized head: {number} {res}");
+                        finalized_head_tx.send_replace(Some((res, number)));
                     }
 
                     Ok::<(), anyhow::Error>(())
