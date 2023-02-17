@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use jsonrpsee::core::JsonValue;
-use tokio::sync::{watch, RwLock};
+use tokio::{
+    sync::{watch, RwLock},
+    time::interval,
+};
 
 use crate::client::Client;
 
@@ -39,6 +42,7 @@ pub struct Api {
     client: Arc<Client>,
     head: watch::Receiver<Option<(JsonValue, u64)>>,
     finalized_head: watch::Receiver<Option<(JsonValue, u64)>>,
+    stale_timeout: Duration,
 }
 
 impl Api {
@@ -58,7 +62,7 @@ impl Api {
 }
 
 impl Api {
-    pub fn new(client: Arc<Client>) -> Self {
+    pub fn new(client: Arc<Client>, stale_timeout: Duration) -> Self {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
         let (finalized_head_tx, finalized_head_rx) =
             watch::channel::<Option<(JsonValue, u64)>>(None);
@@ -67,6 +71,7 @@ impl Api {
             client,
             head: head_rx,
             finalized_head: finalized_head_rx,
+            stale_timeout,
         };
 
         this.start_background_task(head_tx, finalized_head_tx);
@@ -80,8 +85,11 @@ impl Api {
         finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
     ) {
         let client = self.client.clone();
+        let stale_timeout = self.stale_timeout;
 
         tokio::spawn(async move {
+            let mut heartbeat = interval(stale_timeout);
+
             loop {
                 let client = client.clone();
 
@@ -95,16 +103,27 @@ impl Api {
                         .await?;
 
                     let mut sub = sub;
-                    while let Some(val) = sub.next().await {
-                        if let Ok(val) = val {
-                            let number = get_number(&val)?;
 
-                            let res = client
-                                .request("chain_getBlockHash", vec![number.into()])
-                                .await?;
+                    loop {
+                        tokio::select! {
+                            Some(Ok(val)) = sub.next() => {
+                                heartbeat.reset();
 
-                            tracing::debug!("New head: {number} {res}");
-                            head_tx.send_replace(Some((res, number)));
+                                let number = get_number(&val)?;
+
+                                let res = client
+                                    .request("chain_getBlockHash", vec![number.into()])
+                                    .await?;
+
+                                tracing::debug!("New head: {number} {res}");
+                                head_tx.send_replace(Some((res, number)));
+                            }
+                            _ = heartbeat.tick() => {
+                                tracing::warn!("Heartbeat timed out");
+                                client.rotate_endpoint().await.expect("Failed to rotate endpoint");
+                                break;
+                            }
+                            else => break,
                         }
                     }
 

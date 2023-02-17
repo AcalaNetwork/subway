@@ -3,6 +3,7 @@ use jsonrpsee::core::JsonValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use jsonrpsee::types::error::CallError;
 use serde_json::json;
+use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 use tokio::task::JoinHandle;
 
@@ -42,7 +43,7 @@ pub async fn start_server(
     let mut module = RpcModule::new(());
 
     let client = Arc::new(client);
-    let api = Arc::new(Api::new(client.clone()));
+    let api = Arc::new(Api::new(client.clone(), Duration::from_secs(60)));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 

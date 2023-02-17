@@ -299,8 +299,6 @@ impl Client {
         rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
-    // TODO: use this later on stalled subscription
-    #[allow(dead_code)]
     pub async fn rotate_endpoint(&self) -> Result<(), ()> {
         self.sender
             .send(Message::RotateEndpoint)
