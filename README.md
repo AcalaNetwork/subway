@@ -10,7 +10,7 @@ Quick start: `cargo run -- --config config.yml`
 
 This will run a proxy server with [config.yml](config.yml) as the configuration file.
 
-Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [toko-console](https://github.com/tokio-rs/console)
+Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [tokio-console](https://github.com/tokio-rs/console)
 
 ## Environment Variables
 
