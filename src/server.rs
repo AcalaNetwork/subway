@@ -43,7 +43,10 @@ pub async fn start_server(
     let mut module = RpcModule::new(());
 
     let client = Arc::new(client);
-    let api = Arc::new(Api::new(client.clone(), Duration::from_secs(60)));
+    let api = Arc::new(Api::new(
+        client.clone(),
+        Duration::from_secs(config.stale_timeout_seconds),
+    ));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 

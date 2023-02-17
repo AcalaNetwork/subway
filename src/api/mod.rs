@@ -119,7 +119,7 @@ impl Api {
                                 head_tx.send_replace(Some((res, number)));
                             }
                             _ = heartbeat.tick() => {
-                                tracing::warn!("Heartbeat timed out");
+                                tracing::warn!("No new blocks for {stale_timeout} seconds, rotating endpoint");
                                 client.rotate_endpoint().await.expect("Failed to rotate endpoint");
                                 break;
                             }
