@@ -44,15 +44,18 @@ impl RpcMethod {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Clone, Deserialize, Debug)]
 pub enum ParamType {
-    Any,
     BlockHash,
     BlockNumber,
+    #[serde(rename = "vec")]
+    Vec(Box<ParamType>),
     #[serde(rename = "optional")]
     Optional(Box<ParamType>),
     #[serde(rename = "at")]
     At(Box<ParamType>),
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]
