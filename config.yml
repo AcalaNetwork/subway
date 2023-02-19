@@ -104,3 +104,5 @@ rpcs:
   aliases:
     - [chain_subscribeNewHeads, chain_subscribeNewHead]
     - [chain_unsubscribeNewHeads, chain_unsubscribeNewHead]
+    - [state_getKeysPaged, state_getKeysPagedAt]
+    - [state_getStorage, state_getStorageAt]
