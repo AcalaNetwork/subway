@@ -31,6 +31,9 @@ governor = { version = "0.5.1", path = "./vendor/governor/governor" }
 
 [dev-dependencies]
 
+[target.'cfg(tokio_unstable)'.dependencies]
+console-subscriber = "0.1.8"
+
 [profile.release]
 codegen-units = 1
 lto = true
