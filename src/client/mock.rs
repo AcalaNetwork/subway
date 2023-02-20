@@ -58,7 +58,7 @@ impl TestServerBuilder {
                 let params = params.parse::<JsonValue>().unwrap();
                 tokio::spawn(async move {
                     let sink = sink.accept().await.unwrap();
-                    tx.send((params, sink)).await.unwrap();
+                    let _ = tx.send((params, sink)).await;
                 })
                 .map_err(|_| jsonrpsee::core::SubscriptionCallbackError::None)
             })
