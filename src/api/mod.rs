@@ -86,13 +86,13 @@ impl Api {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(stale_timeout);
-            // The first tick completes immediately
-            interval.tick().await;
 
             loop {
                 let client = client.clone();
 
                 let run = async {
+                    interval.reset();
+
                     let mut sub = client
                         .subscribe(
                             "chain_subscribeNewHeads",
