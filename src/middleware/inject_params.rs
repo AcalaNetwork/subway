@@ -51,7 +51,7 @@ impl InjectParamsMiddleware {
         let mut optional = 0;
         let mut required = 0;
         for param in &self.params {
-            if param.is_optional == Some(true) {
+            if param.is_optional {
                 optional += 1;
             } else {
                 required += 1;
@@ -64,14 +64,12 @@ impl InjectParamsMiddleware {
 pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
     let maybe_block_num = params
         .iter()
-        .position(|p| p.inject == Some(true) && p.ty == "BlockNumber");
+        .position(|p| p.inject && p.ty == "BlockNumber");
     if let Some(block_num) = maybe_block_num {
         return Some(InjectType::BlockNumberAt(block_num));
     }
 
-    let maybe_block_hash = params
-        .iter()
-        .position(|p| p.inject == Some(true) && p.ty == "BlockHash");
+    let maybe_block_hash = params.iter().position(|p| p.inject && p.ty == "BlockHash");
     if let Some(block_hash) = maybe_block_hash {
         return Some(InjectType::BlockHashAt(block_hash));
     }
@@ -99,7 +97,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
                 let params_passed = request.params.len();
                 while request.params.len() < idx {
                     let current = request.params.len();
-                    if self.params[current].is_optional == Some(true) {
+                    if self.params[current].is_optional {
                         request.params.push(JsonValue::Null);
                     } else {
                         let (required, optional) = self.params_count();

@@ -37,8 +37,10 @@ pub struct RpcMethod {
 pub struct MethodParam {
     pub name: String,
     pub ty: String,
-    pub is_optional: Option<bool>,
-    pub inject: Option<bool>,
+    #[serde(default)]
+    pub is_optional: bool,
+    #[serde(default)]
+    pub inject: bool,
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]
