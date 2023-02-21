@@ -1,10 +1,14 @@
 use async_trait::async_trait;
-use jsonrpsee::core::{Error, JsonValue};
+use jsonrpsee::{
+    core::{Error, JsonValue},
+    types::error::CallError,
+};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
 use crate::{
     api::{Api, ValueHandle},
+    config::MethodParam,
     middleware::call::CallRequest,
 };
 
@@ -16,13 +20,15 @@ pub enum InjectType {
 pub struct InjectParamsMiddleware {
     head: ValueHandle<(JsonValue, u64)>,
     inject: InjectType,
+    params: Vec<MethodParam>,
 }
 
 impl InjectParamsMiddleware {
-    pub fn new(api: Arc<Api>, inject: InjectType) -> Self {
+    pub fn new(api: Arc<Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
         Self {
             head: api.get_head(),
             inject,
+            params,
         }
     }
 
@@ -40,6 +46,24 @@ impl InjectParamsMiddleware {
             InjectType::BlockNumberAt(_) => res.1.into(),
         }
     }
+}
+
+pub fn inject(params: &Vec<MethodParam>) -> Option<InjectType> {
+    let maybe_block_num = params
+        .iter()
+        .position(|p| p.inject == Some(true) && p.ty == "BlockNumber");
+    if let Some(block_num) = maybe_block_num {
+        return Some(InjectType::BlockNumberAt(block_num));
+    }
+
+    let maybe_block_hash = params
+        .iter()
+        .position(|p| p.inject == Some(true) && p.ty == "BlockHash");
+    if let Some(block_hash) = maybe_block_hash {
+        return Some(InjectType::BlockHashAt(block_hash));
+    }
+
+    None
 }
 
 #[async_trait]
@@ -60,7 +84,14 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
                 let to_inject = self.get_parameter().await;
                 tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
                 while request.params.len() < idx {
-                    request.params.push(JsonValue::Null);
+                    let current = request.params.len();
+                    if self.params[current].is_optional == Some(true) {
+                        request.params.push(JsonValue::Null);
+                    } else {
+                        return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
+                            "non-optional param",
+                        ))));
+                    }
                 }
                 request.params.push(to_inject);
 

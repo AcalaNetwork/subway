@@ -33,21 +33,7 @@ pub struct RpcMethod {
     pub cache: usize,
 }
 
-impl RpcMethod {
-    pub fn inject_block_num(&self) -> Option<usize> {
-        self.params
-            .iter()
-            .position(|p| p.inject == Some(true) && p.ty == "BlockNumber")
-    }
-
-    pub fn inject_block_hash(&self) -> Option<usize> {
-        self.params
-            .iter()
-            .position(|p| p.inject == Some(true) && p.ty == "BlockHash")
-    }
-}
-
-#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct MethodParam {
     pub name: String,
     pub ty: String,
