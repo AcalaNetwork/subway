@@ -27,6 +27,7 @@ pub struct ServerConfig {
 #[derive(Deserialize, Debug)]
 pub struct RpcMethod {
     pub method: String,
+    #[serde(default)]
     pub params: Vec<MethodParam>,
 
     #[serde(default)]

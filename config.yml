@@ -15,7 +15,6 @@ rpcs:
           ty: Bytes
 
     - method: author_pendingExtrinsics
-      params: []
 
     - method: chain_getBlockHash
       cache: 2000
@@ -42,7 +41,6 @@ rpcs:
           inject: true
 
     - method: chain_getFinalizedHead
-      params: []
 
     - method: state_getRuntimeVersion
       cache: 2000
@@ -109,26 +107,20 @@ rpcs:
 
     - method: system_chain
       cache: 1
-      params: []
 
     - method: system_properties
       cache: 1
-      params: []
 
     - method: system_name
       cache: 1
-      params: []
 
     - method: system_version
       cache: 1
-      params: []
 
     - method: system_chainType
       cache: 1
-      params: []
 
     - method: system_health
-      params: []
 
     - method: system_dryRun
       cache: 100
