@@ -46,6 +46,19 @@ impl InjectParamsMiddleware {
             InjectType::BlockNumberAt(_) => res.1.into(),
         }
     }
+
+    pub fn params_count(&self) -> (usize, usize) {
+        let mut optional = 0;
+        let mut required = 0;
+        for param in &self.params {
+            if param.is_optional == Some(true) {
+                optional += 1;
+            } else {
+                required += 1;
+            }
+        }
+        (required, optional)
+    }
 }
 
 pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
@@ -83,13 +96,20 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
                 // without current block
                 let to_inject = self.get_parameter().await;
                 tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
+                let params_passed = request.params.len();
                 while request.params.len() < idx {
                     let current = request.params.len();
                     if self.params[current].is_optional == Some(true) {
                         request.params.push(JsonValue::Null);
                     } else {
+                        let (required, optional) = self.params_count();
                         return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
-                            "non-optional param",
+                            format!(
+                                "Expected {:?} parameters ({:?} optional), {:?} found instead",
+                                required + optional,
+                                optional,
+                                params_passed
+                            ),
                         ))));
                     }
                 }
