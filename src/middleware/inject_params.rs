@@ -48,7 +48,7 @@ impl InjectParamsMiddleware {
     }
 }
 
-pub fn inject(params: &Vec<MethodParam>) -> Option<InjectType> {
+pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
     let maybe_block_num = params
         .iter()
         .position(|p| p.inject == Some(true) && p.ty == "BlockNumber");
