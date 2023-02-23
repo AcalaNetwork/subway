@@ -128,10 +128,10 @@ mod tests {
     use super::*;
 
     use crate::client::{mock::TestServerBuilder, Client};
+    use futures::FutureExt;
     use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
     use serde_json::json;
     use tokio::sync::{mpsc, oneshot};
-    use futures::FutureExt;
 
     async fn create_client() -> (
         Api,
