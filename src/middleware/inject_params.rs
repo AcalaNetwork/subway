@@ -131,6 +131,7 @@ mod tests {
     use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
     use serde_json::json;
     use tokio::sync::{mpsc, oneshot};
+    use futures::FutureExt;
 
     async fn create_client() -> (
         Api,
