@@ -133,13 +133,15 @@ mod tests {
     use serde_json::json;
     use tokio::sync::{mpsc, oneshot};
 
-    async fn create_client() -> (
-        Api,
-        ServerHandle,
-        mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-        mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-        mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
-    ) {
+    struct ExecutionContext {
+        _server: ServerHandle,
+        head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+        _finalized_head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+        block_hash_rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+        head_sink: Option<SubscriptionSink>,
+    }
+
+    async fn create_client() -> (ExecutionContext, Api) {
         let mut builder = TestServerBuilder::new();
 
         let head_rx = builder.register_subscription(
@@ -148,7 +150,7 @@ mod tests {
             "chain_unsubscribeNewHeads",
         );
 
-        let finalized_head_rx = builder.register_subscription(
+        let _finalized_head_rx = builder.register_subscription(
             "chain_subscribeFinalizedHeads",
             "chain_finalizedHead",
             "chain_unsubscribeFinalizedHeads",
@@ -156,30 +158,52 @@ mod tests {
 
         let block_hash_rx = builder.register_method("chain_getBlockHash");
 
-        let (addr, server) = builder.build().await;
+        let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
         let api = Api::new(Arc::new(client));
 
-        (api, server, head_rx, finalized_head_rx, block_hash_rx)
+        (
+            ExecutionContext {
+                _server,
+                head_rx,
+                _finalized_head_rx,
+                block_hash_rx,
+                head_sink: None,
+            },
+            api,
+        )
     }
 
-    async fn create_inject_middleware() -> InjectParamsMiddleware {
-        let (api, _server, mut head_rx, _finalized_head_rx, mut block_rx) = create_client().await;
+    async fn create_inject_middleware(
+        inject_type: InjectType,
+        params: Vec<MethodParam>,
+    ) -> (InjectParamsMiddleware, ExecutionContext) {
+        let (mut context, api) = create_client().await;
 
-        let (_, head_sink) = head_rx.recv().await.unwrap();
+        let (_, head_sink) = context.head_rx.recv().await.unwrap();
         head_sink
             .send(SubscriptionMessage::from_json(&json!({ "number": "0x4321" })).unwrap())
             .await
             .unwrap();
 
         {
-            let (_, tx) = block_rx.recv().await.unwrap();
+            let (_, tx) = context.block_hash_rx.recv().await.unwrap();
             tx.send(json!("0xabcd")).unwrap();
         }
 
-        InjectParamsMiddleware::new(
-            Arc::new(api),
+        context.head_sink = Some(head_sink);
+
+        (
+            InjectParamsMiddleware::new(Arc::new(api), inject_type, params),
+            context,
+        )
+    }
+
+    #[tokio::test]
+    async fn skip_inject_if_full_params() {
+        let params = vec![json!("0x1234"), json!("0x5678")];
+        let (middleware, _) = create_inject_middleware(
             InjectType::BlockHashAt(1),
             vec![
                 MethodParam {
@@ -196,13 +220,8 @@ mod tests {
                 },
             ],
         )
-    }
-
-    #[tokio::test]
-    async fn skip_inject_if_full_params() {
-        let params = vec![json!("0x1234"), json!("0x5678")];
-        let middleware = create_inject_middleware().await;
-        middleware
+        .await;
+        let result = middleware
             .call(
                 CallRequest {
                     method: "state_getStorage".to_string(),
@@ -211,19 +230,37 @@ mod tests {
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, params);
-                        Ok(json!("0x1234"))
+                        Ok(json!("0x1111"))
                     }
                     .boxed()
                 }),
             )
             .await
             .unwrap();
+        assert_eq!(result, json!("0x1111"));
     }
 
     #[tokio::test]
-    async fn inject_if_without_current_block() {
-        let middleware = create_inject_middleware().await;
-        middleware
+    async fn inject_if_without_current_block_hash() {
+        let (middleware, _) = create_inject_middleware(
+            InjectType::BlockHashAt(1),
+            vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    ty: "StorageKey".to_string(),
+                    optional: false,
+                    inject: false,
+                },
+                MethodParam {
+                    name: "at".to_string(),
+                    ty: "BlockHash".to_string(),
+                    optional: true,
+                    inject: true,
+                },
+            ],
+        )
+        .await;
+        let result = middleware
             .call(
                 CallRequest {
                     method: "state_getStorage".to_string(),
@@ -232,12 +269,180 @@ mod tests {
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!("0xabcd")]);
-                        Ok(json!("0x1234"))
+                        Ok(json!("0x1111"))
                     }
                     .boxed()
                 }),
             )
             .await
             .unwrap();
+        assert_eq!(result, json!("0x1111"));
+    }
+
+    #[tokio::test]
+    async fn inject_null_if_expected_optional_param() {
+        let (middleware, _) = create_inject_middleware(
+            InjectType::BlockHashAt(2),
+            vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    ty: "StorageKey".to_string(),
+                    optional: false,
+                    inject: false,
+                },
+                MethodParam {
+                    name: "pho".to_string(),
+                    ty: "u32".to_string(),
+                    optional: true,
+                    inject: false,
+                },
+                MethodParam {
+                    name: "at".to_string(),
+                    ty: "BlockHash".to_string(),
+                    optional: true,
+                    inject: true,
+                },
+            ],
+        )
+        .await;
+        let result = middleware
+            .call(
+                CallRequest {
+                    method: "state_getStorage".to_string(),
+                    params: vec![json!("0x1234")],
+                },
+                Box::new(move |req: CallRequest| {
+                    async move {
+                        assert_eq!(
+                            req.params,
+                            vec![json!("0x1234"), JsonValue::Null, json!("0xabcd")]
+                        );
+                        Ok(json!("0x1111"))
+                    }
+                    .boxed()
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result, json!("0x1111"));
+    }
+
+    #[tokio::test]
+    async fn err_if_missing_param() {
+        let (middleware, _) = create_inject_middleware(
+            InjectType::BlockHashAt(2),
+            vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    ty: "StorageKey".to_string(),
+                    optional: false,
+                    inject: false,
+                },
+                MethodParam {
+                    name: "foo".to_string(),
+                    ty: "u32".to_string(),
+                    optional: false,
+                    inject: false,
+                },
+                MethodParam {
+                    name: "at".to_string(),
+                    ty: "BlockHash".to_string(),
+                    optional: true,
+                    inject: true,
+                },
+            ],
+        )
+        .await;
+        let result = middleware
+            .call(
+                CallRequest {
+                    method: "state_getStorage".to_string(),
+                    params: vec![json!("0x1234")],
+                },
+                Box::new(move |req: CallRequest| {
+                    async move {
+                        assert_eq!(
+                            req.params,
+                            vec![json!("0x1234"), JsonValue::Null, json!("0xabcd")]
+                        );
+                        Ok(json!("0x1111"))
+                    }
+                    .boxed()
+                }),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(Error::Call(CallError::InvalidParams(e))) if e.to_string() == "Expected 3 parameters (1 optional), 1 found instead")
+        );
+    }
+
+    #[tokio::test]
+    async fn inject_if_without_current_block_num() {
+        let (middleware, mut context) = create_inject_middleware(
+            InjectType::BlockNumberAt(1),
+            vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    ty: "StorageKey".to_string(),
+                    optional: false,
+                    inject: false,
+                },
+                MethodParam {
+                    name: "at".to_string(),
+                    ty: "BlockNumber".to_string(),
+                    optional: true,
+                    inject: true,
+                },
+            ],
+        )
+        .await;
+        let result = middleware
+            .call(
+                CallRequest {
+                    method: "state_getStorage".to_string(),
+                    params: vec![json!("0x1234")],
+                },
+                Box::new(move |req: CallRequest| {
+                    async move {
+                        assert_eq!(req.params, vec![json!("0x1234"), json!(0x4321)]);
+                        Ok(json!("0x1111"))
+                    }
+                    .boxed()
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result, json!("0x1111"));
+
+        // head updated
+        context
+            .head_sink
+            .unwrap()
+            .send(SubscriptionMessage::from_json(&json!({ "number": "0x5432" })).unwrap())
+            .await
+            .unwrap();
+        {
+            let (_, tx) = context.block_hash_rx.recv().await.unwrap();
+            tx.send(json!("0xbcde")).unwrap();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+        let result2 = middleware
+            .call(
+                CallRequest {
+                    method: "state_getStorage".to_string(),
+                    params: vec![json!("0x1234")],
+                },
+                Box::new(move |req: CallRequest| {
+                    async move {
+                        assert_eq!(req.params, vec![json!("0x1234"), json!(0x5432)]);
+                        Ok(json!("0x1111"))
+                    }
+                    .boxed()
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result2, json!("0x1111"));
     }
 }
