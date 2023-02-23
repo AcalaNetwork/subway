@@ -51,7 +51,7 @@ impl InjectParamsMiddleware {
         let mut optional = 0;
         let mut required = 0;
         for param in &self.params {
-            if param.is_optional {
+            if param.optional {
                 optional += 1;
             } else {
                 required += 1;
@@ -97,7 +97,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
                 let params_passed = request.params.len();
                 while request.params.len() < idx {
                     let current = request.params.len();
-                    if self.params[current].is_optional {
+                    if self.params[current].optional {
                         request.params.push(JsonValue::Null);
                     } else {
                         let (required, optional) = self.params_count();
@@ -184,13 +184,13 @@ mod tests {
                 MethodParam {
                     name: "key".to_string(),
                     ty: "StorageKey".to_string(),
-                    is_optional: false,
+                    optional: false,
                     inject: false,
                 },
                 MethodParam {
                     name: "at".to_string(),
                     ty: "BlockHash".to_string(),
-                    is_optional: true,
+                    optional: true,
                     inject: true,
                 },
             ],

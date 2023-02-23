@@ -39,7 +39,7 @@ pub struct MethodParam {
     pub name: String,
     pub ty: String,
     #[serde(default)]
-    pub is_optional: bool,
+    pub optional: bool,
     #[serde(default)]
     pub inject: bool,
 }

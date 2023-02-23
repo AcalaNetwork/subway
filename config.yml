@@ -21,7 +21,7 @@ rpcs:
       params:
         - name: blockNumber
           ty: BlockNumber
-          is_optional: true
+          optional: true
           inject: true
       
     - method: chain_getHeader
@@ -29,7 +29,7 @@ rpcs:
       params:
         - name: hash
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: chain_getBlock
@@ -37,7 +37,7 @@ rpcs:
       params:
         - name: hash
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: chain_getFinalizedHead
@@ -47,7 +47,7 @@ rpcs:
       params:
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: state_getMetadata
@@ -55,7 +55,7 @@ rpcs:
       params:
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: state_getStorage
@@ -65,7 +65,7 @@ rpcs:
           ty: StorageKey
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: state_getKeysPaged
@@ -77,10 +77,10 @@ rpcs:
           ty: u32
         - name: startKey
           ty: StorageKey
-          is_optional: true
+          optional: true
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: state_queryStorageAt
@@ -90,7 +90,7 @@ rpcs:
           ty: 'Vec<StorageKey>'
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: state_call
@@ -102,7 +102,7 @@ rpcs:
           ty: Bytes
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: system_chain
@@ -129,7 +129,7 @@ rpcs:
           ty: Bytes
         - name: at
           ty: BlockHash
-          is_optional: true
+          optional: true
           inject: true
 
     - method: system_accountNextIndex
