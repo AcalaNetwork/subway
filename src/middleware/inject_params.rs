@@ -131,6 +131,7 @@ mod tests {
     use futures::FutureExt;
     use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
     use serde_json::json;
+    use std::time::Duration;
     use tokio::sync::{mpsc, oneshot};
 
     struct ExecutionContext {
@@ -161,7 +162,7 @@ mod tests {
         let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-        let api = Api::new(Arc::new(client));
+        let api = Api::new(Arc::new(client), Duration::from_secs(100));
 
         (
             ExecutionContext {
