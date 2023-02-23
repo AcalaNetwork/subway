@@ -15,7 +15,7 @@ use crate::{
     middleware::{
         cache::CacheMiddleware,
         call::{self, CallRequest},
-        inject_params::{InjectParamsMiddleware, InjectType},
+        inject_params::{inject, InjectParamsMiddleware},
         merge_subscription::MergeSubscriptionMiddleware,
         subscription::{self, SubscriptionRequest},
         Middleware, Middlewares,
@@ -53,16 +53,11 @@ pub async fn start_server(
     for method in &config.rpcs.methods {
         let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
 
-        if let Some(hash_index) = method.with_block_hash {
+        if let Some(inject_type) = inject(&method.params) {
             list.push(Arc::new(InjectParamsMiddleware::new(
                 api.clone(),
-                InjectType::BlockHashAt(hash_index),
-            )));
-        }
-        if let Some(number_index) = method.with_block_number {
-            list.push(Arc::new(InjectParamsMiddleware::new(
-                api.clone(),
-                InjectType::BlockNumberAt(number_index),
+                inject_type,
+                method.params.clone(),
             )));
         }
 

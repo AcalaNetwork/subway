@@ -28,12 +28,21 @@ pub struct ServerConfig {
 #[derive(Deserialize, Debug)]
 pub struct RpcMethod {
     pub method: String,
+    #[serde(default)]
+    pub params: Vec<MethodParam>,
 
     #[serde(default)]
     pub cache: usize,
+}
 
-    pub with_block_hash: Option<usize>,
-    pub with_block_number: Option<usize>,
+#[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
+pub struct MethodParam {
+    pub name: String,
+    pub ty: String,
+    #[serde(default)]
+    pub optional: bool,
+    #[serde(default)]
+    pub inject: bool,
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]
