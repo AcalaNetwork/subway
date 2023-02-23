@@ -135,9 +135,9 @@ mod tests {
     use tokio::sync::{mpsc, oneshot};
 
     struct ExecutionContext {
-        _server: ServerHandle,
+        server: ServerHandle,
         head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-        _finalized_head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+        finalized_head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
         block_hash_rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
         head_sink: Option<SubscriptionSink>,
     }
@@ -166,9 +166,9 @@ mod tests {
 
         (
             ExecutionContext {
-                _server,
+                server: _server,
                 head_rx,
-                _finalized_head_rx,
+                finalized_head_rx:  _finalized_head_rx,
                 block_hash_rx,
                 head_sink: None,
             },
