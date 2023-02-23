@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
@@ -6,8 +8,8 @@ use super::*;
 
 use crate::client::mock::TestServerBuilder;
 
-async fn create_client() -> (
-    Api,
+async fn create_server() -> (
+    SocketAddr,
     ServerHandle,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
@@ -31,15 +33,39 @@ async fn create_client() -> (
 
     let (addr, server) = builder.build().await;
 
+    (addr, server, head_rx, finalized_head_rx, block_hash_rx)
+}
+
+async fn create_client() -> (
+    Client,
+    ServerHandle,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+) {
+    let (addr, server, head_rx, finalized_head_rx, block_hash_rx) = create_server().await;
+
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-    let api = Api::new(Arc::new(client));
+
+    (client, server, head_rx, finalized_head_rx, block_hash_rx)
+}
+
+async fn create_api() -> (
+    Api,
+    ServerHandle,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+) {
+    let (client, server, head_rx, finalized_head_rx, block_hash_rx) = create_client().await;
+    let api = Api::new(Arc::new(client), Duration::from_secs(100));
 
     (api, server, head_rx, finalized_head_rx, block_hash_rx)
 }
 
 #[tokio::test]
 async fn get_head_finalized_head() {
-    let (api, server, mut head_rx, mut finalized_head_rx, mut block_rx) = create_client().await;
+    let (api, server, mut head_rx, mut finalized_head_rx, mut block_rx) = create_api().await;
 
     let head = api.get_head();
     let finalized_head = api.get_finalized_head();
@@ -134,4 +160,80 @@ async fn get_head_finalized_head() {
     h1.await.unwrap();
     h2.await.unwrap();
     server.stop().unwrap();
+}
+
+#[tokio::test]
+async fn rotate_endpoint_on_stale() {
+    let (addr, server, mut head_rx, _, mut block_rx) = create_server().await;
+    let (addr2, server2, mut head_rx2, _, mut block_rx2) = create_server().await;
+
+    println!("{} {}", addr, addr2);
+
+    let client = Client::new(&[format!("ws://{addr}"), format!("ws://{addr2}")])
+        .await
+        .unwrap();
+    let api = Api::new(Arc::new(client), Duration::from_millis(10));
+
+    let head = api.get_head();
+    let h1 = tokio::spawn(async move {
+        assert_eq!(head.read().await, (json!("0xabcd"), 0x1234));
+    });
+
+    // initial connection
+    let (_, head_sink) = head_rx.recv().await.unwrap();
+    head_sink
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x1234" })).unwrap())
+        .await
+        .unwrap();
+    {
+        let (params, tx) = block_rx.recv().await.unwrap();
+        assert_eq!(params, json!([0x1234]));
+        tx.send(json!("0xabcd")).unwrap();
+    }
+
+    // wait a bit but before timeout
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+    // not stale
+    head_sink
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x2345" })).unwrap())
+        .await
+        .unwrap();
+    {
+        let (params, tx) = block_rx.recv().await.unwrap();
+        assert_eq!(params, json!([0x2345]));
+        tx.send(json!("0xbcde")).unwrap();
+    }
+
+    // wait a bit to process tasks
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+    assert_eq!(api.get_head().read().await, (json!("0xbcde"), 0x2345));
+
+    // wait for timeout
+    tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+
+    // stale
+    assert!(head_sink.is_closed());
+
+    // server 2
+    let (_, head_sink2) = head_rx2.recv().await.unwrap();
+    head_sink2
+        .send(SubscriptionMessage::from_json(&json!({ "number": "0x4321" })).unwrap())
+        .await
+        .unwrap();
+    {
+        let (params, tx) = block_rx2.recv().await.unwrap();
+        assert_eq!(params, json!([0x4321]));
+        tx.send(json!("0xdcba")).unwrap();
+    }
+
+    // wait a bit to process tasks
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+    assert_eq!(api.get_head().read().await, (json!("0xdcba"), 0x4321));
+
+    h1.await.unwrap();
+    server.stop().unwrap();
+    server2.stop().unwrap();
 }

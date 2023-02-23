@@ -13,6 +13,7 @@ struct Command {
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub endpoints: Vec<String>,
+    pub stale_timeout_seconds: u64,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
 }

@@ -3,12 +3,13 @@ use jsonrpsee::core::JsonValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
 use jsonrpsee::types::error::CallError;
 use serde_json::json;
+use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 use tokio::task::JoinHandle;
 
+use crate::cache::new_cache;
 use crate::{
     api::Api,
-    cache::Cache,
     client::Client,
     config::Config,
     middleware::{
@@ -42,7 +43,10 @@ pub async fn start_server(
     let mut module = RpcModule::new(());
 
     let client = Arc::new(client);
-    let api = Arc::new(Api::new(client.clone()));
+    let api = Arc::new(Api::new(
+        client.clone(),
+        Duration::from_secs(config.stale_timeout_seconds),
+    ));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 
@@ -60,7 +64,8 @@ pub async fn start_server(
         if method.cache > 0 {
             // each method has it's own cache
             let cache_size = NonZeroUsize::new(method.cache).expect("qed;");
-            list.push(Arc::new(CacheMiddleware::new(Cache::new(cache_size))));
+            let cache = new_cache(cache_size, None);
+            list.push(Arc::new(CacheMiddleware::new(cache)));
         }
         list.push(upstream.clone());
 

@@ -2,6 +2,8 @@ endpoints:
   - wss://acala-rpc.dwellir.com:443
   - wss://acala-rpc-0.aca-api.network:443
 
+stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+
 server:
   port: 9944
   listen_address: '0.0.0.0'
@@ -165,3 +167,5 @@ rpcs:
   aliases:
     - [chain_subscribeNewHeads, chain_subscribeNewHead]
     - [chain_unsubscribeNewHeads, chain_unsubscribeNewHead]
+    - [state_getKeysPaged, state_getKeysPagedAt]
+    - [state_getStorage, state_getStorageAt]

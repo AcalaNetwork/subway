@@ -71,7 +71,7 @@ impl Client {
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(30))
                         .connection_timeout(std::time::Duration::from_secs(10))
-                        .max_notifs_per_subscription(1024)
+                        .max_buffer_capacity_per_subscription(1024)
                         .build(url)
                 };
 
@@ -299,8 +299,6 @@ impl Client {
         rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
-    // TODO: use this later on stalled subscription
-    #[allow(dead_code)]
     pub async fn rotate_endpoint(&self) -> Result<(), ()> {
         self.sender
             .send(Message::RotateEndpoint)
