@@ -168,7 +168,7 @@ mod tests {
             ExecutionContext {
                 server: _server,
                 head_rx,
-                finalized_head_rx:  _finalized_head_rx,
+                finalized_head_rx: _finalized_head_rx,
                 block_hash_rx,
                 head_sink: None,
             },
