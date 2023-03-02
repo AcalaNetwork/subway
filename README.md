@@ -6,6 +6,8 @@ This is a generalized JSON RPC proxy server with features specifically designed 
 
 ## Getting Started
 
+Pull vendors: `git submodule update --init --recursive`
+
 Quick start: `cargo run -- --config config.yml`
 
 This will run a proxy server with [config.yml](config.yml) as the configuration file.
