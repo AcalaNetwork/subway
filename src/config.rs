@@ -82,7 +82,7 @@ pub fn read_config() -> Result<Config, String> {
     if let Ok(endpoints) = std::env::var("ENDPOINTS") {
         log::info!("Override endpoints with env.ENDPOINTS");
         config.endpoints = endpoints
-            .split(",")
+            .split(',')
             .map(|x| x.trim().to_string())
             .collect::<Vec<_>>();
     }
