@@ -44,7 +44,7 @@ async fn merge_subscription_works() {
         stale_timeout_seconds: 0,
         server: ServerConfig {
             listen_address: "0.0.0.0".to_string(),
-            port: 8888,
+            port: 0,
             max_connections: 10,
         },
         rpcs: RpcDefinitions {
@@ -86,7 +86,7 @@ async fn merge_subscription_works() {
         .await
         .unwrap();
 
-    tokio::spawn(async move {
+    let send_msg = tokio::spawn(async move {
         let (_, mock_sub_sink) = mock_sub_rx.recv().await.unwrap();
 
         run_sink_tasks(
@@ -99,14 +99,14 @@ async fn merge_subscription_works() {
                         ["0x02", null]
                     ]
                 })),
-                SinkTask::Sleep(1_000),
+                SinkTask::Sleep(100),
                 SinkTask::Send(json!({
                     "block": "0x02",
                     "changes": [
                         ["0x02", "world"]
                     ]
                 })),
-                SinkTask::Sleep(1_000),
+                SinkTask::Sleep(100),
                 SinkTask::Send(json!({
                     "block": "0x03",
                     "changes": [
@@ -114,7 +114,7 @@ async fn merge_subscription_works() {
                         ["0x02", "bye"]
                     ]
                 })),
-                SinkTask::Sleep(1_000),
+                SinkTask::Sleep(100),
                 SinkTask::Send(json!({
                     "block": "0x04",
                     "changes": [
@@ -164,7 +164,9 @@ async fn merge_subscription_works() {
         first_sub.unsubscribe().await.unwrap();
     });
 
-    tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
+    // second subscription happens after 2nd msg is send (100ms) and 3rd msg (200ms)
+    // so 1st msg for the second subscription will be a merge between 1st & 2nd msg ["block": "0x02"]
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     let mut second_sub = client
         .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await
@@ -216,6 +218,7 @@ async fn merge_subscription_works() {
         assert!(second_sub.next().await.is_none());
     });
 
+    send_msg.await.unwrap();
     test_one.await.unwrap();
     test_two.await.unwrap();
 
