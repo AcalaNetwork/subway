@@ -9,7 +9,7 @@ use super::*;
 use futures::TryFutureExt;
 use jsonrpsee::{
     server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
-    SubscriptionSink,
+    SubscriptionMessage, SubscriptionSink,
 };
 use tokio::sync::{mpsc, oneshot};
 
@@ -98,4 +98,32 @@ pub async fn dummy_server() -> (
     let (addr, handle) = builder.build().await;
 
     (addr, handle, rx, sub_rx)
+}
+
+pub enum SinkTask {
+    Sleep(u64),
+    Send(JsonValue),
+}
+
+impl SinkTask {
+    async fn run(&self, sink: &SubscriptionSink) {
+        match self {
+            SinkTask::Sleep(ms) => {
+                println!("sleep {} ms", ms);
+                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
+            }
+            SinkTask::Send(msg) => {
+                println!("send msg to sink: {}", msg.to_string());
+                sink.send(SubscriptionMessage::from_json(msg).unwrap())
+                    .await
+                    .unwrap()
+            }
+        }
+    }
+}
+
+pub async fn run_sink_tasks(sink: &SubscriptionSink, tasks: Vec<SinkTask>) {
+    for task in tasks {
+        task.run(sink).await
+    }
 }

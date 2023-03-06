@@ -1,11 +1,10 @@
 use futures::FutureExt;
 use jsonrpsee::core::JsonValue;
-use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
+use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::CallError;
 use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
-use tokio::task::JoinHandle;
 
 use crate::cache::new_cache;
 use crate::{
@@ -30,7 +29,7 @@ fn string_to_static_str(s: String) -> &'static str {
 pub async fn start_server(
     config: &Config,
     client: Client,
-) -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
+) -> anyhow::Result<(SocketAddr, ServerHandle)> {
     let service_builder = tower::ServiceBuilder::new();
 
     let server = ServerBuilder::default()
@@ -179,9 +178,7 @@ pub async fn start_server(
     })?;
 
     let addr = server.local_addr()?;
-    let handle = server.start(module)?;
+    let server = server.start(module)?;
 
-    let handle = tokio::spawn(handle.stopped());
-
-    Ok((addr, handle))
+    Ok((addr, server))
 }

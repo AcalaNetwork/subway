@@ -251,3 +251,70 @@ impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
         Ok(())
     }
 }
+
+#[test]
+fn merge_storage_changes_works() {
+    use serde_json::json;
+
+    let current = json!({
+        "block": "0x01",
+        "changes": [
+            ["1", Some("foo")],
+            ["2", null]
+        ]
+    });
+    let update = json!({
+        "block": "0x02",
+        "changes": [
+            ["2", Some("bar")]
+        ]
+    });
+    let current = merge_storage_changes(current, update).unwrap();
+    assert_eq!(
+        current,
+        json!({
+            "block": "0x02",
+            "changes": [
+                ["1", Some("foo")],
+                ["2", Some("bar")]
+            ]
+        })
+    );
+
+    let update = json!({
+        "block": "0x03",
+        "changes": [
+            ["1", null],
+        ]
+    });
+    let current = merge_storage_changes(current, update).unwrap();
+    assert_eq!(
+        current,
+        json!({
+            "block": "0x03",
+            "changes": [
+                ["2", Some("bar")],
+                ["1", null],
+            ]
+        })
+    );
+
+    let update = json!({
+        "block": "0x03",
+        "changes": [
+            ["3", Some("foobar")],
+        ]
+    });
+    let current = merge_storage_changes(current, update).unwrap();
+    assert_eq!(
+        current,
+        json!({
+            "block": "0x03",
+            "changes": [
+                ["2", Some("bar")],
+                ["1", null],
+                ["3", Some("foobar")],
+            ]
+        })
+    );
+}
