@@ -79,8 +79,25 @@ pub fn read_config() -> Result<Config, String> {
     let mut config: Config =
         serde_yaml::from_str(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
 
-    let env_port = std::env::var("PORT");
-    if let Ok(env_port) = env_port {
+    if let Ok(endpoints) = std::env::var("ENDPOINTS") {
+        log::info!("Override endpoints with env.ENDPOINTS");
+        config.endpoints = endpoints
+            .split(",")
+            .map(|x| x.trim().to_string())
+            .collect::<Vec<_>>();
+    }
+
+    // validate endpoints
+    assert!(
+        config
+            .endpoints
+            .iter()
+            .all(|x| x.parse::<jsonrpsee::client_transport::ws::Uri>().is_ok()),
+        "Invalid endpoint"
+    );
+
+    if let Ok(env_port) = std::env::var("PORT") {
+        log::info!("Override port with env.PORT");
         let port = env_port.parse::<u16>();
         if let Ok(port) = port {
             config.server.port = port;
