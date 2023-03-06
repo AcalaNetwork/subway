@@ -103,7 +103,7 @@ pub async fn dummy_server() -> (
 pub enum SinkTask {
     Sleep(u64),
     Send(JsonValue),
-    SinkClosed,
+    SinkClosed(Option<u64>),
 }
 
 impl SinkTask {
@@ -119,8 +119,12 @@ impl SinkTask {
                     .await
                     .unwrap()
             }
-            SinkTask::SinkClosed => {
+            SinkTask::SinkClosed(duration) => {
+                let begin = std::time::Instant::now();
                 sink.closed().await;
+                if let Some(duration) = *duration {
+                    assert_eq!(begin.elapsed().as_secs(), duration);
+                }
             }
         }
     }

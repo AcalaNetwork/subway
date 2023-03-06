@@ -124,7 +124,7 @@ async fn merge_subscription_works() {
                     ]
                 })),
                 // after 1s upstream subscription is dropped
-                SinkTask::SinkClosed,
+                SinkTask::SinkClosed(Some(1)),
             ],
         )
         .await;
