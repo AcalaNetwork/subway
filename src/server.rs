@@ -111,6 +111,7 @@ pub async fn start_server(
             Some(merge_strategy) => list.push(Arc::new(MergeSubscriptionMiddleware::new(
                 client.clone(),
                 merge_strategy,
+                config.merge_subscription_keep_alive,
             ))),
             None => list.push(upstream.clone()),
         };

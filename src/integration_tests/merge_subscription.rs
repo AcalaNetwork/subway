@@ -42,6 +42,7 @@ async fn merge_subscription_works() {
     let config = Config {
         endpoints: vec![format!("ws://{addr}")],
         stale_timeout_seconds: 0,
+        merge_subscription_keep_alive: Some(1),
         server: ServerConfig {
             listen_address: "0.0.0.0".to_string(),
             port: 0,
@@ -122,6 +123,8 @@ async fn merge_subscription_works() {
                         ["0x02", "again"]
                     ]
                 })),
+                // after 1s upstream subscription is dropped
+                SinkTask::SinkClosed,
             ],
         )
         .await;
@@ -172,7 +175,6 @@ async fn merge_subscription_works() {
         .await
         .unwrap();
 
-    let server_clone = server.clone();
     let test_two = tokio::spawn(async move {
         // 2nd msg with merged storage changes
         assert_eq!(
@@ -211,16 +213,13 @@ async fn merge_subscription_works() {
             })
         );
 
-        // stop server
-        server_clone.stop().unwrap();
-
-        // subscription closed
-        assert!(second_sub.next().await.is_none());
+        second_sub.unsubscribe().await.unwrap();
     });
 
     send_msg.await.unwrap();
     test_one.await.unwrap();
     test_two.await.unwrap();
 
-    server.stopped().await;
+    // stop server
+    server.stop().unwrap();
 }

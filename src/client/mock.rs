@@ -103,6 +103,7 @@ pub async fn dummy_server() -> (
 pub enum SinkTask {
     Sleep(u64),
     Send(JsonValue),
+    SinkClosed,
 }
 
 impl SinkTask {
@@ -117,6 +118,9 @@ impl SinkTask {
                 sink.send(SubscriptionMessage::from_json(msg).unwrap())
                     .await
                     .unwrap()
+            }
+            SinkTask::SinkClosed => {
+                sink.closed().await;
             }
         }
     }

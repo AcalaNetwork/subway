@@ -14,6 +14,7 @@ struct Command {
 pub struct Config {
     pub endpoints: Vec<String>,
     pub stale_timeout_seconds: u64,
+    pub merge_subscription_keep_alive: Option<u64>,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
 }
