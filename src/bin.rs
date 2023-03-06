@@ -1,0 +1,26 @@
+use subway::client;
+use subway::config;
+use subway::server;
+use subway::enable_logger;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    enable_logger();
+
+    let config = match config::read_config() {
+        Ok(config) => config,
+        Err(e) => {
+            return Err(anyhow::anyhow!(e));
+        }
+    };
+
+    let client = client::create_client(&config).await?;
+
+    let (addr, handle) = server::start_server(&config, client).await?;
+
+    tracing::info!("Server running at {addr}");
+
+    handle.await?;
+
+    Ok(())
+}
