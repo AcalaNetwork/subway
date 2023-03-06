@@ -113,7 +113,7 @@ impl SinkTask {
                 tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
             }
             SinkTask::Send(msg) => {
-                println!("send msg to sink: {}", msg.to_string());
+                println!("send msg to sink: {}", msg);
                 sink.send(SubscriptionMessage::from_json(msg).unwrap())
                     .await
                     .unwrap()

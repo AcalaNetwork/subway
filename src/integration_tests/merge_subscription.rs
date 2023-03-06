@@ -23,15 +23,11 @@ async fn merge_subscription_works() {
 
     let mut builder = TestServerBuilder::new();
 
-    let mut head_sub =
-        builder.register_subscription(&subscribe_head, &update_head, &unsubscribe_head);
-    let mut finalized_sub = builder.register_subscription(
-        &subscribe_finalized,
-        &update_finalized,
-        &unsubscribe_finalized,
-    );
+    let mut head_sub = builder.register_subscription(subscribe_head, update_head, unsubscribe_head);
+    let mut finalized_sub =
+        builder.register_subscription(subscribe_finalized, update_finalized, unsubscribe_finalized);
     let mut mock_sub_rx =
-        builder.register_subscription(&subscribe_mock, &update_mock, &unsubscribe_mock);
+        builder.register_subscription(subscribe_mock, update_mock, unsubscribe_mock);
 
     let (addr, _upstream_handle) = builder.build().await;
 
@@ -55,15 +51,15 @@ async fn merge_subscription_works() {
             methods: vec![],
             subscriptions: vec![
                 RpcSubscription {
-                    subscribe: "chain_subscribeNewHeads".to_string(),
-                    unsubscribe: "chain_unsubscribeNewHeads".to_string(),
-                    name: "chain_newHead".to_string(),
+                    subscribe: subscribe_head.to_string(),
+                    unsubscribe: unsubscribe_head.to_string(),
+                    name: update_head.to_string(),
                     merge_strategy: None,
                 },
                 RpcSubscription {
-                    subscribe: "chain_subscribeFinalizedHeads".to_string(),
-                    unsubscribe: "chain_unsubscribeFinalizedHeads".to_string(),
-                    name: "chain_finalizedHead".to_string(),
+                    subscribe: subscribe_finalized.to_string(),
+                    unsubscribe: unsubscribe_finalized.to_string(),
+                    name: update_finalized.to_string(),
                     merge_strategy: None,
                 },
                 RpcSubscription {
@@ -86,7 +82,7 @@ async fn merge_subscription_works() {
 
     let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
     let mut first_sub = client
-        .subscribe(&subscribe_mock, vec![], &unsubscribe_mock)
+        .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await
         .unwrap();
 
@@ -170,7 +166,7 @@ async fn merge_subscription_works() {
 
     tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
     let mut second_sub = client
-        .subscribe(&subscribe_mock, vec![], &unsubscribe_mock)
+        .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await
         .unwrap();
 
