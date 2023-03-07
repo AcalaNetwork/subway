@@ -71,7 +71,7 @@ type UpstreamSubscription = broadcast::Sender<SubscriptionMessage>;
 pub struct MergeSubscriptionMiddleware {
     client: Arc<Client>,
     merge_strategy: MergeStrategy,
-    keep_alive: u64,
+    keep_alive_seconds: u64,
     upstream_subs: Arc<RwLock<HashMap<CacheKey<Blake2b512>, UpstreamSubscription>>>,
     current_values: Arc<RwLock<HashMap<CacheKey<Blake2b512>, JsonValue>>>,
 }
@@ -80,12 +80,12 @@ impl MergeSubscriptionMiddleware {
     pub fn new(
         client: Arc<Client>,
         merge_strategy: MergeStrategy,
-        keep_alive: Option<u64>,
+        keep_alive_seconds: Option<u64>,
     ) -> Self {
         Self {
             client,
             merge_strategy,
-            keep_alive: keep_alive.unwrap_or(60), // 60s
+            keep_alive_seconds: keep_alive_seconds.unwrap_or(60), // 60s
             upstream_subs: Arc::new(RwLock::new(HashMap::new())),
             current_values: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -125,14 +125,14 @@ impl MergeSubscriptionMiddleware {
         let client = self.client.clone();
         let upstream_subs = self.upstream_subs.clone();
         let current_values = self.current_values.clone();
-        let keep_alive = self.keep_alive;
+        let keep_alive_seconds = self.keep_alive_seconds;
 
         let subscribe = Box::new(move || {
             let rx = tx.subscribe();
 
             tokio::spawn(async move {
                 // this ticker acts like a waker to help cleanup subscriptions
-                let mut interval = tokio::time::interval(Duration::from_secs(keep_alive));
+                let mut interval = tokio::time::interval(Duration::from_secs(keep_alive_seconds));
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 interval.reset();
 
