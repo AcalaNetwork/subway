@@ -139,6 +139,16 @@ rpcs:
         - name: accountId
           ty: AccountId
 
+    - method: engine_createBlock
+      params:
+        - name: createEmpty
+          ty: Boolean
+        - name: finalize
+          ty: Boolean
+        - name: parentHash
+          ty: BlockHash
+          optional: true
+
   subscriptions:
     - subscribe: author_submitAndWatchExtrinsic
       unsubscribe: author_unwatchExtrinsic
