@@ -5,6 +5,9 @@ pub mod config;
 pub mod middleware;
 pub mod server;
 
+#[cfg(test)]
+mod integration_tests;
+
 use tracing_subscriber::prelude::*;
 
 pub fn enable_logger() {

@@ -16,11 +16,11 @@ async fn main() -> anyhow::Result<()> {
 
     let client = client::create_client(&config).await?;
 
-    let (addr, handle) = server::start_server(&config, client).await?;
+    let (addr, server) = server::start_server(&config, client).await?;
 
     tracing::info!("Server running at {addr}");
 
-    handle.await?;
+    server.stopped().await;
 
     Ok(())
 }
