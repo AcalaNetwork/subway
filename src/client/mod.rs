@@ -1,5 +1,6 @@
 use std::sync::{atomic::AtomicUsize, Arc};
 
+use futures::TryFutureExt;
 use jsonrpsee::{
     core::{
         client::{ClientT, Subscription, SubscriptionClientT},
@@ -66,13 +67,14 @@ impl Client {
                         current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let url = &endpoints[current_endpoint % endpoints.len()];
 
-                    tracing::debug!("Connecting to endpoint: {}", url);
+                    tracing::info!("Connecting to endpoint: {}", url);
 
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(30))
-                        .connection_timeout(std::time::Duration::from_secs(10))
+                        .connection_timeout(std::time::Duration::from_secs(30))
                         .max_buffer_capacity_per_subscription(1024)
                         .build(url)
+                        .map_err(|e| (e, url.to_string()))
                 };
 
                 let disconnect_tx = disconnect_tx.clone();
@@ -86,13 +88,13 @@ impl Client {
                             tokio::spawn(async move {
                                 ws2.on_disconnect().await;
                                 if let Err(e) = disconnect_tx.send(()).await {
-                                    tracing::debug!("Unable to send disconnect: {}", e);
+                                    tracing::warn!("Unable to send disconnect: {}", e);
                                 }
                             });
                             break ws;
                         }
-                        Err(e) => {
-                            tracing::debug!("Unable to connect to endpoint: {}", e);
+                        Err((e, url)) => {
+                            tracing::warn!("Unable to connect to endpoint: '{url}' error: {e}");
                             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                     }
