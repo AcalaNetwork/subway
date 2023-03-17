@@ -71,13 +71,13 @@ criterion_group!(
     targets = AsyncBencher::websocket_benches_inject
 );
 criterion_main!(
-    // sync_benches,
-    // sync_benches_mid,
-    // sync_benches_slow,
-    // async_benches,
-    // async_benches_mid,
-    // async_benches_slow,
-    // subscriptions,
+    sync_benches,
+    sync_benches_mid,
+    sync_benches_slow,
+    async_benches,
+    async_benches_mid,
+    async_benches_slow,
+    subscriptions,
     async_benches_inject,
 );
 
@@ -228,6 +228,7 @@ fn config() -> Config {
             format!("ws://{}", SERVER_TWO_ENDPOINT),
         ],
         stale_timeout_seconds: 60,
+        merge_subscription_keep_alive_seconds: None,
         server: ServerConfig {
             listen_address: SUBWAY_SERVER_ADDR.to_string(),
             port: SUBWAY_SERVER_PORT,
@@ -295,7 +296,7 @@ fn config() -> Config {
     }
 }
 
-async fn server() -> (String, tokio::task::JoinHandle<()>) {
+async fn server() -> (String, jsonrpsee::server::ServerHandle) {
     let config = config();
     let client = create_client(&config).await.unwrap();
     let (addr, handle) = start_server(&config, client).await.unwrap();
