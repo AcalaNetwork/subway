@@ -1,7 +1,7 @@
 use subway::client;
 use subway::config;
-use subway::server;
 use subway::enable_logger;
+use subway::server;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -88,11 +88,17 @@ pub async fn start_server(
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
             async move {
-                let params = params
-                    .parse::<JsonValue>()?
-                    .as_array()
-                    .ok_or_else(|| CallError::InvalidParams(anyhow::Error::msg("invalid params")))?
-                    .to_owned();
+                let parsed = params.parse::<JsonValue>()?;
+                let params = if parsed == JsonValue::Null {
+                    vec![]
+                } else {
+                    parsed
+                        .as_array()
+                        .ok_or_else(|| {
+                            CallError::InvalidParams(anyhow::Error::msg("invalid params"))
+                        })?
+                        .to_owned()
+                };
                 middlewares
                     .call(CallRequest::new(method_name.into(), params))
                     .await
@@ -138,13 +144,17 @@ pub async fn start_server(
             move |params, sink, _| {
                 let middlewares = middlewares.clone();
                 async move {
-                    let params = params
-                        .parse::<JsonValue>()?
-                        .as_array()
-                        .ok_or_else(|| {
-                            CallError::InvalidParams(anyhow::Error::msg("invalid params"))
-                        })?
-                        .to_owned();
+                    let parsed = params.parse::<JsonValue>()?;
+                    let params = if parsed == JsonValue::Null {
+                        vec![]
+                    } else {
+                        parsed
+                            .as_array()
+                            .ok_or_else(|| {
+                                CallError::InvalidParams(anyhow::Error::msg("invalid params"))
+                            })?
+                            .to_owned()
+                    };
                     middlewares
                         .call(SubscriptionRequest {
                             subscribe: subscribe_name.into(),
