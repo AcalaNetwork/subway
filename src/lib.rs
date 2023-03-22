@@ -1,16 +1,16 @@
-mod api;
-mod cache;
-mod client;
-mod config;
-mod middleware;
-mod server;
+pub mod api;
+pub mod cache;
+pub mod client;
+pub mod config;
+pub mod middleware;
+pub mod server;
 
 #[cfg(test)]
 mod integration_tests;
 
 use tracing_subscriber::prelude::*;
 
-fn enable_logger() {
+pub fn enable_logger() {
     let registry = tracing_subscriber::registry();
 
     let filter = tracing_subscriber::EnvFilter::builder()
@@ -58,26 +58,4 @@ fn enable_logger() {
             .try_init(),
         _ => registry.with(fmt_layer.with_filter(filter)).try_init(),
     };
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    enable_logger();
-
-    let config = match config::read_config() {
-        Ok(config) => config,
-        Err(e) => {
-            return Err(anyhow::anyhow!(e));
-        }
-    };
-
-    let client = client::create_client(&config).await?;
-
-    let (addr, server) = server::start_server(&config, client).await?;
-
-    tracing::info!("Server running at {addr}");
-
-    server.stopped().await;
-
-    Ok(())
 }

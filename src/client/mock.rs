@@ -17,6 +17,12 @@ pub struct TestServerBuilder {
     module: RpcModule<()>,
 }
 
+impl Default for TestServerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestServerBuilder {
     pub fn new() -> Self {
         Self {

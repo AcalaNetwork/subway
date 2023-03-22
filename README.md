@@ -60,3 +60,17 @@ Subway is build with middleware pattern.
   - TODO: Limit batch size, request size and response size.
 - TODO: Metrics
   - Getting insights of the RPC calls and server performance.
+  
+## Benchmarks
+
+To run all benchmarks:
+
+```
+cargo bench
+```
+
+It's also possible to run individual benchmarks by:
+
+```
+cargo bench --bench bench ws_round_trip
+```

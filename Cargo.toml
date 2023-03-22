@@ -7,6 +7,14 @@ description = "Substrate JSON RPC gateway"
 license = "Apache-2.0"
 edition = "2021"
 
+[lib]
+name = "subway"
+path = "src/lib.rs"
+
+[[bin]]
+name = "subway"
+path = "src/bin.rs"
+
 [dependencies]
 anyhow = "1.0.68"
 async-trait = "0.1.63"
@@ -30,6 +38,16 @@ jsonrpsee = { version = "0.16.0", path = "./vendor/jsonrpsee/jsonrpsee", feature
 governor = { version = "0.5.1", path = "./vendor/governor/governor" }
 
 [dev-dependencies]
+criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
+pprof = { version = "0.11", features = ["flamegraph", "criterion"] }
+futures-util = "0.3.15"
+jsonrpc-ws-server = { version = "18.0.0" }
+jsonrpc-http-server = { version = "18.0.0" }
+jsonrpc-pubsub = { version = "18.0.0" }
+
+[[bench]]
+name = "bench"
+harness = false
 
 [target.'cfg(tokio_unstable)'.dependencies]
 console-subscriber = "0.1.8"
