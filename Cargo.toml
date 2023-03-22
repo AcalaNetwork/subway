@@ -44,7 +44,6 @@ futures-util = "0.3.15"
 jsonrpc-ws-server = { version = "18.0.0" }
 jsonrpc-http-server = { version = "18.0.0" }
 jsonrpc-pubsub = { version = "18.0.0" }
-jsonrpsee_v0_15 = { package = "jsonrpsee", version = "=0.15.1", features = ["http-client", "ws-client", "client-ws-transport"] }
 
 [[bench]]
 name = "bench"

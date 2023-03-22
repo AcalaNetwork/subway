@@ -1,12 +1,13 @@
 use criterion::*;
 use futures::{future::join_all, stream::FuturesUnordered};
 use futures_util::FutureExt;
+use jsonrpsee::core::params::BatchRequestBuilder;
 use pprof::criterion::{Output, PProfProfiler};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime as TokioRuntime;
 
-use helpers::fixed_client::{
+use helpers::client::{
     rpc_params, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT,
 };
 use helpers::{ASYNC_INJECT_CALL, KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
@@ -339,7 +340,7 @@ fn ws_concurrent_conn_calls(
                             let futs = FuturesUnordered::new();
 
                             for _ in 0..10 {
-                                futs.push(client.request::<String>(fast_call, None));
+                                futs.push(client.request::<String, _>(fast_call, rpc_params![]));
                             }
 
                             join_all(futs).await;
@@ -387,7 +388,11 @@ fn ws_concurrent_conn_subs(
 
                             for _ in 0..10 {
                                 let fut = client
-                                    .subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+                                    .subscribe::<String, _>(
+                                        SUB_METHOD_NAME,
+                                        rpc_params![],
+                                        UNSUB_METHOD_NAME,
+                                    )
                                     .then(|sub| async move {
                                         let mut s = sub.unwrap();
 
@@ -443,7 +448,12 @@ fn round_trip(
         let bench_name = format!("{}/{}", name, method);
         crit.bench_function(&request.group_name(&bench_name), |b| {
             b.to_async(rt).iter(|| async {
-                black_box(client.request::<String>(method, None).await.unwrap());
+                black_box(
+                    client
+                        .request::<String, _>(method, rpc_params![])
+                        .await
+                        .unwrap(),
+                );
             })
         });
     }
@@ -463,7 +473,10 @@ fn batch_round_trip(
     let bench_name = format!("{}/{}", name, fast_call);
     let mut group = crit.benchmark_group(request.group_name(&bench_name));
     for batch_size in [2, 5, 10, 50, 100usize].iter() {
-        let batch = vec![(fast_call, None); *batch_size];
+        let mut batch = BatchRequestBuilder::new();
+        for _ in 0..*batch_size {
+            batch.insert(fast_call, rpc_params![]).unwrap();
+        }
 
         group.throughput(Throughput::Elements(*batch_size as u64));
         group.bench_with_input(
@@ -489,7 +502,7 @@ fn sub_round_trip(
         b.to_async(rt).iter_with_large_drop(|| async {
             black_box(
                 client
-                    .subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+                    .subscribe::<String, _>(SUB_METHOD_NAME, rpc_params![], UNSUB_METHOD_NAME)
                     .await
                     .unwrap(),
             );
@@ -503,7 +516,11 @@ fn sub_round_trip(
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
                         client
-                            .subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+                            .subscribe::<String, _>(
+                                SUB_METHOD_NAME,
+                                rpc_params![],
+                                UNSUB_METHOD_NAME,
+                            )
                             .await
                             .unwrap()
                     })
@@ -523,7 +540,7 @@ fn sub_round_trip(
             || {
                 rt.block_on(async {
                     client
-                        .subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME)
+                        .subscribe::<String, _>(SUB_METHOD_NAME, rpc_params![], UNSUB_METHOD_NAME)
                         .await
                         .unwrap()
                 })
@@ -551,7 +568,7 @@ fn ws_inject_calls(
         b.to_async(rt).iter(|| async {
             black_box(
                 client
-                    .request::<String>(method, rpc_params![0_u64])
+                    .request::<String, _>(method, rpc_params![0_u64])
                     .await
                     .unwrap(),
             );

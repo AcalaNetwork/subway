@@ -122,17 +122,17 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
     module
 }
 
-pub mod fixed_client {
-    use jsonrpsee_v0_15::client_transport::ws::{Uri, WsTransportClientBuilder};
-    use jsonrpsee_v0_15::ws_client::{WsClient, WsClientBuilder};
+pub mod client {
+    use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
+    use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
-    pub use jsonrpsee_v0_15::core::client::{ClientT, SubscriptionClientT};
-    pub use jsonrpsee_v0_15::http_client::HeaderMap;
-    pub use jsonrpsee_v0_15::rpc_params;
+    pub use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+    pub use jsonrpsee::http_client::HeaderMap;
+    pub use jsonrpsee::rpc_params;
 
     pub async fn ws_client(url: &str) -> WsClient {
         WsClientBuilder::default()
-            .max_request_body_size(u32::MAX)
+            .max_request_size(u32::MAX)
             .max_concurrent_requests(1024 * 1024)
             .build(url)
             .await
@@ -142,7 +142,7 @@ pub mod fixed_client {
     pub async fn ws_handshake(url: &str, headers: HeaderMap) {
         let uri: Uri = url.parse().unwrap();
         WsTransportClientBuilder::default()
-            .max_request_body_size(u32::MAX)
+            .max_request_size(u32::MAX)
             .set_headers(headers)
             .build(uri)
             .await
