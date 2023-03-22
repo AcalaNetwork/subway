@@ -216,7 +216,7 @@ mod tests {
 
     async fn server() -> (String, ServerHandle) {
         let config = Config {
-            endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT.to_string())],
+            endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
             stale_timeout_seconds: 60,
             merge_subscription_keep_alive_seconds: None,
             server: ServerConfig {
