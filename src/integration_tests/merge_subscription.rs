@@ -43,6 +43,8 @@ async fn merge_subscription_works() {
         endpoints: vec![format!("ws://{addr}")],
         stale_timeout_seconds: 0,
         merge_subscription_keep_alive_seconds: Some(1),
+        eth_rpc: false,
+        eth_finalization: crate::config::EthFinalization::Latest,
         server: ServerConfig {
             listen_address: "0.0.0.0".to_string(),
             port: 0,

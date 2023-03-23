@@ -212,7 +212,7 @@ mod tests {
     use super::*;
     use crate::{
         client::create_client,
-        config::{RpcDefinitions, RpcMethod, ServerConfig},
+        config::{EthFinalization, RpcDefinitions, RpcMethod, ServerConfig},
     };
 
     const PHO: &str = "pho";
@@ -224,6 +224,8 @@ mod tests {
             endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
             stale_timeout_seconds: 60,
             merge_subscription_keep_alive_seconds: None,
+            eth_rpc: false,
+            eth_finalization: EthFinalization::Latest,
             server: ServerConfig {
                 listen_address: "127.0.0.1".to_string(),
                 port: 9944,

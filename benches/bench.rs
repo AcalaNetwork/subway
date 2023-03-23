@@ -13,7 +13,8 @@ use helpers::client::{
 use helpers::{ASYNC_INJECT_CALL, KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use subway::client::create_client;
 use subway::config::{
-    Config, MergeStrategy, MethodParam, RpcDefinitions, RpcMethod, RpcSubscription, ServerConfig,
+    Config, EthFinalization, MergeStrategy, MethodParam, RpcDefinitions, RpcMethod,
+    RpcSubscription, ServerConfig,
 };
 use subway::server::start_server;
 
@@ -230,6 +231,8 @@ fn config() -> Config {
         ],
         stale_timeout_seconds: 60,
         merge_subscription_keep_alive_seconds: None,
+        eth_rpc: false,
+        eth_finalization: EthFinalization::Latest,
         server: ServerConfig {
             listen_address: SUBWAY_SERVER_ADDR.to_string(),
             port: SUBWAY_SERVER_PORT,
