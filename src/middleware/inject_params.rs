@@ -6,19 +6,16 @@ use jsonrpsee::{
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
-use crate::{
-    api::{Api, ValueHandle},
-    config::MethodParam,
-    middleware::call::CallRequest,
-};
+use crate::{api::Api, config::MethodParam, middleware::call::CallRequest};
 
 pub enum InjectType {
     BlockHashAt(usize),
     BlockNumberAt(usize),
+    BlockTagAt(usize),
 }
 
 pub struct InjectParamsMiddleware {
-    head: ValueHandle<(JsonValue, u64)>,
+    api: Arc<Api>,
     inject: InjectType,
     params: Vec<MethodParam>,
 }
@@ -26,54 +23,70 @@ pub struct InjectParamsMiddleware {
 impl InjectParamsMiddleware {
     pub fn new(api: Arc<Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
         Self {
-            head: api.get_head(),
+            api,
             inject,
             params,
         }
     }
 
-    fn get_index(&self) -> usize {
-        match self.inject {
-            InjectType::BlockHashAt(index) => index,
-            InjectType::BlockNumberAt(index) => index,
+    async fn replace_parameter(&self, request: &mut CallRequest) -> Option<(usize, JsonValue)> {
+        let (_, number) = self.api.get_head().read().await;
+        let (_, finalized_number) = self.api.get_finalized_head().read().await;
+        let maybe_inject = match self.inject {
+            InjectType::BlockTagAt(index) => {
+                if let Some(param) = request.params.get(index).cloned() {
+                    if !param.is_string() {
+                        return None;
+                    }
+                    match param.as_str().unwrap_or_default() {
+                        "finalized" => Some((index, format!("0x{:x}", finalized_number).into())),
+                        // TODO: what is safe? maybe we skip caching?
+                        "safe" => Some((index, format!("0x{:x}", number).into())),
+                        "latest" => Some((index, format!("0x{:x}", number).into())),
+                        "earliest" => None, // no need to replace earliest because it's always going to be genesis
+                        "pending" => {
+                            request.bypass_cache = true;
+                            None
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        if let Some((index, to_inject)) = maybe_inject.clone() {
+            request.params.remove(index);
+            request.params.insert(index, to_inject);
         }
+
+        maybe_inject
     }
 
     async fn get_parameter(&self) -> JsonValue {
-        let res = self.head.read().await;
+        let (hash, number) = self.api.get_head().read().await;
         match self.inject {
-            InjectType::BlockHashAt(_) => res.0,
-            InjectType::BlockNumberAt(_) => res.1.into(),
+            InjectType::BlockHashAt(_) => hash,
+            InjectType::BlockNumberAt(_) => number.into(),
+            InjectType::BlockTagAt(_) => JsonValue::Null,
         }
-    }
-
-    pub fn params_count(&self) -> (usize, usize) {
-        let mut optional = 0;
-        let mut required = 0;
-        for param in &self.params {
-            if param.optional {
-                optional += 1;
-            } else {
-                required += 1;
-            }
-        }
-        (required, optional)
     }
 }
 
 pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
-    let maybe_block_num = params
-        .iter()
-        .position(|p| p.inject && p.ty == "BlockNumber");
-    if let Some(block_num) = maybe_block_num {
-        return Some(InjectType::BlockNumberAt(block_num));
+    for (index, param) in params.iter().enumerate() {
+        if !param.inject {
+            continue;
+        }
+        match param.ty.as_str() {
+            "BlockNumber" => return Some(InjectType::BlockNumberAt(index)),
+            "BlockHash" => return Some(InjectType::BlockHashAt(index)),
+            "BlockTag" => return Some(InjectType::BlockTagAt(index)),
+            _ => continue,
+        }
     }
-
-    let maybe_block_hash = params.iter().position(|p| p.inject && p.ty == "BlockHash");
-    if let Some(block_hash) = maybe_block_hash {
-        return Some(InjectType::BlockHashAt(block_hash));
-    }
-
     None
 }
 
@@ -84,42 +97,47 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
         mut request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        let idx = self.get_index();
-        match request.params.len() {
-            len if len == idx + 1 => {
-                // full params with current block
-                return next(request).await;
-            }
-            len if len <= idx => {
-                // without current block
-                let to_inject = self.get_parameter().await;
-                tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
-                let params_passed = request.params.len();
-                while request.params.len() < idx {
-                    let current = request.params.len();
-                    if self.params[current].optional {
-                        request.params.push(JsonValue::Null);
-                    } else {
-                        let (required, optional) = self.params_count();
+        let mut reached_optional = false;
+        for (index, param) in self.params.iter().enumerate() {
+            if !param.optional {
+                if reached_optional {
+                    return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
+                        format!(
+                            "config error, cannot have required at {} after optional",
+                            index
+                        ),
+                    ))));
+                }
+                if let Some(param) = request.params.get(index) {
+                    if param.is_null() {
                         return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
-                            format!(
-                                "Expected {:?} parameters ({:?} optional), {:?} found instead",
-                                required + optional,
-                                optional,
-                                params_passed
-                            ),
+                            format!("required param at {} is null", index),
                         ))));
                     }
+                } else {
+                    return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
+                        format!("missing required param at {}", index),
+                    ))));
                 }
-                request.params.push(to_inject);
-
-                return next(request).await;
             }
-            _ => {
-                // unexpected number of params
-                next(request).await
+            if param.inject {
+                let injected = if param.ty == "BlockTag" {
+                    self.replace_parameter(&mut request).await
+                } else if param.optional && request.params.get(index).is_none() {
+                    let to_inject = self.get_parameter().await;
+                    request.params.push(to_inject.clone());
+                    Some((index, to_inject))
+                } else {
+                    None
+                };
+                log::debug!("Injected {:?} to request: {:?}", injected, request);
+            } else if param.optional {
+                reached_optional = true;
+                request.params.insert(index, JsonValue::Null);
             }
         }
+
+        next(request).await
     }
 }
 
@@ -162,7 +180,7 @@ mod tests {
         let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-        let api = Api::new(Arc::new(client), Duration::from_secs(100));
+        let api = Api::new(Arc::new(client), Duration::from_secs(100), None);
 
         (
             ExecutionContext {
@@ -224,10 +242,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: params.clone(),
-                },
+                CallRequest::new("state_getStorage", params.clone()),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, params);
@@ -263,10 +278,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!("0xabcd")]);
@@ -308,10 +320,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(
@@ -356,10 +365,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(
@@ -373,7 +379,7 @@ mod tests {
             )
             .await;
         assert!(
-            matches!(result, Err(Error::Call(CallError::InvalidParams(e))) if e.to_string() == "Expected 3 parameters (1 optional), 1 found instead")
+            matches!(result, Err(Error::Call(CallError::InvalidParams(e))) if e.to_string() == "missing required param at 1")
         );
     }
 
@@ -399,10 +405,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!(0x4321)]);
@@ -430,10 +433,7 @@ mod tests {
 
         let result2 = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!(0x5432)]);

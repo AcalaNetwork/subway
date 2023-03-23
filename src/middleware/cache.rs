@@ -25,6 +25,10 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
+        if request.bypass_cache {
+            return next(request).await;
+        }
+
         let key = CacheKey::<Blake2b512>::new(&request.method, &request.params);
 
         if let Some(value) = self.cache.get(&key) {
@@ -58,10 +62,7 @@ mod tests {
 
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test".into(),
-                    params: vec![json!(11)],
-                },
+                CallRequest::new("test", vec![json!(11)]),
                 Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
             )
             .await;
@@ -73,10 +74,7 @@ mod tests {
         // cache hit
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test".into(),
-                    params: vec![json!(11)],
-                },
+                CallRequest::new("test", vec![json!(11)]),
                 Box::new(move |_| async move { panic!() }.boxed()),
             )
             .await;
@@ -85,10 +83,7 @@ mod tests {
         // cache miss with different params
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test".into(),
-                    params: vec![json!(22)],
-                },
+                CallRequest::new("test", vec![json!(22)]),
                 Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
             )
             .await;
@@ -97,10 +92,7 @@ mod tests {
         // cache miss with different method
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test2".into(),
-                    params: vec![json!(22)],
-                },
+                CallRequest::new("test2", vec![json!(22)]),
                 Box::new(move |_| async move { Ok(json!(3)) }.boxed()),
             )
             .await;
@@ -109,10 +101,7 @@ mod tests {
         // cache hit and update prune priority
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test".into(),
-                    params: vec![json!(11)],
-                },
+                CallRequest::new("test", vec![json!(11)]),
                 Box::new(move |_| async move { panic!() }.boxed()),
             )
             .await;
@@ -121,10 +110,7 @@ mod tests {
         // cache override oldest entry
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test2".into(),
-                    params: vec![json!(33)],
-                },
+                CallRequest::new("test2", vec![json!(33)]),
                 Box::new(move |_| async move { Ok(json!(4)) }.boxed()),
             )
             .await;
@@ -133,10 +119,7 @@ mod tests {
         // cache miss due to entry pruned
         let res = middleware
             .call(
-                CallRequest {
-                    method: "test".into(),
-                    params: vec![json!(22)],
-                },
+                CallRequest::new("test", vec![json!(22)]),
                 Box::new(move |_| async move { Ok(json!(5)) }.boxed()),
             )
             .await;

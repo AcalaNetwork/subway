@@ -46,6 +46,11 @@ pub async fn start_server(
     let api = Arc::new(Api::new(
         client.clone(),
         Duration::from_secs(config.stale_timeout_seconds),
+        if config.eth_rpc {
+            Some(config.eth_finalization)
+        } else {
+            None
+        },
     ));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
@@ -94,7 +99,7 @@ pub async fn start_server(
                     .ok_or_else(|| CallError::InvalidParams(anyhow::Error::msg("invalid params")))?
                     .to_owned();
                 middlewares
-                    .call(CallRequest::new(method_name.into(), params))
+                    .call(CallRequest::new(method_name, params))
                     .await
             }
         })?;
