@@ -9,12 +9,18 @@ use super::*;
 use futures::TryFutureExt;
 use jsonrpsee::{
     server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
-    SubscriptionSink,
+    SubscriptionMessage, SubscriptionSink,
 };
 use tokio::sync::{mpsc, oneshot};
 
 pub struct TestServerBuilder {
     module: RpcModule<()>,
+}
+
+impl Default for TestServerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestServerBuilder {
@@ -98,4 +104,40 @@ pub async fn dummy_server() -> (
     let (addr, handle) = builder.build().await;
 
     (addr, handle, rx, sub_rx)
+}
+
+pub enum SinkTask {
+    Sleep(u64),
+    Send(JsonValue),
+    SinkClosed(Option<u64>),
+}
+
+impl SinkTask {
+    async fn run(&self, sink: &SubscriptionSink) {
+        match self {
+            SinkTask::Sleep(ms) => {
+                println!("sleep {} ms", ms);
+                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
+            }
+            SinkTask::Send(msg) => {
+                println!("send msg to sink: {}", msg);
+                sink.send(SubscriptionMessage::from_json(msg).unwrap())
+                    .await
+                    .unwrap()
+            }
+            SinkTask::SinkClosed(duration) => {
+                let begin = std::time::Instant::now();
+                sink.closed().await;
+                if let Some(duration) = *duration {
+                    assert_eq!(begin.elapsed().as_secs(), duration);
+                }
+            }
+        }
+    }
+}
+
+pub async fn run_sink_tasks(sink: &SubscriptionSink, tasks: Vec<SinkTask>) {
+    for task in tasks {
+        task.run(sink).await
+    }
 }

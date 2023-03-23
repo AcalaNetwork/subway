@@ -80,6 +80,7 @@ pub struct RpcDefinitions {
 pub struct Config {
     pub endpoints: Vec<String>,
     pub stale_timeout_seconds: u64,
+    pub merge_subscription_keep_alive_seconds: Option<u64>,
     pub eth_rpc: bool,
     pub eth_finalization: EthFinalization,
     pub server: ServerConfig,

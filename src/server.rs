@@ -1,11 +1,10 @@
 use futures::FutureExt;
 use jsonrpsee::core::JsonValue;
-use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder};
+use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::CallError;
 use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
-use tokio::task::JoinHandle;
 
 use crate::cache::new_cache;
 use crate::{
@@ -30,7 +29,7 @@ fn string_to_static_str(s: String) -> &'static str {
 pub async fn start_server(
     config: &Config,
     client: Client,
-) -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
+) -> anyhow::Result<(SocketAddr, ServerHandle)> {
     let service_builder = tower::ServiceBuilder::new();
 
     let server = ServerBuilder::default()
@@ -93,11 +92,17 @@ pub async fn start_server(
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
             async move {
-                let params = params
-                    .parse::<JsonValue>()?
-                    .as_array()
-                    .ok_or_else(|| CallError::InvalidParams(anyhow::Error::msg("invalid params")))?
-                    .to_owned();
+                let parsed = params.parse::<JsonValue>()?;
+                let params = if parsed == JsonValue::Null {
+                    vec![]
+                } else {
+                    parsed
+                        .as_array()
+                        .ok_or_else(|| {
+                            CallError::InvalidParams(anyhow::Error::msg("invalid params"))
+                        })?
+                        .to_owned()
+                };
                 middlewares
                     .call(CallRequest::new(method_name, params))
                     .await
@@ -117,6 +122,7 @@ pub async fn start_server(
             Some(merge_strategy) => list.push(Arc::new(MergeSubscriptionMiddleware::new(
                 client.clone(),
                 merge_strategy,
+                config.merge_subscription_keep_alive_seconds,
             ))),
             None => list.push(upstream.clone()),
         };
@@ -143,13 +149,17 @@ pub async fn start_server(
             move |params, sink, _| {
                 let middlewares = middlewares.clone();
                 async move {
-                    let params = params
-                        .parse::<JsonValue>()?
-                        .as_array()
-                        .ok_or_else(|| {
-                            CallError::InvalidParams(anyhow::Error::msg("invalid params"))
-                        })?
-                        .to_owned();
+                    let parsed = params.parse::<JsonValue>()?;
+                    let params = if parsed == JsonValue::Null {
+                        vec![]
+                    } else {
+                        parsed
+                            .as_array()
+                            .ok_or_else(|| {
+                                CallError::InvalidParams(anyhow::Error::msg("invalid params"))
+                            })?
+                            .to_owned()
+                    };
                     middlewares
                         .call(SubscriptionRequest {
                             subscribe: subscribe_name.into(),
@@ -184,9 +194,94 @@ pub async fn start_server(
     })?;
 
     let addr = server.local_addr()?;
-    let handle = server.start(module)?;
+    let server = server.start(module)?;
 
-    let handle = tokio::spawn(handle.stopped());
+    Ok((addr, server))
+}
 
-    Ok((addr, handle))
+#[cfg(test)]
+mod tests {
+    use jsonrpsee::{
+        core::client::ClientT,
+        rpc_params,
+        server::ServerHandle,
+        ws_client::{WsClient, WsClientBuilder},
+        RpcModule,
+    };
+
+    use super::*;
+    use crate::{
+        client::create_client,
+        config::{RpcDefinitions, RpcMethod, ServerConfig},
+    };
+
+    const PHO: &str = "pho";
+    const BAR: &str = "bar";
+    const WS_SERVER_ENDPOINT: &str = "127.0.0.1:9955";
+
+    async fn server() -> (String, ServerHandle) {
+        let config = Config {
+            endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
+            stale_timeout_seconds: 60,
+            merge_subscription_keep_alive_seconds: None,
+            server: ServerConfig {
+                listen_address: "127.0.0.1".to_string(),
+                port: 9944,
+                max_connections: 1024,
+            },
+            rpcs: RpcDefinitions {
+                methods: vec![RpcMethod {
+                    method: PHO.to_string(),
+                    params: vec![],
+                    cache: 0,
+                }],
+                subscriptions: vec![],
+                aliases: vec![],
+            },
+        };
+        let client = create_client(&config).await.unwrap();
+        let (addr, server) = start_server(&config, client).await.unwrap();
+        (format!("ws://{}", addr), server)
+    }
+
+    async fn ws_server(url: &str) -> (String, ServerHandle) {
+        let server = ServerBuilder::default()
+            .max_request_body_size(u32::MAX)
+            .max_response_body_size(u32::MAX)
+            .max_connections(10 * 1024)
+            .build(url)
+            .await
+            .unwrap();
+
+        let mut module = RpcModule::new(());
+        module
+            .register_method(PHO, |_, _| Ok(BAR.to_string()))
+            .unwrap();
+        let addr = format!("ws://{}", server.local_addr().unwrap());
+        let handle = server.start(module).unwrap();
+        (addr, handle)
+    }
+
+    async fn ws_client(url: &str) -> WsClient {
+        WsClientBuilder::default()
+            .max_request_size(u32::MAX)
+            .max_concurrent_requests(1024 * 1024)
+            .build(url)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn null_param_works() {
+        let (_url1, _server1) = ws_server(WS_SERVER_ENDPOINT).await;
+        let (url, _server) = server().await;
+        let client = ws_client(&url).await;
+        assert_eq!(
+            BAR,
+            client
+                .request::<String, _>(PHO, rpc_params!())
+                .await
+                .unwrap()
+        );
+    }
 }
