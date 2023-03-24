@@ -1,11 +1,8 @@
-use std::collections::LinkedList;
-use std::{sync::Arc, time::Duration};
-
 use jsonrpsee::core::JsonValue;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{watch, RwLock};
 
 use crate::client::Client;
-use crate::config::EthFinalization;
 
 #[cfg(test)]
 mod tests;
@@ -39,8 +36,8 @@ impl<T: Clone> ValueHandle<T> {
 
 pub struct Api {
     client: Arc<Client>,
-    head: watch::Receiver<Option<(JsonValue, u64)>>,
-    finalized_head: watch::Receiver<Option<(JsonValue, u64)>>,
+    pub head: watch::Receiver<Option<(JsonValue, u64)>>,
+    pub finalized_head: watch::Receiver<Option<(JsonValue, u64)>>,
     stale_timeout: Duration,
 }
 
@@ -61,11 +58,7 @@ impl Api {
 }
 
 impl Api {
-    pub fn new(
-        client: Arc<Client>,
-        stale_timeout: Duration,
-        eth_finalization: Option<EthFinalization>,
-    ) -> Self {
+    pub fn new(client: Arc<Client>, stale_timeout: Duration, eth_rpc: bool) -> Self {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
         let (finalized_head_tx, finalized_head_rx) =
             watch::channel::<Option<(JsonValue, u64)>>(None);
@@ -77,8 +70,8 @@ impl Api {
             stale_timeout,
         };
 
-        if let Some(eth_finalization) = eth_finalization {
-            this.start_eth_background_task(head_tx, finalized_head_tx, eth_finalization);
+        if eth_rpc {
+            this.start_eth_background_task(head_tx, finalized_head_tx);
         } else {
             this.start_background_task(head_tx, finalized_head_tx);
         }
@@ -188,27 +181,13 @@ impl Api {
     fn start_eth_background_task(
         &self,
         head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-        finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-        eth_finalization: EthFinalization,
+        _finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
     ) {
         let client = self.client.clone();
         let stale_timeout = self.stale_timeout;
 
-        let mut unfinalized_blocks = LinkedList::<(JsonValue, u64)>::new();
-
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(stale_timeout);
-
-            let (check_finalized_tx, mut check_finalized_rx) = tokio::sync::mpsc::channel::<()>(1);
-
-            let check_finalized_tx2 = check_finalized_tx.clone();
-            tokio::spawn(async move {
-                let mut query_finalized_interval = tokio::time::interval(Duration::from_secs(1));
-                loop {
-                    query_finalized_interval.tick().await;
-                    let _ = check_finalized_tx2.try_send(());
-                }
-            });
 
             loop {
                 let client = client.clone();
@@ -225,16 +204,6 @@ impl Api {
 
                     tracing::debug!("New head: {number} {hash}");
                     head_tx.send_replace(Some((hash.clone(), number)));
-                    match eth_finalization {
-                        EthFinalization::Latest => {
-                            tracing::debug!("New finalized head: {number} {hash}");
-                            finalized_head_tx.send_replace(Some((hash, number)));
-                        }
-                        _ => {
-                            unfinalized_blocks.push_front((hash, number));
-                            let _ = check_finalized_tx.try_send(());
-                        }
-                    }
 
                     let mut sub = client
                         .subscribe(
@@ -256,30 +225,8 @@ impl Api {
 
                                     tracing::debug!("New head: {number} {hash}");
                                     head_tx.send_replace(Some((hash.clone(), number)));
-                                    match eth_finalization {
-                                        EthFinalization::Latest => {
-                                            tracing::debug!("New finalized head: {number} {hash}");
-                                            finalized_head_tx.send_replace(Some((hash, number)));
-                                        }
-                                        _ => {
-                                            unfinalized_blocks.push_front((hash, number));
-                                            let _ = check_finalized_tx.try_send(());
-                                        }
-                                    }
                                 } else {
                                     break;
-                                }
-                            }
-                            _ = check_finalized_rx.recv() => {
-                                if let Some((hash, number)) = unfinalized_blocks.back() {
-                                    let res = client.request("eth_isBlockFinalized", vec![format!("0x{:x}", number).into()]).await?;
-                                    let finalized = res.as_bool().ok_or_else(|| anyhow::Error::msg("expected boolean"))?;
-                                    if finalized {
-                                        tracing::debug!("New finalized head: {number} {hash}");
-                                        finalized_head_tx.send_replace(Some((hash.to_owned(), number.to_owned())));
-                                        unfinalized_blocks.pop_back();
-                                        let _ = check_finalized_tx.try_send(());
-                                    }
                                 }
                             }
                             _ = interval.tick() => {

@@ -58,7 +58,7 @@ async fn create_api() -> (
     mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
 ) {
     let (client, server, head_rx, finalized_head_rx, block_hash_rx) = create_client().await;
-    let api = Api::new(Arc::new(client), Duration::from_secs(100), None);
+    let api = Api::new(Arc::new(client), Duration::from_secs(100), false);
 
     (api, server, head_rx, finalized_head_rx, block_hash_rx)
 }
@@ -172,7 +172,7 @@ async fn rotate_endpoint_on_stale() {
     let client = Client::new(&[format!("ws://{addr}"), format!("ws://{addr2}")])
         .await
         .unwrap();
-    let api = Api::new(Arc::new(client), Duration::from_millis(10), None);
+    let api = Api::new(Arc::new(client), Duration::from_millis(10), false);
 
     let head = api.get_head();
     let h1 = tokio::spawn(async move {

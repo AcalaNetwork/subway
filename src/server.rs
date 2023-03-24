@@ -45,11 +45,7 @@ pub async fn start_server(
     let api = Arc::new(Api::new(
         client.clone(),
         Duration::from_secs(config.stale_timeout_seconds),
-        if config.eth_rpc {
-            Some(config.eth_finalization)
-        } else {
-            None
-        },
+        config.eth_rpc,
     ));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
@@ -212,7 +208,7 @@ mod tests {
     use super::*;
     use crate::{
         client::create_client,
-        config::{EthFinalization, RpcDefinitions, RpcMethod, ServerConfig},
+        config::{RpcDefinitions, RpcMethod, ServerConfig},
     };
 
     const PHO: &str = "pho";
@@ -225,7 +221,6 @@ mod tests {
             stale_timeout_seconds: 60,
             merge_subscription_keep_alive_seconds: None,
             eth_rpc: false,
-            eth_finalization: EthFinalization::Latest,
             server: ServerConfig {
                 listen_address: "127.0.0.1".to_string(),
                 port: 9944,

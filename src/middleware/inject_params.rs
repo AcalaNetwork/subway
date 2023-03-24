@@ -31,7 +31,7 @@ impl InjectParamsMiddleware {
 
     async fn replace_parameter(&self, request: &mut CallRequest) -> Option<(usize, JsonValue)> {
         let (_, number) = self.api.get_head().read().await;
-        let (_, finalized_number) = self.api.get_finalized_head().read().await;
+        let finalized_head = self.api.finalized_head.borrow().clone();
         let maybe_inject = match self.inject {
             InjectType::BlockTagAt(index) => {
                 if let Some(param) = request.params.get(index).cloned() {
@@ -39,12 +39,18 @@ impl InjectParamsMiddleware {
                         return None;
                     }
                     match param.as_str().unwrap_or_default() {
-                        "finalized" => Some((index, format!("0x{:x}", finalized_number).into())),
-                        // TODO: what is safe? maybe we skip caching?
-                        "safe" => Some((index, format!("0x{:x}", number).into())),
+                        "finalized" => {
+                            if let Some((_, finalized_number)) = finalized_head {
+                                Some((index, format!("0x{:x}", finalized_number).into()))
+                            } else {
+                                // cannot determine finalized
+                                request.bypass_cache = true;
+                                None
+                            }
+                        }
                         "latest" => Some((index, format!("0x{:x}", number).into())),
                         "earliest" => None, // no need to replace earliest because it's always going to be genesis
-                        "pending" => {
+                        "pending" | "safe" => {
                             request.bypass_cache = true;
                             None
                         }
@@ -180,7 +186,7 @@ mod tests {
         let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-        let api = Api::new(Arc::new(client), Duration::from_secs(100), None);
+        let api = Api::new(Arc::new(client), Duration::from_secs(100), false);
 
         (
             ExecutionContext {
