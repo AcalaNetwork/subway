@@ -39,6 +39,7 @@ pub struct Api {
     pub head: watch::Receiver<Option<(JsonValue, u64)>>,
     pub finalized_head: watch::Receiver<Option<(JsonValue, u64)>>,
     stale_timeout: Duration,
+    eth_subscribe_finalized: bool,
 }
 
 impl Api {
@@ -58,7 +59,12 @@ impl Api {
 }
 
 impl Api {
-    pub fn new(client: Arc<Client>, stale_timeout: Duration, eth_rpc: bool) -> Self {
+    pub fn new(
+        client: Arc<Client>,
+        stale_timeout: Duration,
+        eth_rpc: bool,
+        eth_subscribe_finalized: bool,
+    ) -> Self {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
         let (finalized_head_tx, finalized_head_rx) =
             watch::channel::<Option<(JsonValue, u64)>>(None);
@@ -68,6 +74,7 @@ impl Api {
             head: head_rx,
             finalized_head: finalized_head_rx,
             stale_timeout,
+            eth_subscribe_finalized,
         };
 
         if eth_rpc {
@@ -181,7 +188,7 @@ impl Api {
     fn start_eth_background_task(
         &self,
         head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-        _finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
+        finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
     ) {
         let client = self.client.clone();
         let stale_timeout = self.stale_timeout;
@@ -235,6 +242,42 @@ impl Api {
                                 break;
                             }
                         }
+                    }
+
+                    Ok::<(), anyhow::Error>(())
+                };
+
+                if let Err(e) = run.await {
+                    tracing::error!("Error in background task: {e}");
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+
+        if !self.eth_subscribe_finalized {
+            return;
+        }
+
+        let client = self.client.clone();
+        tokio::spawn(async move {
+            loop {
+                let client = client.clone();
+
+                let run = async {
+                    let mut sub = client
+                        .subscribe(
+                            "eth_subscribe",
+                            ["newFinalizedHeads".into()].into(),
+                            "eth_unsubscribe",
+                        )
+                        .await?;
+
+                    while let Some(Ok(val)) = sub.next().await {
+                        let number = get_number(&val)?;
+                        let hash: JsonValue = val["hash"].clone();
+
+                        tracing::debug!("New finalized head: {number} {hash}");
+                        finalized_head_tx.send_replace(Some((hash, number)));
                     }
 
                     Ok::<(), anyhow::Error>(())

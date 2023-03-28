@@ -46,6 +46,7 @@ pub async fn start_server(
         client.clone(),
         Duration::from_secs(config.stale_timeout_seconds),
         config.eth_rpc,
+        config.eth_subscribe_finalized,
     ));
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
@@ -221,6 +222,7 @@ mod tests {
             stale_timeout_seconds: 60,
             merge_subscription_keep_alive_seconds: None,
             eth_rpc: false,
+            eth_subscribe_finalized: false,
             server: ServerConfig {
                 listen_address: "127.0.0.1".to_string(),
                 port: 9944,

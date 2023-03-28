@@ -72,6 +72,7 @@ pub struct Config {
     pub stale_timeout_seconds: u64,
     pub merge_subscription_keep_alive_seconds: Option<u64>,
     pub eth_rpc: bool,
+    pub eth_subscribe_finalized: bool,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
 }

@@ -186,7 +186,7 @@ mod tests {
         let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-        let api = Api::new(Arc::new(client), Duration::from_secs(100), false);
+        let api = Api::new(Arc::new(client), Duration::from_secs(100), false, false);
 
         (
             ExecutionContext {

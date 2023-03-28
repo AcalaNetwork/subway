@@ -4,6 +4,7 @@ endpoints:
 stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
 
 eth_rpc: true
+eth_subscribe_finalized: true
 
 server:
   port: 8555
