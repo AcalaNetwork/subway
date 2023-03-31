@@ -47,7 +47,7 @@ impl BlockTagMiddleware {
             }
         };
 
-        if let Some(value) = maybe_value.clone() {
+        if let Some(value) = maybe_value {
             log::debug!(
                 "Replacing params {:?} updated with {:?}",
                 request.params,
