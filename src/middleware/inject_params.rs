@@ -6,93 +6,74 @@ use jsonrpsee::{
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
-use crate::{api::Api, config::MethodParam, middleware::call::CallRequest};
+use crate::{
+    api::{Api, ValueHandle},
+    config::MethodParam,
+    middleware::call::CallRequest,
+};
 
 pub enum InjectType {
     BlockHashAt(usize),
     BlockNumberAt(usize),
-    BlockTagAt(usize),
 }
 
 pub struct InjectParamsMiddleware {
-    api: Arc<Api>,
+    head: ValueHandle<(JsonValue, u64)>,
     inject: InjectType,
     params: Vec<MethodParam>,
 }
 
 impl InjectParamsMiddleware {
-    pub fn new(api: Arc<Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
+    pub fn new(api: Arc<dyn Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
         Self {
-            api,
+            head: api.get_head(),
             inject,
             params,
         }
     }
 
-    async fn replace_parameter(&self, request: &mut CallRequest) -> Option<(usize, JsonValue)> {
-        let (_, number) = self.api.get_head().read().await;
-        let finalized_head = self.api.finalized_head.borrow().clone();
-        let maybe_inject = match self.inject {
-            InjectType::BlockTagAt(index) => {
-                if let Some(param) = request.params.get(index).cloned() {
-                    if !param.is_string() {
-                        return None;
-                    }
-                    match param.as_str().unwrap_or_default() {
-                        "finalized" => {
-                            if let Some((_, finalized_number)) = finalized_head {
-                                Some((index, format!("0x{:x}", finalized_number).into()))
-                            } else {
-                                // cannot determine finalized
-                                request.bypass_cache = true;
-                                None
-                            }
-                        }
-                        "latest" => Some((index, format!("0x{:x}", number).into())),
-                        "earliest" => None, // no need to replace earliest because it's always going to be genesis
-                        "pending" | "safe" => {
-                            request.bypass_cache = true;
-                            None
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        };
-
-        if let Some((index, to_inject)) = maybe_inject.clone() {
-            request.params.remove(index);
-            request.params.insert(index, to_inject);
+    fn get_index(&self) -> usize {
+        match self.inject {
+            InjectType::BlockHashAt(index) => index,
+            InjectType::BlockNumberAt(index) => index,
         }
-
-        maybe_inject
     }
 
     async fn get_parameter(&self) -> JsonValue {
-        let (hash, number) = self.api.get_head().read().await;
+        let res = self.head.read().await;
         match self.inject {
-            InjectType::BlockHashAt(_) => hash,
-            InjectType::BlockNumberAt(_) => number.into(),
-            InjectType::BlockTagAt(_) => JsonValue::Null,
+            InjectType::BlockHashAt(_) => res.0,
+            InjectType::BlockNumberAt(_) => res.1.into(),
         }
+    }
+
+    pub fn params_count(&self) -> (usize, usize) {
+        let mut optional = 0;
+        let mut required = 0;
+        for param in &self.params {
+            if param.optional {
+                optional += 1;
+            } else {
+                required += 1;
+            }
+        }
+        (required, optional)
     }
 }
 
 pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
-    for (index, param) in params.iter().enumerate() {
-        if !param.inject {
-            continue;
-        }
-        match param.ty.as_str() {
-            "BlockNumber" => return Some(InjectType::BlockNumberAt(index)),
-            "BlockHash" => return Some(InjectType::BlockHashAt(index)),
-            "BlockTag" => return Some(InjectType::BlockTagAt(index)),
-            _ => continue,
-        }
+    let maybe_block_num = params
+        .iter()
+        .position(|p| p.inject && p.ty == "BlockNumber");
+    if let Some(block_num) = maybe_block_num {
+        return Some(InjectType::BlockNumberAt(block_num));
     }
+
+    let maybe_block_hash = params.iter().position(|p| p.inject && p.ty == "BlockHash");
+    if let Some(block_hash) = maybe_block_hash {
+        return Some(InjectType::BlockHashAt(block_hash));
+    }
+
     None
 }
 
@@ -103,47 +84,42 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
         mut request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        let mut reached_optional = false;
-        for (index, param) in self.params.iter().enumerate() {
-            if !param.optional {
-                if reached_optional {
-                    return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
-                        format!(
-                            "config error, cannot have required at {} after optional",
-                            index
-                        ),
-                    ))));
-                }
-                if let Some(param) = request.params.get(index) {
-                    if param.is_null() {
+        let idx = self.get_index();
+        match request.params.len() {
+            len if len == idx + 1 => {
+                // full params with current block
+                return next(request).await;
+            }
+            len if len <= idx => {
+                // without current block
+                let to_inject = self.get_parameter().await;
+                tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
+                let params_passed = request.params.len();
+                while request.params.len() < idx {
+                    let current = request.params.len();
+                    if self.params[current].optional {
+                        request.params.push(JsonValue::Null);
+                    } else {
+                        let (required, optional) = self.params_count();
                         return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
-                            format!("required param at {} is null", index),
+                            format!(
+                                "Expected {:?} parameters ({:?} optional), {:?} found instead",
+                                required + optional,
+                                optional,
+                                params_passed
+                            ),
                         ))));
                     }
-                } else {
-                    return Err(Error::Call(CallError::InvalidParams(anyhow::Error::msg(
-                        format!("missing required param at {}", index),
-                    ))));
                 }
+                request.params.push(to_inject);
+
+                return next(request).await;
             }
-            if param.inject {
-                let injected = if param.ty == "BlockTag" {
-                    self.replace_parameter(&mut request).await
-                } else if param.optional && request.params.get(index).is_none() {
-                    let to_inject = self.get_parameter().await;
-                    request.params.push(to_inject.clone());
-                    Some((index, to_inject))
-                } else {
-                    None
-                };
-                log::debug!("Injected {:?} to request: {:?}", injected, request);
-            } else if param.optional {
-                reached_optional = true;
-                request.params.insert(index, JsonValue::Null);
+            _ => {
+                // unexpected number of params
+                next(request).await
             }
         }
-
-        next(request).await
     }
 }
 
@@ -151,6 +127,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
 mod tests {
     use super::*;
 
+    use crate::api::SubstrateApi;
     use crate::client::{mock::TestServerBuilder, Client};
     use futures::FutureExt;
     use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
@@ -166,7 +143,7 @@ mod tests {
         head_sink: Option<SubscriptionSink>,
     }
 
-    async fn create_client() -> (ExecutionContext, Api) {
+    async fn create_client() -> (ExecutionContext, SubstrateApi) {
         let mut builder = TestServerBuilder::new();
 
         let head_rx = builder.register_subscription(
@@ -186,7 +163,7 @@ mod tests {
         let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-        let api = Api::new(Arc::new(client), Duration::from_secs(100), false, false);
+        let api = SubstrateApi::new(Arc::new(client), Duration::from_secs(100));
 
         (
             ExecutionContext {
@@ -385,7 +362,7 @@ mod tests {
             )
             .await;
         assert!(
-            matches!(result, Err(Error::Call(CallError::InvalidParams(e))) if e.to_string() == "missing required param at 1")
+            matches!(result, Err(Error::Call(CallError::InvalidParams(e))) if e.to_string() == "Expected 3 parameters (1 optional), 1 found instead")
         );
     }
 

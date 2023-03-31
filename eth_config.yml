@@ -1,13 +1,10 @@
 endpoints:
-  - ws://localhost:8545
+  - wss://eth-rpc-karura-testnet.aca-staging.network:443
 
 stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
 
-eth_rpc: true
-eth_subscribe_finalized: true
-
 server:
-  port: 8555
+  port: 8545
   listen_address: '0.0.0.0'
   max_connections: 2000
 

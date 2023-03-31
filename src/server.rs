@@ -6,12 +6,14 @@ use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 
+use crate::api::Api;
 use crate::cache::new_cache;
 use crate::{
-    api::Api,
+    api::{EthApi, SubstrateApi},
     client::Client,
     config::Config,
     middleware::{
+        block_tag::BlockTagMiddleware,
         cache::CacheMiddleware,
         call::{self, CallRequest},
         inject_params::{inject, InjectParamsMiddleware},
@@ -42,17 +44,31 @@ pub async fn start_server(
     let mut module = RpcModule::new(());
 
     let client = Arc::new(client);
-    let api = Arc::new(Api::new(
-        client.clone(),
-        Duration::from_secs(config.stale_timeout_seconds),
-        config.eth_rpc,
-        config.eth_subscribe_finalized,
-    ));
+
+    let api: Arc<dyn Api> = if client.request("eth_chainId", vec![]).await.is_ok() {
+        Arc::new(EthApi::new(
+            client.clone(),
+            Duration::from_secs(config.stale_timeout_seconds),
+        ))
+    } else {
+        Arc::new(SubstrateApi::new(
+            client.clone(),
+            Duration::from_secs(config.stale_timeout_seconds),
+        ))
+    };
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
 
     for method in &config.rpcs.methods {
         let mut list: Vec<Arc<dyn Middleware<_, _>>> = vec![];
+
+        if let Some(index) = method
+            .params
+            .iter()
+            .position(|p| p.ty == "BlockTag" && p.inject)
+        {
+            list.push(Arc::new(BlockTagMiddleware::new(api.clone(), index)))
+        }
 
         if let Some(inject_type) = inject(&method.params) {
             list.push(Arc::new(InjectParamsMiddleware::new(
@@ -221,8 +237,6 @@ mod tests {
             endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
             stale_timeout_seconds: 60,
             merge_subscription_keep_alive_seconds: None,
-            eth_rpc: false,
-            eth_subscribe_finalized: false,
             server: ServerConfig {
                 listen_address: "127.0.0.1".to_string(),
                 port: 9944,

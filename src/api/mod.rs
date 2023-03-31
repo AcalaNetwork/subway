@@ -1,11 +1,24 @@
 use jsonrpsee::core::JsonValue;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::sync::{watch, RwLock};
 
 use crate::client::Client;
 
 #[cfg(test)]
 mod tests;
+
+pub mod eth;
+pub mod substrate;
+
+pub use eth::EthApi;
+pub use substrate::SubstrateApi;
+
+pub trait Api: Send + Sync {
+    fn get_head(&self) -> ValueHandle<(JsonValue, u64)>;
+    fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)>;
+    fn current_head(&self) -> Option<(JsonValue, u64)>;
+    fn current_finalized_head(&self) -> Option<(JsonValue, u64)>;
+}
 
 pub struct ValueHandle<T> {
     inner: RwLock<watch::Receiver<Option<T>>>,
@@ -34,18 +47,16 @@ impl<T: Clone> ValueHandle<T> {
     }
 }
 
-pub struct Api {
-    client: Arc<Client>,
-    pub head: watch::Receiver<Option<(JsonValue, u64)>>,
-    pub finalized_head: watch::Receiver<Option<(JsonValue, u64)>>,
-    stale_timeout: Duration,
-    eth_subscribe_finalized: bool,
+pub(crate) struct BaseApi {
+    pub client: Arc<Client>,
+    pub head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
+    pub finalized_head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
 }
 
-impl Api {
+impl BaseApi {
     pub fn get_head(&self) -> ValueHandle<(JsonValue, u64)> {
         ValueHandle {
-            inner: RwLock::new(self.head.clone()),
+            inner: RwLock::new(self.head_rx.clone()),
         }
     }
 
@@ -53,250 +64,38 @@ impl Api {
     #[allow(dead_code)]
     pub fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
         ValueHandle {
-            inner: RwLock::new(self.finalized_head.clone()),
+            inner: RwLock::new(self.finalized_head_rx.clone()),
         }
     }
 }
 
-impl Api {
+impl BaseApi {
     pub fn new(
         client: Arc<Client>,
-        stale_timeout: Duration,
-        eth_rpc: bool,
-        eth_subscribe_finalized: bool,
+        head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
+        finalized_head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
     ) -> Self {
-        let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
-        let (finalized_head_tx, finalized_head_rx) =
-            watch::channel::<Option<(JsonValue, u64)>>(None);
-
-        let this = Self {
+        Self {
             client,
-            head: head_rx,
-            finalized_head: finalized_head_rx,
-            stale_timeout,
-            eth_subscribe_finalized,
-        };
-
-        if eth_rpc {
-            this.start_eth_background_task(head_tx, finalized_head_tx);
-        } else {
-            this.start_background_task(head_tx, finalized_head_tx);
+            head_rx,
+            finalized_head_rx,
         }
-
-        this
-    }
-
-    fn start_background_task(
-        &self,
-        head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-        finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-    ) {
-        let client = self.client.clone();
-        let stale_timeout = self.stale_timeout;
-
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(stale_timeout);
-
-            loop {
-                let client = client.clone();
-
-                let run = async {
-                    interval.reset();
-
-                    let mut sub = client
-                        .subscribe(
-                            "chain_subscribeNewHeads",
-                            [].into(),
-                            "chain_unsubscribeNewHeads",
-                        )
-                        .await?;
-
-                    loop {
-                        tokio::select! {
-                            val = sub.next() => {
-                                if let Some(Ok(val)) = val {
-                                    interval.reset();
-
-                                    let number = get_number(&val)?;
-
-                                    let res = client
-                                        .request("chain_getBlockHash", vec![number.into()])
-                                        .await?;
-
-                                    tracing::debug!("New head: {number} {res}");
-                                    head_tx.send_replace(Some((res, number)));
-                                } else {
-                                    break;
-                                }
-                            }
-                            _ = interval.tick() => {
-                                tracing::warn!("No new blocks for {stale_timeout:?} seconds, rotating endpoint");
-                                client.rotate_endpoint().await.expect("Failed to rotate endpoint");
-                                break;
-                            }
-                        }
-                    }
-
-                    Ok::<(), anyhow::Error>(())
-                };
-
-                if let Err(e) = run.await {
-                    tracing::error!("Error in background task: {e}");
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        });
-
-        let client = self.client.clone();
-
-        tokio::spawn(async move {
-            loop {
-                let client = client.clone();
-
-                let run = async {
-                    let sub = client
-                        .subscribe(
-                            "chain_subscribeFinalizedHeads",
-                            [].into(),
-                            "chain_unsubscribeFinalizedHeads",
-                        )
-                        .await?;
-
-                    let mut sub = sub;
-                    while let Some(Ok(val)) = sub.next().await {
-                        let number = get_number(&val)?;
-
-                        let res = client
-                            .request("chain_getBlockHash", vec![number.into()])
-                            .await?;
-
-                        tracing::debug!("New finalized head: {number} {res}");
-                        finalized_head_tx.send_replace(Some((res, number)));
-                    }
-
-                    Ok::<(), anyhow::Error>(())
-                };
-
-                if let Err(e) = run.await {
-                    tracing::error!("Error in background task: {e}");
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        });
-    }
-
-    fn start_eth_background_task(
-        &self,
-        head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-        finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
-    ) {
-        let client = self.client.clone();
-        let stale_timeout = self.stale_timeout;
-
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(stale_timeout);
-
-            loop {
-                let client = client.clone();
-
-                let run = async {
-                    interval.reset();
-
-                    // query current head
-                    let head = client
-                        .request("eth_getBlockByNumber", vec!["latest".into(), true.into()])
-                        .await?;
-                    let number = get_number(&head)?;
-                    let hash: JsonValue = head["hash"].clone();
-
-                    tracing::debug!("New head: {number} {hash}");
-                    head_tx.send_replace(Some((hash.clone(), number)));
-
-                    let mut sub = client
-                        .subscribe(
-                            "eth_subscribe",
-                            ["newHeads".into()].into(),
-                            "eth_unsubscribe",
-                        )
-                        .await?;
-
-                    loop {
-                        tokio::select! {
-                            val = sub.next() => {
-                                if let Some(Ok(val)) = val {
-                                    interval.reset();
-
-                                    let number = get_number(&val)?;
-
-                                    let hash: JsonValue = val["hash"].clone();
-
-                                    tracing::debug!("New head: {number} {hash}");
-                                    head_tx.send_replace(Some((hash.clone(), number)));
-                                } else {
-                                    break;
-                                }
-                            }
-                            _ = interval.tick() => {
-                                tracing::warn!("No new blocks for {stale_timeout:?} seconds, rotating endpoint");
-                                client.rotate_endpoint().await.expect("Failed to rotate endpoint");
-                                break;
-                            }
-                        }
-                    }
-
-                    Ok::<(), anyhow::Error>(())
-                };
-
-                if let Err(e) = run.await {
-                    tracing::error!("Error in background task: {e}");
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        });
-
-        if !self.eth_subscribe_finalized {
-            return;
-        }
-
-        let client = self.client.clone();
-        tokio::spawn(async move {
-            loop {
-                let client = client.clone();
-
-                let run = async {
-                    let mut sub = client
-                        .subscribe(
-                            "eth_subscribe",
-                            ["newFinalizedHeads".into()].into(),
-                            "eth_unsubscribe",
-                        )
-                        .await?;
-
-                    while let Some(Ok(val)) = sub.next().await {
-                        let number = get_number(&val)?;
-                        let hash: JsonValue = val["hash"].clone();
-
-                        tracing::debug!("New finalized head: {number} {hash}");
-                        finalized_head_tx.send_replace(Some((hash, number)));
-                    }
-
-                    Ok::<(), anyhow::Error>(())
-                };
-
-                if let Err(e) = run.await {
-                    tracing::error!("Error in background task: {e}");
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        });
     }
 }
 
-fn get_number(val: &JsonValue) -> anyhow::Result<u64> {
+pub(crate) fn get_number(val: &JsonValue) -> anyhow::Result<u64> {
     let number = val["number"]
         .as_str()
         .and_then(|s| s.strip_prefix("0x"))
         .ok_or_else(|| anyhow::Error::msg("Invalid number"))?;
     let number = u64::from_str_radix(number, 16)?;
     Ok(number)
+}
+
+pub(crate) fn get_hash(val: &JsonValue) -> anyhow::Result<JsonValue> {
+    let hash = val["hash"].to_owned();
+    if hash.is_string() {
+        return Ok(hash);
+    }
+    Err(anyhow::Error::msg("Hash not found"))
 }

@@ -25,7 +25,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        if request.bypass_cache {
+        if request.extra.bypass_cache {
             return next(request).await;
         }
 

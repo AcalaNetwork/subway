@@ -230,8 +230,6 @@ fn config() -> Config {
         ],
         stale_timeout_seconds: 60,
         merge_subscription_keep_alive_seconds: None,
-        eth_rpc: false,
-        eth_subscribe_finalized: false,
         server: ServerConfig {
             listen_address: SUBWAY_SERVER_ADDR.to_string(),
             port: SUBWAY_SERVER_PORT,
