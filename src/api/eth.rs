@@ -16,8 +16,6 @@ impl Api for EthApi {
         self.inner.get_head()
     }
 
-    // TODO use this later
-    #[allow(dead_code)]
     fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
         self.inner.get_finalized_head()
     }
@@ -117,30 +115,37 @@ impl EthApi {
 
         let client = self.inner.client.clone();
         tokio::spawn(async move {
-            let run = async {
-                let mut sub = client
-                    .subscribe(
-                        "eth_subscribe",
-                        ["newFinalizedHeads".into()].into(),
-                        "eth_unsubscribe",
-                    )
-                    .await?;
+            loop {
+                let run = async {
+                    let mut sub = client
+                        .subscribe(
+                            "eth_subscribe",
+                            ["newFinalizedHeads".into()].into(),
+                            "eth_unsubscribe",
+                        )
+                        .await?;
 
-                while let Some(Ok(val)) = sub.next().await {
-                    let number = super::get_number(&val)?;
-                    let hash = super::get_hash(&val)?;
+                    while let Some(Ok(val)) = sub.next().await {
+                        let number = super::get_number(&val)?;
+                        let hash = super::get_hash(&val)?;
 
-                    tracing::debug!("New finalized head: {number} {hash}");
-                    finalized_head_tx.send_replace(Some((hash, number)));
+                        tracing::debug!("New finalized head: {number} {hash}");
+                        finalized_head_tx.send_replace(Some((hash, number)));
+                    }
+
+                    Ok::<(), anyhow::Error>(())
+                };
+
+                if let Err(e) = run.await {
+                    // cannot figure out finalized head
+                    finalized_head_tx.send_replace(None);
+                    tracing::error!("Error in background task: {e}");
+                    if e.to_string().contains("invalid") {
+                        // finalized head subscription is not supported
+                        break;
+                    }
                 }
-
-                Ok::<(), anyhow::Error>(())
-            };
-
-            if let Err(e) = run.await {
-                // cannot figure out finalized head
-                finalized_head_tx.send_replace(None);
-                tracing::error!("Error in background task: {e}");
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });
     }

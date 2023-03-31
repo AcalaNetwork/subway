@@ -16,8 +16,6 @@ impl Api for SubstrateApi {
         self.inner.get_head()
     }
 
-    // TODO use this later
-    #[allow(dead_code)]
     fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
         self.inner.get_finalized_head()
     }

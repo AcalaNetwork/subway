@@ -1,17 +1,19 @@
 use jsonrpsee::core::JsonValue;
 use std::sync::Arc;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch;
 
 use crate::client::Client;
 
 #[cfg(test)]
 mod tests;
 
-pub mod eth;
-pub mod substrate;
+mod eth;
+mod substrate;
+mod value_handle;
 
 pub use eth::EthApi;
 pub use substrate::SubstrateApi;
+pub use value_handle::ValueHandle;
 
 pub trait Api: Send + Sync {
     fn get_head(&self) -> ValueHandle<(JsonValue, u64)>;
@@ -20,53 +22,10 @@ pub trait Api: Send + Sync {
     fn current_finalized_head(&self) -> Option<(JsonValue, u64)>;
 }
 
-pub struct ValueHandle<T> {
-    inner: RwLock<watch::Receiver<Option<T>>>,
-}
-
-impl<T: Clone> ValueHandle<T> {
-    pub async fn read(&self) -> T {
-        let read_guard = self.inner.read().await;
-        let val = (*read_guard).borrow().clone();
-        drop(read_guard);
-
-        if let Some(val) = val {
-            return val;
-        }
-
-        let mut write_guard = self.inner.write().await;
-        if let Err(e) = write_guard.changed().await {
-            tracing::error!("Changed channel closed: {}", e);
-        }
-
-        let val = (*write_guard)
-            .borrow()
-            .clone()
-            .expect("already awaited changed");
-        val
-    }
-}
-
 pub(crate) struct BaseApi {
     pub client: Arc<Client>,
     pub head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
     pub finalized_head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
-}
-
-impl BaseApi {
-    pub fn get_head(&self) -> ValueHandle<(JsonValue, u64)> {
-        ValueHandle {
-            inner: RwLock::new(self.head_rx.clone()),
-        }
-    }
-
-    // TODO use this later
-    #[allow(dead_code)]
-    pub fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
-        ValueHandle {
-            inner: RwLock::new(self.finalized_head_rx.clone()),
-        }
-    }
 }
 
 impl BaseApi {
@@ -80,6 +39,14 @@ impl BaseApi {
             head_rx,
             finalized_head_rx,
         }
+    }
+
+    pub fn get_head(&self) -> ValueHandle<(JsonValue, u64)> {
+        ValueHandle::new(self.head_rx.clone())
+    }
+
+    pub fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
+        ValueHandle::new(self.finalized_head_rx.clone())
     }
 }
 
