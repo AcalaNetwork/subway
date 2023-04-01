@@ -88,6 +88,20 @@ pub fn read_config() -> Result<Config, String> {
             .collect::<Vec<_>>();
     }
 
+    if let Ok(env_port) = std::env::var("PORT") {
+        log::info!("Override port with env.PORT");
+        let port = env_port.parse::<u16>();
+        if let Ok(port) = port {
+            config.server.port = port;
+        }
+    }
+
+    validate_config(&config);
+
+    Ok(config)
+}
+
+pub fn validate_config(config: &Config) {
     // validate endpoints
     assert!(
         config
@@ -96,14 +110,6 @@ pub fn read_config() -> Result<Config, String> {
             .all(|x| x.parse::<jsonrpsee::client_transport::ws::Uri>().is_ok()),
         "Invalid endpoint"
     );
-
-    if let Ok(env_port) = std::env::var("PORT") {
-        log::info!("Override port with env.PORT");
-        let port = env_port.parse::<u16>();
-        if let Ok(port) = port {
-            config.server.port = port;
-        }
-    }
 
     // ensure each method has only one param with inject=true
     for method in &config.rpcs.methods {
@@ -129,6 +135,4 @@ pub fn read_config() -> Result<Config, String> {
             }
         }
     }
-
-    Ok(config)
 }
