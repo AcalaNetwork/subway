@@ -105,5 +105,30 @@ pub fn read_config() -> Result<Config, String> {
         }
     }
 
+    // ensure each method has only one param with inject=true
+    for method in &config.rpcs.methods {
+        assert!(
+            method.params.iter().filter(|x| x.inject).count() <= 1,
+            "Method {} has more than one inject param",
+            method.method
+        );
+    }
+
+    // ensure there is no required param after optional param
+    for method in &config.rpcs.methods {
+        let mut has_optional = false;
+        for param in &method.params {
+            if param.optional {
+                has_optional = true;
+            } else {
+                assert!(
+                    !has_optional,
+                    "Method {} has required param after optional param",
+                    method.method
+                );
+            }
+        }
+    }
+
     Ok(config)
 }
