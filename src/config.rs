@@ -96,28 +96,30 @@ pub fn read_config() -> Result<Config, String> {
         }
     }
 
-    validate_config(&config);
+    validate_config(&config)?;
 
     Ok(config)
 }
 
-pub fn validate_config(config: &Config) {
+fn validate_config(config: &Config) -> Result<(), String> {
     // validate endpoints
-    assert!(
-        config
-            .endpoints
-            .iter()
-            .all(|x| x.parse::<jsonrpsee::client_transport::ws::Uri>().is_ok()),
-        "Invalid endpoint"
-    );
+    for endpoint in &config.endpoints {
+        if endpoint
+            .parse::<jsonrpsee::client_transport::ws::Uri>()
+            .is_err()
+        {
+            return Err(format!("Invalid endpoint {}", endpoint));
+        }
+    }
 
     // ensure each method has only one param with inject=true
     for method in &config.rpcs.methods {
-        assert!(
-            method.params.iter().filter(|x| x.inject).count() <= 1,
-            "Method {} has more than one inject param",
-            method.method
-        );
+        if method.params.iter().filter(|x| x.inject).count() > 1 {
+            return Err(format!(
+                "Method {} has more than one inject param",
+                method.method
+            ));
+        }
     }
 
     // ensure there is no required param after optional param
@@ -126,13 +128,14 @@ pub fn validate_config(config: &Config) {
         for param in &method.params {
             if param.optional {
                 has_optional = true;
-            } else {
-                assert!(
-                    !has_optional,
+            } else if has_optional {
+                return Err(format!(
                     "Method {} has required param after optional param",
                     method.method
-                );
+                ));
             }
         }
     }
+
+    Ok(())
 }
