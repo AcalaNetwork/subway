@@ -1,9 +1,6 @@
 [submodule "vendor/governor"]
 	path = vendor/governor
-	url = git@github.com:AcalaNetwork/governor.git
-[submodule "jsonrpsee"]
-	path = jsonrpsee
-	url = git@github.com:AcalaNetwork/jsonrpsee.git
+	url = https://github.com/AcalaNetwork/governor.git
 [submodule "vendor/jsonrpsee"]
 	path = vendor/jsonrpsee
-	url = git@github.com:AcalaNetwork/jsonrpsee.git
+	url = https://github.com/AcalaNetwork/jsonrpsee.git
