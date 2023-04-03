@@ -11,15 +11,6 @@ struct Command {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Config {
-    pub endpoints: Vec<String>,
-    pub stale_timeout_seconds: u64,
-    pub merge_subscription_keep_alive_seconds: Option<u64>,
-    pub server: ServerConfig,
-    pub rpcs: RpcDefinitions,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct ServerConfig {
     pub listen_address: String,
     pub port: u16,
@@ -39,6 +30,7 @@ pub struct RpcMethod {
 #[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct MethodParam {
     pub name: String,
+    #[serde(default)]
     pub ty: String,
     #[serde(default)]
     pub optional: bool,
@@ -68,17 +60,28 @@ pub struct RpcSubscription {
 #[derive(Deserialize, Debug)]
 pub struct RpcDefinitions {
     pub methods: Vec<RpcMethod>,
+    #[serde(default)]
     pub subscriptions: Vec<RpcSubscription>,
+    #[serde(default)]
     pub aliases: Vec<(String, String)>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Config {
+    pub endpoints: Vec<String>,
+    pub stale_timeout_seconds: u64,
+    pub merge_subscription_keep_alive_seconds: Option<u64>,
+    pub server: ServerConfig,
+    pub rpcs: RpcDefinitions,
 }
 
 pub fn read_config() -> Result<Config, String> {
     let cmd = Command::parse();
 
     let config =
-        fs::read_to_string(cmd.config).map_err(|e| format!("Unable to read config file: {e}"))?;
-    let mut config: Config =
-        serde_yaml::from_str(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
+        fs::File::open(cmd.config).map_err(|e| format!("Unable to open config file: {e}"))?;
+    let mut config: Config = serde_yaml::from_reader(&config)
+        .map_err(|e| format!("Unable to parse config file: {e}"))?;
 
     if let Ok(endpoints) = std::env::var("ENDPOINTS") {
         log::info!("Override endpoints with env.ENDPOINTS");

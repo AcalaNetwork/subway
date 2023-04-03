@@ -1,0 +1,260 @@
+endpoints:
+  - wss://eth-rpc-karura-testnet.aca-staging.network:443
+
+stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+
+server:
+  port: 8545
+  listen_address: '0.0.0.0'
+  max_connections: 2000
+
+rpcs:
+  methods:
+    - method: eth_blockNumber
+
+    - method: eth_chainId
+      cache: 1
+
+    - method: eth_protocolVersion
+
+    - method: eth_syncing
+
+    - method: eth_coinbase
+
+    - method: eth_gasPrice
+
+    - method: eth_accounts
+
+    - method: net_version
+      cache: 1
+
+    - method: net_runtimeVersion
+      cache: 1
+
+    - method: net_health
+
+    - method: net_isSafeMode
+      cache: 1
+
+    - method: net_indexer
+
+    - method: web3_clientVersion
+      cache: 1
+
+    - method: eth_sign
+      params:
+        - name: address
+          ty: String
+        - name: message
+          ty: String
+
+    - method: eth_sendTransaction
+      params:
+        - name: Transaction
+          ty: Bytes
+
+    - method: eth_sendRawTransaction
+      params:
+        - name: transaction
+          ty: Bytes
+
+    - method: eth_call
+      params:
+        - name: transaction
+          ty: Bytes
+
+    - method: eth_getTransactionCount
+      params:
+        - name: address
+          ty: Bytes
+        - name: block
+          ty: BlockHash
+
+    - method: eth_getBlockByHash
+      cache: 2000
+      params:
+        - name: BlockHash
+          ty: BlockHash
+        - name: FullTransactions
+          ty: Boolean
+
+    - method: eth_getBlockByNumber
+      cache: 2000
+      params:
+        - name: blockTag
+          ty: BlockTag
+          inject: true
+        - name: fullTransactions
+          ty: Boolean
+
+    - method: eth_getBlockTransactionCountByHash
+      cache: 2000
+      params:
+        - name: BlockHash
+          ty: BlockHash
+
+    - method: eth_getBlockTransactionCountByNumber
+      cache: 2000
+      params:
+        - name: blockTag
+          ty: BlockTag
+          inject: true
+
+    - method: eth_getUncleCountByBlockHash
+      cache: 2000
+      params:
+        - name: BlockHash
+          ty: BlockHash
+
+    - method: eth_getUncleCountByBlockNumber
+      cache: 2000
+      params:
+        - name: blockTag
+          ty: BlockTag
+          inject: true
+
+    - method: eth_estimateGas
+      params:
+        - name: transaction
+          ty: Bytes
+
+    - method: eth_feeHistory
+      params:
+        - name: blockCount
+          ty: Bytes
+        - name: newestBlock
+          ty: boolean
+        - name: rewardPercentiles
+          ty: Bytes
+
+    - method: eth_getUncleByBlockHashAndIndex
+      cache: 2000
+      params:
+        - name: blockHash
+          ty: BlockHash
+        - name: hexNumber
+          ty: Bytes
+
+    - method: eth_getUncleByBlockNumberAndIndex
+      cache: 2000
+      params:
+        - name: block
+          ty: BlockTag
+          inject: true
+        - name: hexNumber
+          ty: Bytes
+
+    - method: eth_isBlockFinalized
+      cache: 2000
+      params:
+        - name: block
+          ty: BlockTag
+          inject: true
+
+    - method: eth_isTransactionFinalized
+      cache: 2000
+      params:
+        - name: transactionHash
+          ty: Bytes
+
+    - method: eth_newFilter
+      params:
+        - name: Filter
+          ty: Bytes
+
+    - method: eth_newBlockFilter
+
+    - method: eth_newPendingTransactionFilter
+
+    - method: eth_getFilterChanges
+      params:
+        - name: address
+          ty: Bytes
+
+    - method: eth_getFilterLogs
+      params:
+        - name: address
+          ty: Bytes
+
+    - method: eth_uninstallFilter
+      params:
+        - name: FilterIdentifier
+          ty: Bytes
+
+    - method: eth_getLogs
+      params:
+        - name: Filter
+          ty: Bytes
+
+    - method: eth_getBalance
+      cache: 2000
+      params:
+        - name: Address
+          ty: Bytes
+        - name: Block
+          ty: BlockTag
+          inject: true
+
+    - method: eth_getStorageAt
+      cache: 2000
+      params:
+        - name: address
+          ty: Bytes
+        - name: position
+          ty: Bytes
+        - name: block
+          ty: BlockTag
+          inject: true
+
+    - method: eth_getCode
+      cache: 2000
+      params:
+        - name: Address
+          ty: Bytes
+        - name: Block
+          ty: BlockTag
+          inject: true
+
+    - method: eth_getTransactionByHash
+      cache: 2000
+      params:
+        - name: transactionHash
+          ty: Bytes
+
+    - method: eth_getTransactionByBlockHashAndIndex
+      cache: 2000
+      params:
+        - name: BlockHash
+          ty: BlockHash
+        - name: TransactionIndex
+          ty: Bytes
+
+    - method: eth_getTransactionByBlockNumberAndIndex
+      cache: 2000
+      params:
+        - name: blockTag
+          ty: BlockTag
+          inject: true
+        - name: transactionIndex
+          ty: HexNumber
+
+    - method: eth_getEthGas
+      params:
+        - name: substrateGasParams
+          ty: Bytes
+
+    - method: eth_getEthResources
+      params:
+        - name: transaction
+          ty: Bytes
+
+    - method: eth_getTransactionReceipt
+      cache: 2000
+      params:
+        - name: txHash
+          ty: Bytes
+
+  subscriptions:
+    - subscribe: eth_subscribe
+      unsubscribe: eth_unsubscribe
+      name: eth_subscription

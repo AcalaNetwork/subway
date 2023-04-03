@@ -7,14 +7,25 @@ use crate::client::Client;
 
 use super::{Middleware, NextFn};
 
+#[derive(Debug, Default)]
+pub struct Extra {
+    pub bypass_cache: bool,
+}
+
+#[derive(Debug)]
 pub struct CallRequest {
     pub method: String,
     pub params: Vec<JsonValue>,
+    pub extra: Extra,
 }
 
 impl CallRequest {
-    pub fn new(method: String, params: Vec<JsonValue>) -> Self {
-        Self { method, params }
+    pub fn new(method: impl AsRef<str>, params: Vec<JsonValue>) -> Self {
+        Self {
+            method: method.as_ref().to_string(),
+            params,
+            extra: Extra::default(),
+        }
     }
 }
 

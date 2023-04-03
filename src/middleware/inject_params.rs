@@ -24,7 +24,7 @@ pub struct InjectParamsMiddleware {
 }
 
 impl InjectParamsMiddleware {
-    pub fn new(api: Arc<Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
+    pub fn new(api: Arc<dyn Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
         Self {
             head: api.get_head(),
             inject,
@@ -127,6 +127,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddlewar
 mod tests {
     use super::*;
 
+    use crate::api::SubstrateApi;
     use crate::client::{mock::TestServerBuilder, Client};
     use futures::FutureExt;
     use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
@@ -142,7 +143,7 @@ mod tests {
         head_sink: Option<SubscriptionSink>,
     }
 
-    async fn create_client() -> (ExecutionContext, Api) {
+    async fn create_client() -> (ExecutionContext, SubstrateApi) {
         let mut builder = TestServerBuilder::new();
 
         let head_rx = builder.register_subscription(
@@ -162,7 +163,7 @@ mod tests {
         let (addr, _server) = builder.build().await;
 
         let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
-        let api = Api::new(Arc::new(client), Duration::from_secs(100));
+        let api = SubstrateApi::new(Arc::new(client), Duration::from_secs(100));
 
         (
             ExecutionContext {
@@ -224,10 +225,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: params.clone(),
-                },
+                CallRequest::new("state_getStorage", params.clone()),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, params);
@@ -263,10 +261,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!("0xabcd")]);
@@ -308,10 +303,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(
@@ -356,10 +348,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(
@@ -399,10 +388,7 @@ mod tests {
         .await;
         let result = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!(0x4321)]);
@@ -430,10 +416,7 @@ mod tests {
 
         let result2 = middleware
             .call(
-                CallRequest {
-                    method: "state_getStorage".to_string(),
-                    params: vec![json!("0x1234")],
-                },
+                CallRequest::new("state_getStorage", vec![json!("0x1234")]),
                 Box::new(move |req: CallRequest| {
                     async move {
                         assert_eq!(req.params, vec![json!("0x1234"), json!(0x5432)]);

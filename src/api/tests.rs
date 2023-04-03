@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use crate::api::substrate::SubstrateApi;
 use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
@@ -51,14 +52,14 @@ async fn create_client() -> (
 }
 
 async fn create_api() -> (
-    Api,
+    SubstrateApi,
     ServerHandle,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
     mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
 ) {
     let (client, server, head_rx, finalized_head_rx, block_hash_rx) = create_client().await;
-    let api = Api::new(Arc::new(client), Duration::from_secs(100));
+    let api = SubstrateApi::new(Arc::new(client), std::time::Duration::from_secs(100));
 
     (api, server, head_rx, finalized_head_rx, block_hash_rx)
 }
@@ -172,7 +173,7 @@ async fn rotate_endpoint_on_stale() {
     let client = Client::new(&[format!("ws://{addr}"), format!("ws://{addr2}")])
         .await
         .unwrap();
-    let api = Api::new(Arc::new(client), Duration::from_millis(10));
+    let api = SubstrateApi::new(Arc::new(client), std::time::Duration::from_millis(10));
 
     let head = api.get_head();
     let h1 = tokio::spawn(async move {

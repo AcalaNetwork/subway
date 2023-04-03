@@ -25,7 +25,7 @@ rpcs:
           ty: BlockNumber
           optional: true
           inject: true
-      
+
     - method: chain_getHeader
       cache: 2000
       params:
@@ -148,7 +148,7 @@ rpcs:
       unsubscribe: chain_unsubscribeNewHeads
       name: chain_newHead
       merge_strategy: replace
-      
+
     - subscribe: chain_subscribeFinalizedHeads
       unsubscribe: chain_unsubscribeFinalizedHeads
       name: chain_finalizedHead
@@ -165,7 +165,7 @@ rpcs:
       merge_strategy: merge_storage_changes
 
   aliases:
-    - [chain_subscribeNewHeads, chain_subscribeNewHead]
-    - [chain_unsubscribeNewHeads, chain_unsubscribeNewHead]
-    - [state_getKeysPaged, state_getKeysPagedAt]
-    - [state_getStorage, state_getStorageAt]
+    - [ chain_subscribeNewHeads, chain_subscribeNewHead ]
+    - [ chain_unsubscribeNewHeads, chain_unsubscribeNewHead ]
+    - [ state_getKeysPaged, state_getKeysPagedAt ]
+    - [ state_getStorage, state_getStorageAt ]
