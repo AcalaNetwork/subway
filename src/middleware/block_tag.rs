@@ -15,14 +15,14 @@ impl BlockTagMiddleware {
         Self { api, index }
     }
 
-    async fn replace(&self, request: &mut CallRequest) {
+    async fn replace(&self, mut request: CallRequest) -> CallRequest {
         let (_, number) = self.api.get_head().read().await;
         let finalized_head = self.api.current_finalized_head();
         let maybe_value = {
             if let Some(param) = request.params.get(self.index).cloned() {
                 if !param.is_string() {
                     // nothing to do here
-                    return;
+                    return request;
                 }
                 match param.as_str().unwrap_or_default() {
                     "finalized" => {
@@ -56,6 +56,8 @@ impl BlockTagMiddleware {
             request.params.remove(self.index);
             request.params.insert(self.index, value);
         }
+
+        request
     }
 }
 
@@ -63,10 +65,10 @@ impl BlockTagMiddleware {
 impl Middleware<CallRequest, Result<JsonValue, Error>> for BlockTagMiddleware {
     async fn call(
         &self,
-        mut request: CallRequest,
+        request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        self.replace(&mut request).await;
+        let request = self.replace(request).await;
         next(request).await
     }
 }
