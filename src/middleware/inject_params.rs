@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::{Middleware, NextFn};
 use crate::{
-    api::{Api, ValueHandle},
+    api::{SubstrateApi, ValueHandle},
     config::MethodParam,
     middleware::call::CallRequest,
 };
@@ -24,7 +24,7 @@ pub struct InjectParamsMiddleware {
 }
 
 impl InjectParamsMiddleware {
-    pub fn new(api: Arc<dyn Api>, inject: InjectType, params: Vec<MethodParam>) -> Self {
+    pub fn new(api: Arc<SubstrateApi>, inject: InjectType, params: Vec<MethodParam>) -> Self {
         Self {
             head: api.get_head(),
             inject,

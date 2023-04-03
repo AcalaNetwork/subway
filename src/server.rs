@@ -6,7 +6,6 @@ use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 
-use crate::api::Api;
 use crate::cache::new_cache;
 use crate::{
     api::{EthApi, SubstrateApi},
@@ -45,16 +44,27 @@ pub async fn start_server(
 
     let client = Arc::new(client);
 
-    let api: Arc<dyn Api> = if client.request("eth_chainId", vec![]).await.is_ok() {
-        Arc::new(EthApi::new(
-            client.clone(),
-            Duration::from_secs(config.stale_timeout_seconds),
-        ))
-    } else {
-        Arc::new(SubstrateApi::new(
-            client.clone(),
-            Duration::from_secs(config.stale_timeout_seconds),
-        ))
+    let mut sub_api: Option<Arc<SubstrateApi>> = None;
+    let mut eth_api: Option<Arc<EthApi>> = None;
+
+    let mut get_sub_api = || {
+        if sub_api.is_none() {
+            sub_api = Some(Arc::new(SubstrateApi::new(
+                client.clone(),
+                Duration::from_secs(config.stale_timeout_seconds),
+            )));
+        }
+        sub_api.as_ref().unwrap().clone()
+    };
+
+    let mut get_eth_api = || {
+        if eth_api.is_none() {
+            eth_api = Some(Arc::new(EthApi::new(
+                client.clone(),
+                Duration::from_secs(config.stale_timeout_seconds),
+            )));
+        }
+        eth_api.as_ref().unwrap().clone()
     };
 
     let upstream = Arc::new(call::UpstreamMiddleware::new(client.clone()));
@@ -67,20 +77,19 @@ pub async fn start_server(
             .iter()
             .position(|p| p.ty == "BlockTag" && p.inject)
         {
-            list.push(Arc::new(BlockTagMiddleware::new(api.clone(), index)))
+            list.push(Arc::new(BlockTagMiddleware::new(get_eth_api(), index)))
         }
 
         if let Some(inject_type) = inject(&method.params) {
             list.push(Arc::new(InjectParamsMiddleware::new(
-                api.clone(),
+                get_sub_api(),
                 inject_type,
                 method.params.clone(),
             )));
         }
 
-        if method.cache > 0 {
+        if let Some(cache_size) = NonZeroUsize::new(method.cache) {
             // each method has it's own cache
-            let cache_size = NonZeroUsize::new(method.cache).expect("qed;");
             let cache = new_cache(cache_size, None);
             list.push(Arc::new(CacheMiddleware::new(cache)));
         }

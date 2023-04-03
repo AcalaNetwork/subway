@@ -15,13 +15,6 @@ pub use eth::EthApi;
 pub use substrate::SubstrateApi;
 pub use value_handle::ValueHandle;
 
-pub trait Api: Send + Sync {
-    fn get_head(&self) -> ValueHandle<(JsonValue, u64)>;
-    fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)>;
-    fn current_head(&self) -> Option<(JsonValue, u64)>;
-    fn current_finalized_head(&self) -> Option<(JsonValue, u64)>;
-}
-
 pub(crate) struct BaseApi {
     pub client: Arc<Client>,
     pub head_rx: watch::Receiver<Option<(JsonValue, u64)>>,

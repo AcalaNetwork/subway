@@ -1,5 +1,5 @@
 use crate::{
-    api::{Api, BaseApi, ValueHandle},
+    api::{BaseApi, ValueHandle},
     client::Client,
 };
 use jsonrpsee::core::JsonValue;
@@ -9,24 +9,6 @@ use tokio::sync::watch;
 pub struct EthApi {
     inner: BaseApi,
     stale_timeout: Duration,
-}
-
-impl Api for EthApi {
-    fn get_head(&self) -> ValueHandle<(JsonValue, u64)> {
-        self.inner.get_head()
-    }
-
-    fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
-        self.inner.get_finalized_head()
-    }
-
-    fn current_head(&self) -> Option<(JsonValue, u64)> {
-        self.inner.head_rx.borrow().to_owned()
-    }
-
-    fn current_finalized_head(&self) -> Option<(JsonValue, u64)> {
-        self.inner.finalized_head_rx.borrow().to_owned()
-    }
 }
 
 impl EthApi {
@@ -43,6 +25,22 @@ impl EthApi {
         this.start_background_task(head_tx, finalized_head_tx);
 
         this
+    }
+
+    pub fn get_head(&self) -> ValueHandle<(JsonValue, u64)> {
+        self.inner.get_head()
+    }
+
+    pub fn get_finalized_head(&self) -> ValueHandle<(JsonValue, u64)> {
+        self.inner.get_finalized_head()
+    }
+
+    pub fn current_head(&self) -> Option<(JsonValue, u64)> {
+        self.inner.head_rx.borrow().to_owned()
+    }
+
+    pub fn current_finalized_head(&self) -> Option<(JsonValue, u64)> {
+        self.inner.finalized_head_rx.borrow().to_owned()
     }
 
     fn start_background_task(

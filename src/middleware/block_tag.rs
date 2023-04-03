@@ -3,29 +3,28 @@ use jsonrpsee::core::{Error, JsonValue};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
-use crate::{api::Api, middleware::call::CallRequest};
+use crate::{api::EthApi, middleware::call::CallRequest};
 
 pub struct BlockTagMiddleware {
-    api: Arc<dyn Api>,
+    api: Arc<EthApi>,
     index: usize,
 }
 
 impl BlockTagMiddleware {
-    pub fn new(api: Arc<dyn Api>, index: usize) -> Self {
+    pub fn new(api: Arc<EthApi>, index: usize) -> Self {
         Self { api, index }
     }
 
-    async fn replace(&self, request: &mut CallRequest) {
-        let (_, number) = self.api.get_head().read().await;
-        let finalized_head = self.api.current_finalized_head();
+    async fn replace(&self, mut request: CallRequest) -> CallRequest {
         let maybe_value = {
             if let Some(param) = request.params.get(self.index).cloned() {
                 if !param.is_string() {
                     // nothing to do here
-                    return;
+                    return request;
                 }
                 match param.as_str().unwrap_or_default() {
                     "finalized" => {
+                        let finalized_head = self.api.current_finalized_head();
                         if let Some((_, finalized_number)) = finalized_head {
                             Some(format!("0x{:x}", finalized_number).into())
                         } else {
@@ -34,7 +33,10 @@ impl BlockTagMiddleware {
                             None
                         }
                     }
-                    "latest" => Some(format!("0x{:x}", number).into()),
+                    "latest" => {
+                        let (_, number) = self.api.get_head().read().await;
+                        Some(format!("0x{:x}", number).into())
+                    }
                     "earliest" => None, // no need to replace earliest because it's always going to be genesis
                     "pending" | "safe" => {
                         request.extra.bypass_cache = true;
@@ -56,6 +58,8 @@ impl BlockTagMiddleware {
             request.params.remove(self.index);
             request.params.insert(self.index, value);
         }
+
+        request
     }
 }
 
@@ -63,10 +67,10 @@ impl BlockTagMiddleware {
 impl Middleware<CallRequest, Result<JsonValue, Error>> for BlockTagMiddleware {
     async fn call(
         &self,
-        mut request: CallRequest,
+        request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        self.replace(&mut request).await;
+        let request = self.replace(request).await;
         next(request).await
     }
 }
