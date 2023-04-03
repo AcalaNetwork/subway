@@ -16,8 +16,6 @@ impl BlockTagMiddleware {
     }
 
     async fn replace(&self, mut request: CallRequest) -> CallRequest {
-        let (_, number) = self.api.get_head().read().await;
-        let finalized_head = self.api.current_finalized_head();
         let maybe_value = {
             if let Some(param) = request.params.get(self.index).cloned() {
                 if !param.is_string() {
@@ -26,6 +24,7 @@ impl BlockTagMiddleware {
                 }
                 match param.as_str().unwrap_or_default() {
                     "finalized" => {
+                        let finalized_head = self.api.current_finalized_head();
                         if let Some((_, finalized_number)) = finalized_head {
                             Some(format!("0x{:x}", finalized_number).into())
                         } else {
@@ -34,7 +33,10 @@ impl BlockTagMiddleware {
                             None
                         }
                     }
-                    "latest" => Some(format!("0x{:x}", number).into()),
+                    "latest" => {
+                        let (_, number) = self.api.get_head().read().await;
+                        Some(format!("0x{:x}", number).into())
+                    }
                     "earliest" => None, // no need to replace earliest because it's always going to be genesis
                     "pending" | "safe" => {
                         request.extra.bypass_cache = true;
