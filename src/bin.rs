@@ -14,6 +14,8 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    tracing::trace!("{:#?}", config);
+
     let client = client::create_client(&config).await?;
 
     let (addr, server) = server::start_server(&config, client).await?;
