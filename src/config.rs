@@ -2,6 +2,9 @@ use clap::Parser;
 use serde::Deserialize;
 use std::fs;
 
+const SUBSTRATE_CONFIG: &str = include_str!("../rpc_configs/substrate.yml");
+const ETHEREUM_CONFIG: &str = include_str!("../rpc_configs/ethereum.yml");
+
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Command {
@@ -67,6 +70,29 @@ pub struct RpcDefinitions {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum RpcOptions {
+    Path(String),
+    Custom(RpcDefinitions),
+}
+
+impl Into<RpcDefinitions> for RpcOptions {
+    fn into(self) -> RpcDefinitions {
+        match self {
+            RpcOptions::Path(path) => match path.to_lowercase().as_str() {
+                "sub" | "substrate" => serde_yaml::from_str(SUBSTRATE_CONFIG).unwrap(),
+                "eth" | "ethereum" => serde_yaml::from_str(ETHEREUM_CONFIG).unwrap(),
+                _ => {
+                    let file = fs::File::open(path).expect("Invalid rpc config path");
+                    serde_yaml::from_reader(file).expect("Invalid rpc config file")
+                }
+            },
+            RpcOptions::Custom(defs) => defs,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Config {
     pub endpoints: Vec<String>,
     pub stale_timeout_seconds: u64,
@@ -75,16 +101,38 @@ pub struct Config {
     pub rpcs: RpcDefinitions,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct ParseConfig {
+    pub endpoints: Vec<String>,
+    pub stale_timeout_seconds: u64,
+    pub merge_subscription_keep_alive_seconds: Option<u64>,
+    pub server: ServerConfig,
+    pub rpcs: RpcOptions,
+}
+
+impl Into<Config> for ParseConfig {
+    fn into(self) -> Config {
+        Config {
+            endpoints: self.endpoints,
+            stale_timeout_seconds: self.stale_timeout_seconds,
+            merge_subscription_keep_alive_seconds: self.merge_subscription_keep_alive_seconds,
+            server: self.server,
+            rpcs: self.rpcs.into(),
+        }
+    }
+}
+
 pub fn read_config() -> Result<Config, String> {
     let cmd = Command::parse();
 
     let config =
         fs::File::open(cmd.config).map_err(|e| format!("Unable to open config file: {e}"))?;
-    let mut config: Config = serde_yaml::from_reader(&config)
+    let config: ParseConfig = serde_yaml::from_reader(&config)
         .map_err(|e| format!("Unable to parse config file: {e}"))?;
+    let mut config: Config = config.into();
 
     if let Ok(endpoints) = std::env::var("ENDPOINTS") {
-        log::info!("Override endpoints with env.ENDPOINTS");
+        log::debug!("Override endpoints with env.ENDPOINTS");
         config.endpoints = endpoints
             .split(',')
             .map(|x| x.trim().to_string())
@@ -92,7 +140,7 @@ pub fn read_config() -> Result<Config, String> {
     }
 
     if let Ok(env_port) = std::env::var("PORT") {
-        log::info!("Override port with env.PORT");
+        log::debug!("Override port with env.PORT");
         let port = env_port.parse::<u16>();
         if let Ok(port) = port {
             config.server.port = port;
