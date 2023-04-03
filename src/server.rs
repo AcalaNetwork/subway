@@ -88,9 +88,8 @@ pub async fn start_server(
             )));
         }
 
-        if method.cache > 0 {
+        if let Some(cache_size) = NonZeroUsize::new(method.cache) {
             // each method has it's own cache
-            let cache_size = NonZeroUsize::new(method.cache).expect("qed;");
             let cache = new_cache(cache_size, None);
             list.push(Arc::new(CacheMiddleware::new(cache)));
         }
