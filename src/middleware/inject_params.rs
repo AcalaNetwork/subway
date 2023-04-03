@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::{Middleware, NextFn};
 use crate::{
-    api::{Api, SubstrateApi, ValueHandle},
+    api::{SubstrateApi, ValueHandle},
     config::MethodParam,
     middleware::call::CallRequest,
 };

@@ -3,10 +3,7 @@ use jsonrpsee::core::{Error, JsonValue};
 use std::sync::Arc;
 
 use super::{Middleware, NextFn};
-use crate::{
-    api::{Api, EthApi},
-    middleware::call::CallRequest,
-};
+use crate::{api::EthApi, middleware::call::CallRequest};
 
 pub struct BlockTagMiddleware {
     api: Arc<EthApi>,
