@@ -76,9 +76,9 @@ pub enum RpcOptions {
     Custom(RpcDefinitions),
 }
 
-impl Into<RpcDefinitions> for RpcOptions {
-    fn into(self) -> RpcDefinitions {
-        match self {
+impl From<RpcOptions> for RpcDefinitions {
+    fn from(val: RpcOptions) -> Self {
+        match val {
             RpcOptions::Path(path) => match path.to_lowercase().as_str() {
                 "sub" | "substrate" => serde_yaml::from_str(SUBSTRATE_CONFIG).unwrap(),
                 "eth" | "ethereum" => serde_yaml::from_str(ETHEREUM_CONFIG).unwrap(),
@@ -110,14 +110,14 @@ pub struct ParseConfig {
     pub rpcs: RpcOptions,
 }
 
-impl Into<Config> for ParseConfig {
-    fn into(self) -> Config {
+impl From<ParseConfig> for Config {
+    fn from(val: ParseConfig) -> Self {
         Config {
-            endpoints: self.endpoints,
-            stale_timeout_seconds: self.stale_timeout_seconds,
-            merge_subscription_keep_alive_seconds: self.merge_subscription_keep_alive_seconds,
-            server: self.server,
-            rpcs: self.rpcs.into(),
+            endpoints: val.endpoints,
+            stale_timeout_seconds: val.stale_timeout_seconds,
+            merge_subscription_keep_alive_seconds: val.merge_subscription_keep_alive_seconds,
+            server: val.server,
+            rpcs: val.rpcs.into(),
         }
     }
 }
