@@ -34,15 +34,11 @@ impl<D: Digest> std::hash::Hash for CacheKey<D> {
 
 pub type Cache<D> = moka::future::Cache<CacheKey<D>, JsonValue>;
 
-pub fn new_cache<D: Digest + 'static>(size: NonZeroUsize, ttl: Option<Duration>) -> Cache<D> {
+pub fn new_cache<D: Digest + 'static>(size: NonZeroUsize, ttl: Duration) -> Cache<D> {
     let size = size.get();
-    let mut builder = Cache::<D>::builder()
+    Cache::<D>::builder()
         .max_capacity(size as u64)
-        .initial_capacity(size);
-
-    if let Some(ttl) = ttl {
-        builder = builder.time_to_live(ttl);
-    }
-
-    builder.build()
+        .initial_capacity(size)
+        .time_to_live(ttl)
+        .build()
 }

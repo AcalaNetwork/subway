@@ -55,8 +55,11 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
 
 #[cfg(test)]
 mod tests {
+    use crate::cache::new_cache;
     use futures::FutureExt;
     use serde_json::json;
+    use std::num::NonZeroUsize;
+    use std::time::Duration;
 
     use super::*;
 
@@ -146,6 +149,46 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
 
         // should not be cached
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(2));
+    }
+
+    #[tokio::test]
+    async fn cache_ttl_works() {
+        let middleware = CacheMiddleware::new(new_cache(
+            NonZeroUsize::new(1).unwrap(),
+            Duration::from_millis(10),
+        ));
+
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // wait for cache write
+        tokio::time::sleep(Duration::from_millis(1)).await;
+
+        // cache hit
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                Box::new(move |_| async move { panic!() }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // wait for cache to expire
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // cache miss
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
