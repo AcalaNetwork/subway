@@ -38,11 +38,15 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         let result = next(request).await;
 
         if let Ok(ref value) = result {
-            let cache = self.cache.clone();
-            let value = value.clone();
-            tokio::spawn(async move {
-                cache.insert(key, value).await;
-            });
+            // avoid caching null value because it usually means data not available
+            // but it could be available in the future
+            if !value.is_null() {
+                let cache = self.cache.clone();
+                let value = value.clone();
+                tokio::spawn(async move {
+                    cache.insert(key, value).await;
+                });
+            }
         }
 
         result
@@ -124,5 +128,30 @@ mod tests {
             )
             .await;
         assert_eq!(res.unwrap(), json!(5));
+    }
+
+    #[tokio::test]
+    async fn should_not_cache_null() {
+        let middleware = CacheMiddleware::new(Cache::new(3));
+
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                Box::new(move |_| async move { Ok(JsonValue::Null) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), JsonValue::Null);
+
+        // wait for cache write
+        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+
+        // should not be cached
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(2));
     }
 }
