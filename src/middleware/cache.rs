@@ -37,15 +37,26 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
 
         let result = next(request).await;
 
-        if let Ok(ref value) = result {
-            // avoid caching null value because it usually means data not available
-            // but it could be available in the future
-            if !value.is_null() {
+        let value = match &result {
+            Ok(value) => {
+                if value.is_null() {
+                    Err(Ok(value.clone()))
+                } else {
+                    Ok(value.clone())
+                }
+            }
+            result => Err::<_, Result<JsonValue, Error>>(result.clone()),
+        };
+
+        match value {
+            Ok(value) => {
                 let cache = self.cache.clone();
-                let value = value.clone();
                 tokio::spawn(async move {
                     cache.insert(key, value).await;
                 });
+            }
+            Err(err) => {
+                log::debug!("cache miss for {:?} with error {:?}", key, err);
             }
         }
 
