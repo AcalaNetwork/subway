@@ -162,7 +162,7 @@ mod tests {
     async fn cache_ttl_works() {
         let middleware = CacheMiddleware::new(new_cache(
             NonZeroUsize::new(1).unwrap(),
-            Duration::from_millis(10),
+            Some(Duration::from_millis(10)),
         ));
 
         let res = middleware

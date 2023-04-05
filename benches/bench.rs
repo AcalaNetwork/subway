@@ -229,7 +229,7 @@ fn config() -> Config {
             format!("ws://{}", SERVER_TWO_ENDPOINT),
         ],
         stale_timeout_seconds: 60,
-        cache_ttl_seconds: 10,
+        cache_ttl_seconds: None,
         merge_subscription_keep_alive_seconds: None,
         server: ServerConfig {
             listen_address: SUBWAY_SERVER_ADDR.to_string(),

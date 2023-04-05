@@ -96,7 +96,8 @@ impl From<RpcOptions> for RpcDefinitions {
 pub struct Config {
     pub endpoints: Vec<String>,
     pub stale_timeout_seconds: u64,
-    pub cache_ttl_seconds: u64,
+    // None means no cache expiration
+    pub cache_ttl_seconds: Option<u64>,
     pub merge_subscription_keep_alive_seconds: Option<u64>,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
@@ -117,7 +118,7 @@ impl From<ParseConfig> for Config {
         Config {
             endpoints: val.endpoints,
             stale_timeout_seconds: val.stale_timeout_seconds,
-            cache_ttl_seconds: val.cache_ttl_seconds.unwrap_or(300), // 5 minutes
+            cache_ttl_seconds: val.cache_ttl_seconds,
             merge_subscription_keep_alive_seconds: val.merge_subscription_keep_alive_seconds,
             server: val.server,
             rpcs: val.rpcs.into(),
