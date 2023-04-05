@@ -90,7 +90,10 @@ pub async fn start_server(
 
         if let Some(cache_size) = NonZeroUsize::new(method.cache) {
             // each method has it's own cache
-            let cache = new_cache(cache_size, None);
+            let cache = new_cache(
+                cache_size,
+                config.cache_ttl_seconds.map(Duration::from_secs),
+            );
             list.push(Arc::new(CacheMiddleware::new(cache)));
         }
         list.push(upstream.clone());
@@ -245,6 +248,7 @@ mod tests {
         let config = Config {
             endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
             stale_timeout_seconds: 60,
+            cache_ttl_seconds: None,
             merge_subscription_keep_alive_seconds: None,
             server: ServerConfig {
                 listen_address: "127.0.0.1".to_string(),

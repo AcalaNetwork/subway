@@ -40,8 +40,8 @@ pub fn new_cache<D: Digest + 'static>(size: NonZeroUsize, ttl: Option<Duration>)
         .max_capacity(size as u64)
         .initial_capacity(size);
 
-    if let Some(ttl) = ttl {
-        builder = builder.time_to_live(ttl);
+    if let Some(duration) = ttl {
+        builder = builder.time_to_live(duration);
     }
 
     builder.build()
