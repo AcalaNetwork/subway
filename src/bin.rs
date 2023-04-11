@@ -1,3 +1,6 @@
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 use subway::client;
 use subway::config;
 use subway::enable_logger;
@@ -16,7 +19,11 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("{:#?}", config);
 
-    let client = client::create_client(&config).await?;
+    let mut endpoints = config.endpoints.clone();
+    endpoints.shuffle(&mut thread_rng());
+    let client = client::Client::new(endpoints)
+        .await
+        .map_err(anyhow::Error::msg)?;
 
     let (addr, server) = server::start_server(&config, client).await?;
 
