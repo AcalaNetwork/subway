@@ -11,7 +11,7 @@ use helpers::client::{
     rpc_params, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT,
 };
 use helpers::{ASYNC_INJECT_CALL, KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use subway::client::create_client;
+use subway::client::Client;
 use subway::config::{
     Config, MergeStrategy, MethodParam, RpcDefinitions, RpcMethod, RpcSubscription, ServerConfig,
 };
@@ -300,7 +300,7 @@ fn config() -> Config {
 
 async fn server() -> (String, jsonrpsee::server::ServerHandle) {
     let config = config();
-    let client = create_client(&config).await.unwrap();
+    let client = Client::new(&config.endpoints).await.unwrap();
     let (addr, handle) = start_server(&config, client).await.unwrap();
     (format!("ws://{}", addr), handle)
 }

@@ -10,8 +10,6 @@ use jsonrpsee::{
     ws_client::{WsClient, WsClientBuilder},
 };
 
-use crate::config::Config;
-
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
@@ -307,10 +305,4 @@ impl Client {
             .await
             .map_err(|_| ())
     }
-}
-
-pub async fn create_client(config: &Config) -> anyhow::Result<Client> {
-    let endpoints = config.endpoints.clone();
-
-    Client::new(endpoints).await.map_err(anyhow::Error::msg)
 }

@@ -235,10 +235,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::{
-        client::create_client,
-        config::{RpcDefinitions, RpcMethod, ServerConfig},
-    };
+    use crate::config::{RpcDefinitions, RpcMethod, ServerConfig};
 
     const PHO: &str = "pho";
     const BAR: &str = "bar";
@@ -265,7 +262,7 @@ mod tests {
                 aliases: vec![],
             },
         };
-        let client = create_client(&config).await.unwrap();
+        let client = Client::new(&config.endpoints).await.unwrap();
         let (addr, server) = start_server(&config, client).await.unwrap();
         (format!("ws://{}", addr), server)
     }
