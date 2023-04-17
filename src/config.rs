@@ -93,8 +93,15 @@ impl From<RpcOptions> for RpcDefinitions {
 }
 
 #[derive(Deserialize, Debug)]
+pub enum TelemetryProvider {
+    None,
+    Datadog,
+    Jaeger,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct TelemetryOptions {
-    pub enabled: bool,
+    pub provider: TelemetryProvider,
     #[serde(default)]
     pub service_name: Option<String>,
     #[serde(default)]

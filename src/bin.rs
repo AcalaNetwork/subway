@@ -1,12 +1,7 @@
 use opentelemetry::global::shutdown_tracer_provider;
-use opentelemetry_datadog::new_pipeline;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{seq::SliceRandom, thread_rng};
 
-use subway::client;
-use subway::config;
-use subway::enable_logger;
-use subway::server;
+use subway::{client, config, enable_logger, server, telemetry::setup_telemetry};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,28 +12,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let tracer = if let Some(ref telemetry_config) = config.telemetry {
-        if telemetry_config.enabled {
-            let mut tracer = new_pipeline().with_service_name(
-                telemetry_config
-                    .service_name
-                    .clone()
-                    .unwrap_or_else(|| "subway".into()),
-            );
-
-            if let Some(ref agent_endpoint) = telemetry_config.agent_endpoint {
-                tracer = tracer.with_agent_endpoint(agent_endpoint.clone());
-            }
-
-            let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
-
-            Some(tracer)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let tracer = setup_telemetry(&config.telemetry)?;
 
     enable_logger(tracer);
 
