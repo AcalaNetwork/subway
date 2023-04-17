@@ -3,6 +3,7 @@ use jsonrpsee::{
     core::JsonValue, core::SubscriptionCallbackError, PendingSubscriptionSink, SubscriptionMessage,
 };
 use std::sync::Arc;
+use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::client::Client;
@@ -26,6 +27,7 @@ impl UpstreamMiddleware {
 
 #[async_trait]
 impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>> for UpstreamMiddleware {
+    #[instrument(level = "trace", skip_all, fields(method = request.subscribe))]
     async fn call(
         &self,
         request: SubscriptionRequest,

@@ -73,6 +73,7 @@ async fn merge_subscription_works() {
             ],
             aliases: vec![],
         },
+        telemetry: None,
     };
 
     let (addr, server) = start_server(

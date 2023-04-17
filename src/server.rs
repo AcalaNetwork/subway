@@ -261,6 +261,7 @@ mod tests {
                 subscriptions: vec![],
                 aliases: vec![],
             },
+            telemetry: None,
         };
         let client = Client::new(&config.endpoints).await.unwrap();
         let (addr, server) = start_server(&config, client).await.unwrap();

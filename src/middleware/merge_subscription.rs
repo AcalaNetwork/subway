@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{broadcast, RwLock};
+use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::{
@@ -192,6 +193,7 @@ impl MergeSubscriptionMiddleware {
 impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
     for MergeSubscriptionMiddleware
 {
+    #[instrument(level = "trace", skip_all, fields(method = request.subscribe))]
     async fn call(
         &self,
         request: SubscriptionRequest,

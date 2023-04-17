@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use blake2::Blake2b512;
 use jsonrpsee::core::{Error, JsonValue};
+use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::{
@@ -20,6 +21,7 @@ impl CacheMiddleware {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
+    #[instrument(level = "trace", skip_all, fields(method = request.method))]
     async fn call(
         &self,
         request: CallRequest,

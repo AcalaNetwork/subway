@@ -92,6 +92,14 @@ impl From<RpcOptions> for RpcDefinitions {
     }
 }
 
+#[derive(Deserialize, Debug)]
+pub struct TelemetryOptions {
+    #[serde(default)]
+    pub service_name: Option<String>,
+    #[serde(default)]
+    pub agent_endpoint: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct Config {
     pub endpoints: Vec<String>,
@@ -101,16 +109,20 @@ pub struct Config {
     pub merge_subscription_keep_alive_seconds: Option<u64>,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
+    pub telemetry: Option<TelemetryOptions>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ParseConfig {
     pub endpoints: Vec<String>,
     pub stale_timeout_seconds: u64,
+    #[serde(default)]
     pub cache_ttl_seconds: Option<u64>,
     pub merge_subscription_keep_alive_seconds: Option<u64>,
     pub server: ServerConfig,
     pub rpcs: RpcOptions,
+    #[serde(default)]
+    pub telemetry: Option<TelemetryOptions>,
 }
 
 impl From<ParseConfig> for Config {
@@ -122,6 +134,7 @@ impl From<ParseConfig> for Config {
             merge_subscription_keep_alive_seconds: val.merge_subscription_keep_alive_seconds,
             server: val.server,
             rpcs: val.rpcs.into(),
+            telemetry: val.telemetry,
         }
     }
 }
