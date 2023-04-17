@@ -1,3 +1,7 @@
+use std::env;
+
+use opentelemetry::global::shutdown_tracer_provider;
+use opentelemetry_datadog::new_pipeline;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -19,6 +23,28 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("{:#?}", config);
 
+    if let Some(ref telemetry_config) = config.telemetry {
+        let env = telemetry_config
+            .env
+            .clone()
+            .unwrap_or_else(|| env::var("ENV").unwrap_or_else(|_| "dev".to_string()));
+
+        let mut tracer = new_pipeline()
+            .with_service_name(
+                telemetry_config
+                    .service_name
+                    .clone()
+                    .unwrap_or_else(|| "subway".into()),
+            )
+            .with_env(env);
+
+        if let Some(ref agent_endpoint) = telemetry_config.agent_endpoint {
+            tracer = tracer.with_agent_endpoint(agent_endpoint.clone());
+        }
+
+        tracer.install_batch(opentelemetry::runtime::Tokio)?;
+    };
+
     let mut endpoints = config.endpoints.clone();
     endpoints.shuffle(&mut thread_rng());
     let client = client::Client::new(endpoints)
@@ -30,6 +56,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Server running at {addr}");
 
     server.stopped().await;
+
+    shutdown_tracer_provider();
 
     Ok(())
 }
