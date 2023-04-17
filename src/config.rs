@@ -98,8 +98,6 @@ pub struct TelemetryOptions {
     pub service_name: Option<String>,
     #[serde(default)]
     pub agent_endpoint: Option<String>,
-    #[serde(default)]
-    pub env: Option<String>,
 }
 
 #[derive(Debug)]
