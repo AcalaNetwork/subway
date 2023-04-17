@@ -4,6 +4,7 @@ use jsonrpsee::{
     types::error::CallError,
 };
 use std::sync::Arc;
+use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::{
@@ -79,6 +80,7 @@ pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddleware {
+    #[instrument(level = "trace", skip_all, fields(method = request.method))]
     async fn call(
         &self,
         mut request: CallRequest,

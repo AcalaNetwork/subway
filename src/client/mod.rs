@@ -9,6 +9,7 @@ use jsonrpsee::{
     types::error::CallError,
     ws_client::{WsClient, WsClientBuilder},
 };
+use tracing::instrument;
 
 #[cfg(test)]
 pub mod mock;
@@ -265,6 +266,7 @@ impl Client {
         Ok(Self { sender: tx })
     }
 
+    #[instrument(level = "trace", skip(self, params))]
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, Error> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
@@ -279,6 +281,7 @@ impl Client {
         rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
+    #[instrument(level = "trace", skip(self, params, unsubscribe))]
     pub async fn subscribe(
         &self,
         subscribe: &str,
@@ -299,6 +302,7 @@ impl Client {
         rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub async fn rotate_endpoint(&self) -> Result<(), ()> {
         self.sender
             .send(Message::RotateEndpoint)

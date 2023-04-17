@@ -10,8 +10,6 @@ use subway::server;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    enable_logger();
-
     let config = match config::read_config() {
         Ok(config) => config,
         Err(e) => {
@@ -19,9 +17,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    tracing::trace!("{:#?}", config);
-
-    if let Some(ref telemetry_config) = config.telemetry {
+    let tracer = if let Some(ref telemetry_config) = config.telemetry {
         let mut tracer = new_pipeline().with_service_name(
             telemetry_config
                 .service_name
@@ -33,8 +29,16 @@ async fn main() -> anyhow::Result<()> {
             tracer = tracer.with_agent_endpoint(agent_endpoint.clone());
         }
 
-        tracer.install_batch(opentelemetry::runtime::Tokio)?;
+        let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
+
+        Some(tracer)
+    } else {
+        None
     };
+
+    enable_logger(tracer);
+
+    tracing::trace!("{:#?}", config);
 
     let mut endpoints = config.endpoints.clone();
     endpoints.shuffle(&mut thread_rng());
