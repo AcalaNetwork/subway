@@ -72,6 +72,7 @@ impl Client {
                         .request_timeout(std::time::Duration::from_secs(30))
                         .connection_timeout(std::time::Duration::from_secs(30))
                         .max_buffer_capacity_per_subscription(1024)
+                        .max_concurrent_requests(1024)
                         .build(url)
                         .map_err(|e| (e, url.to_string()))
                 };
