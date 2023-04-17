@@ -295,6 +295,7 @@ fn config() -> Config {
             }],
             aliases: vec![],
         },
+        telemetry: None,
     }
 }
 
