@@ -18,20 +18,24 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let tracer = if let Some(ref telemetry_config) = config.telemetry {
-        let mut tracer = new_pipeline().with_service_name(
-            telemetry_config
-                .service_name
-                .clone()
-                .unwrap_or_else(|| "subway".into()),
-        );
+        if telemetry_config.enabled {
+            let mut tracer = new_pipeline().with_service_name(
+                telemetry_config
+                    .service_name
+                    .clone()
+                    .unwrap_or_else(|| "subway".into()),
+            );
 
-        if let Some(ref agent_endpoint) = telemetry_config.agent_endpoint {
-            tracer = tracer.with_agent_endpoint(agent_endpoint.clone());
+            if let Some(ref agent_endpoint) = telemetry_config.agent_endpoint {
+                tracer = tracer.with_agent_endpoint(agent_endpoint.clone());
+            }
+
+            let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
+
+            Some(tracer)
+        } else {
+            None
         }
-
-        let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
-
-        Some(tracer)
     } else {
         None
     };

@@ -94,6 +94,7 @@ impl From<RpcOptions> for RpcDefinitions {
 
 #[derive(Deserialize, Debug)]
 pub struct TelemetryOptions {
+    pub enabled: bool,
     #[serde(default)]
     pub service_name: Option<String>,
     #[serde(default)]
