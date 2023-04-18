@@ -72,6 +72,7 @@ impl Client {
                         .request_timeout(std::time::Duration::from_secs(30))
                         .connection_timeout(std::time::Duration::from_secs(30))
                         .max_buffer_capacity_per_subscription(1024)
+                        .max_concurrent_requests(1024)
                         .build(url)
                         .map_err(|e| (e, url.to_string()))
                 };
@@ -266,7 +267,7 @@ impl Client {
         Ok(Self { sender: tx })
     }
 
-    #[instrument(level = "trace", skip(self, params))]
+    #[instrument(skip(self, params))]
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, Error> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
@@ -281,7 +282,7 @@ impl Client {
         rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
-    #[instrument(level = "trace", skip(self, params, unsubscribe))]
+    #[instrument(skip(self, params, unsubscribe))]
     pub async fn subscribe(
         &self,
         subscribe: &str,
@@ -302,7 +303,7 @@ impl Client {
         rx.await.map_err(|e| CallError::Failed(e.into()))?
     }
 
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(skip(self))]
     pub async fn rotate_endpoint(&self) -> Result<(), ()> {
         self.sender
             .send(Message::RotateEndpoint)

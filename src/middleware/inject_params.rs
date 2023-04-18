@@ -80,7 +80,7 @@ pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, Error>> for InjectParamsMiddleware {
-    #[instrument(level = "trace", skip_all, fields(method = request.method))]
+    #[instrument(skip_all)]
     async fn call(
         &self,
         mut request: CallRequest,

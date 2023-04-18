@@ -4,6 +4,7 @@ pub mod client;
 pub mod config;
 pub mod middleware;
 pub mod server;
+pub mod telemetry;
 
 #[cfg(test)]
 mod integration_tests;
