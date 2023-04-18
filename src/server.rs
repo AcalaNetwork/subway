@@ -5,7 +5,6 @@ use jsonrpsee::types::error::CallError;
 use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
-use tracing::Instrument;
 
 use crate::cache::new_cache;
 use crate::{
