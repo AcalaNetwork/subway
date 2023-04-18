@@ -193,7 +193,7 @@ impl MergeSubscriptionMiddleware {
 impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>>
     for MergeSubscriptionMiddleware
 {
-    #[instrument(level = "trace", skip_all, fields(method = request.subscribe))]
+    #[instrument(skip_all, fields(method = request.subscribe))]
     async fn call(
         &self,
         request: SubscriptionRequest,

@@ -66,7 +66,7 @@ impl BlockTagMiddleware {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, Error>> for BlockTagMiddleware {
-    #[instrument(level = "trace", skip_all, fields(method = request.method))]
+    #[instrument(skip_all)]
     async fn call(
         &self,
         request: CallRequest,

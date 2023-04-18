@@ -27,7 +27,7 @@ impl UpstreamMiddleware {
 
 #[async_trait]
 impl Middleware<SubscriptionRequest, Result<(), SubscriptionCallbackError>> for UpstreamMiddleware {
-    #[instrument(level = "trace", skip_all, fields(method = request.subscribe))]
+    #[instrument(skip_all, fields(method = request.subscribe))]
     async fn call(
         &self,
         request: SubscriptionRequest,

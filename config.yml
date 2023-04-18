@@ -9,4 +9,7 @@ server:
   listen_address: '0.0.0.0'
   max_connections: 2000
 
+telemetry:
+  provider: datadog
+
 rpcs: substrate

@@ -41,7 +41,7 @@ impl UpstreamMiddleware {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, Error>> for UpstreamMiddleware {
-    #[instrument(level = "trace", skip_all, fields(method = request.method))]
+    #[instrument(skip_all)]
     async fn call(
         &self,
         request: CallRequest,

@@ -93,6 +93,7 @@ impl From<RpcOptions> for RpcDefinitions {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
 pub enum TelemetryProvider {
     None,
     Datadog,
