@@ -1,3 +1,5 @@
+use std::env;
+
 use opentelemetry::{sdk::trace::Tracer, trace::TraceError};
 
 use crate::config::{TelemetryOptions, TelemetryProvider};
@@ -17,8 +19,11 @@ pub fn setup_telemetry(options: &Option<TelemetryOptions>) -> Result<Option<Trac
             let mut tracer =
                 opentelemetry_jaeger::new_agent_pipeline().with_service_name(service_name);
 
-            if let Some(ref agent_endpoint) = options.agent_endpoint {
-                tracer = tracer.with_endpoint(agent_endpoint.clone());
+            let agent_endpoint = env::var("DATADOG_AGENT_ENDPOINT")
+                .ok()
+                .or_else(|| options.agent_endpoint.clone());
+            if let Some(agent_endpoint) = agent_endpoint {
+                tracer = tracer.with_endpoint(agent_endpoint);
             }
 
             let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
