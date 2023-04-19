@@ -10,6 +10,6 @@ server:
   max_connections: 2000
 
 telemetry:
-  provider: datadog
+  provider: none
 
 rpcs: substrate
