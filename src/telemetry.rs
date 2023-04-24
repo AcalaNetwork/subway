@@ -1,6 +1,6 @@
 use std::env;
 
-use opentelemetry::{sdk::trace::Tracer, trace::TraceError};
+use opentelemetry::{global, sdk::trace::Tracer, trace::TraceError};
 
 use crate::config::{TelemetryOptions, TelemetryProvider};
 
@@ -8,6 +8,10 @@ pub fn setup_telemetry(options: &Option<TelemetryOptions>) -> Result<Option<Trac
     let Some(options) = options else {
         return Ok(None);
     };
+
+    global::set_error_handler(|e| {
+        log::warn!("OpenTelemetry error: {}", e);
+    });
 
     let service_name = options
         .service_name
