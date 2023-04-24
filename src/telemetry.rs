@@ -11,7 +11,8 @@ pub fn setup_telemetry(options: &Option<TelemetryOptions>) -> Result<Option<Trac
 
     global::set_error_handler(|e| {
         log::warn!("OpenTelemetry error: {}", e);
-    });
+    })
+    .expect("failed to set OpenTelemetry error handler");
 
     let service_name = options
         .service_name
