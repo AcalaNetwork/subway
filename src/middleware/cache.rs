@@ -79,7 +79,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
 mod tests {
     use crate::cache::new_cache;
     use futures::FutureExt;
-    use serde_json::json;
+    use serde_json::{json, Map};
     use std::num::NonZeroUsize;
     use std::time::Duration;
 
@@ -153,6 +153,65 @@ mod tests {
             )
             .await;
         assert_eq!(res.unwrap(), json!(5));
+    }
+
+    #[tokio::test]
+    async fn should_not_cache_with_tag() {
+        let middleware = CacheMiddleware::new(Cache::new(3));
+
+        let mut map = Map::new();
+
+        map.insert(
+            "fromBlock".to_string(),
+            JsonValue::String("latest".to_string()),
+        );
+
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![JsonValue::Object(map.clone())]),
+                Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // wait for cache write
+        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+
+        // should not be cached
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![JsonValue::Object(map)]),
+                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(2));
+
+        let mut map = Map::new();
+
+        map.insert(
+            "toBlock".to_string(),
+            JsonValue::String("latest".to_string()),
+        );
+
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![JsonValue::Object(map.clone())]),
+                Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // wait for cache write
+        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+
+        // should not be cached
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![JsonValue::Object(map)]),
+                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(2));
     }
 
     #[tokio::test]
