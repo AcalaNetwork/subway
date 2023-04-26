@@ -14,6 +14,8 @@ RUN useradd -m -u 1000 -U -s /bin/sh -d /app docker
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install tini
+
 COPY --from=builder /app/target/release/subway /usr/local/bin
 COPY ./config.yml /app/config.yml
 
@@ -28,4 +30,4 @@ RUN rm -rf /usr/lib/python* && \
 USER docker
 EXPOSE 9944
 
-ENTRYPOINT ["/usr/local/bin/subway"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/subway"]
