@@ -19,6 +19,26 @@ impl CacheMiddleware {
     }
 }
 
+fn with_tag(value: &[JsonValue]) -> bool {
+    if let Some(JsonValue::Object(object)) = value.get(0) {
+        if let Some(JsonValue::String(value)) = object.get("fromBlock") {
+            if let Some(signature) = value.get(0..2) {
+                if !signature.eq("0x") {
+                    return true;
+                }
+            }
+        }
+        if let Some(JsonValue::String(value)) = object.get("toBlock") {
+            if let Some(signature) = value.get(0..2) {
+                if !signature.eq("0x") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
     #[instrument(skip_all)]
@@ -27,7 +47,7 @@ impl Middleware<CallRequest, Result<JsonValue, Error>> for CacheMiddleware {
         request: CallRequest,
         next: NextFn<CallRequest, Result<JsonValue, Error>>,
     ) -> Result<JsonValue, Error> {
-        if request.extra.bypass_cache {
+        if request.extra.bypass_cache || with_tag(&request.params) {
             return next(request).await;
         }
 
