@@ -110,6 +110,15 @@ methods:
   - method: system_chainType
     cache: 1
 
+  - method: system_localPeerId
+    cache: 1
+
+  - method: system_nodeRoles
+    cache: 1
+
+  - method: system_localListenAddresses
+    cache: 1
+
   - method: system_health
 
   - method: system_dryRun
