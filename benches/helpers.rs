@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use jsonrpsee::types::ErrorObjectOwned;
+
 pub const SYNC_FAST_CALL: &str = "fast_call";
 pub const ASYNC_FAST_CALL: &str = "fast_call_async";
 pub const SYNC_MEM_CALL: &str = "memory_intense";
@@ -23,7 +25,7 @@ pub async fn ws_server(
     handle: tokio::runtime::Handle,
     url: &str,
 ) -> (String, jsonrpsee::server::ServerHandle) {
-    use jsonrpsee::{core::server::rpc_module::SubscriptionMessage, server::ServerBuilder};
+    use jsonrpsee::{core::server::SubscriptionMessage, server::ServerBuilder};
 
     let server = ServerBuilder::default()
         .max_request_body_size(u32::MAX)
@@ -73,49 +75,51 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
     let mut module = jsonrpsee::RpcModule::new(());
 
     module
-        .register_method(SYNC_FAST_CALL, |_, _| Ok("lo"))
+        .register_method(SYNC_FAST_CALL, |_, _| Ok::<_, ErrorObjectOwned>("lo"))
         .unwrap();
     module
         .register_async_method(ASYNC_FAST_CALL, |_, _| async {
-            Result::<_, jsonrpsee::core::Error>::Ok("lo")
+            Result::<_, ErrorObjectOwned>::Ok("lo")
         })
         .unwrap();
 
     module
-        .register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(MIB)))
+        .register_method(SYNC_MEM_CALL, |_, _| {
+            Ok::<_, ErrorObjectOwned>("A".repeat(MIB))
+        })
         .unwrap();
 
     module
         .register_async_method(ASYNC_MEM_CALL, |_, _| async move {
-            Result::<_, jsonrpsee::core::Error>::Ok("A".repeat(MIB))
+            Result::<_, ErrorObjectOwned>::Ok("A".repeat(MIB))
         })
         .unwrap();
 
     module
         .register_method(SYNC_SLOW_CALL, |_, _| {
             std::thread::sleep(SLOW_CALL);
-            Ok("slow call")
+            Ok::<_, ErrorObjectOwned>("slow call")
         })
         .unwrap();
 
     module
         .register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
             tokio::time::sleep(SLOW_CALL).await;
-            Result::<_, jsonrpsee::core::Error>::Ok("slow call async")
+            Result::<_, ErrorObjectOwned>::Ok("slow call async")
         })
         .unwrap();
 
     module
         .register_async_method(ASYNC_INJECT_CALL, |_, _| async move {
             tokio::time::sleep(SLOW_CALL).await;
-            Result::<_, jsonrpsee::core::Error>::Ok("inject call async")
+            Result::<_, ErrorObjectOwned>::Ok("inject call async")
         })
         .unwrap();
 
     module
         .register_async_method("chain_getBlockHash", |_, _| async move {
             tokio::time::sleep(SLOW_CALL).await;
-            Result::<_, jsonrpsee::core::Error>::Ok("0x42")
+            Result::<_, ErrorObjectOwned>::Ok("0x42")
         })
         .unwrap();
 
