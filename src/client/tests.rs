@@ -155,6 +155,7 @@ async fn concurrent_requests() {
 }
 
 #[tokio::test]
+#[ignore = "blocked by https://github.com/paritytech/jsonrpsee/pull/1116"]
 async fn retry_requests() {
     let (addr1, handle1, mut rx1, _) = dummy_server().await;
     let (addr2, handle2, mut rx2, _) = dummy_server().await;
