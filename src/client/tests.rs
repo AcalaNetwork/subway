@@ -167,7 +167,7 @@ async fn retry_requests() {
         let (_, tx) = rx1.recv().await.unwrap();
         // stop server after received request
         handle1.stop().unwrap();
-        handle1.stopped().await;
+        // handle1.stopped().await; never terminates
         // still send a valid response to avoid this become a call error
         tx.send(JsonValue::from_str("2").unwrap()).unwrap();
     });
