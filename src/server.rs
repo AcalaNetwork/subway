@@ -256,7 +256,9 @@ mod tests {
 
         let mut module = RpcModule::new(());
         module
-            .register_method(PHO, |_, _| Ok(BAR.to_string()))
+            .register_method(PHO, |_, _| {
+                Ok::<std::string::String, ErrorObjectOwned>(BAR.to_string())
+            })
             .unwrap();
         let addr = format!("ws://{}", server.local_addr().unwrap());
         let handle = server.start(module).unwrap();

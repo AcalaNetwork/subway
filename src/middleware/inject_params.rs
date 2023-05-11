@@ -359,12 +359,12 @@ mod tests {
                 }),
             )
             .await;
-        assert!(matches!(
+        assert_eq!(
             result,
-            Err(Error::Call(errors::invalid_params(
+            Err(errors::invalid_params(
                 "Expected 3 parameters (1 optional), 1 found instead"
-            )))
-        ));
+            ))
+        );
     }
 
     #[tokio::test]
