@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use jsonrpsee::core::{Error, JsonValue};
+use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
 use tracing::instrument;
 
@@ -65,13 +65,13 @@ impl BlockTagMiddleware {
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, Error>> for BlockTagMiddleware {
+impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for BlockTagMiddleware {
     #[instrument(skip_all)]
     async fn call(
         &self,
         request: CallRequest,
-        next: NextFn<CallRequest, Result<JsonValue, Error>>,
-    ) -> Result<JsonValue, Error> {
+        next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
+    ) -> Result<JsonValue, ErrorObjectOwned> {
         let request = self.replace(request).await;
         next(request).await
     }

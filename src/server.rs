@@ -1,12 +1,13 @@
 use futures::FutureExt;
 use jsonrpsee::core::JsonValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
-use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::ErrorObjectOwned;
 use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 
 use crate::cache::new_cache;
+use crate::helper::errors;
 use crate::{
     api::{EthApi, SubstrateApi},
     client::Client,
@@ -100,17 +101,7 @@ pub async fn start_server(
 
         let middlewares = Arc::new(Middlewares::new(
             list,
-            Arc::new(|_| {
-                async {
-                    Err(
-                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
-                            "Bad configuration",
-                        ))
-                        .into(),
-                    )
-                }
-                .boxed()
-            }),
+            Arc::new(|_| async { Err(errors::failed("Bad configuration")) }.boxed()),
         ));
 
         let method_name = string_to_static_str(method.method.clone());
@@ -123,9 +114,7 @@ pub async fn start_server(
                 } else {
                     parsed
                         .as_array()
-                        .ok_or_else(|| {
-                            CallError::InvalidParams(anyhow::Error::msg("invalid params"))
-                        })?
+                        .ok_or_else(|| errors::invalid_params(""))?
                         .to_owned()
                 };
                 middlewares
@@ -154,17 +143,7 @@ pub async fn start_server(
 
         let middlewares = Arc::new(Middlewares::new(
             list,
-            Arc::new(|_| {
-                async {
-                    Err(
-                        jsonrpsee::types::error::CallError::Failed(anyhow::Error::msg(
-                            "Bad configuration",
-                        ))
-                        .into(),
-                    )
-                }
-                .boxed()
-            }),
+            Arc::new(|_| async { Err("Bad configuration".into()) }.boxed()),
         ));
 
         module.register_subscription(
@@ -180,9 +159,7 @@ pub async fn start_server(
                     } else {
                         parsed
                             .as_array()
-                            .ok_or_else(|| {
-                                CallError::InvalidParams(anyhow::Error::msg("invalid params"))
-                            })?
+                            .ok_or_else(|| errors::invalid_params(""))?
                             .to_owned()
                     };
                     middlewares
@@ -212,7 +189,7 @@ pub async fn start_server(
     rpc_methods.sort();
 
     module.register_method("rpc_methods", move |_, _| {
-        Ok(json!({
+        Ok::<JsonValue, ErrorObjectOwned>(json!({
             "version": 1,
             "methods": rpc_methods
         }))

@@ -39,7 +39,7 @@ opentelemetry-datadog = { version = "0.6.0", features = ["reqwest-client"] }
 tracing-opentelemetry = "0.18.0"
 opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio"] }
 
-jsonrpsee = { version = "0.16.0", path = "./vendor/jsonrpsee/jsonrpsee", features = ["full"] }
+jsonrpsee = { version = "0.18.1", path = "./vendor/jsonrpsee/jsonrpsee", features = ["full"] }
 governor = { version = "0.5.1", path = "./vendor/governor/governor" }
 
 [dev-dependencies]
