@@ -155,6 +155,7 @@ async fn concurrent_requests() {
 }
 
 #[tokio::test]
+#[ignore = "blocked by https://github.com/paritytech/jsonrpsee/pull/1116"]
 async fn retry_requests() {
     let (addr1, handle1, mut rx1, _) = dummy_server().await;
     let (addr2, handle2, mut rx2, _) = dummy_server().await;
@@ -167,6 +168,7 @@ async fn retry_requests() {
         let (_, tx) = rx1.recv().await.unwrap();
         // stop server after received request
         handle1.stop().unwrap();
+        // handle1.stopped().await; never terminates
         // still send a valid response to avoid this become a call error
         tx.send(JsonValue::from_str("2").unwrap()).unwrap();
     });

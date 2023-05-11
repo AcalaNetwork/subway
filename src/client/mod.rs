@@ -6,10 +6,12 @@ use jsonrpsee::{
         client::{ClientT, Subscription, SubscriptionClientT},
         Error, JsonValue,
     },
-    types::error::CallError,
+    types::ErrorObjectOwned,
     ws_client::{WsClient, WsClientBuilder},
 };
 use tracing::instrument;
+
+use crate::helper::errors;
 
 #[cfg(test)]
 pub mod mock;
@@ -268,7 +270,11 @@ impl Client {
     }
 
     #[instrument(skip(self, params))]
-    pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, Error> {
+    pub async fn request(
+        &self,
+        method: &str,
+        params: Vec<JsonValue>,
+    ) -> Result<JsonValue, ErrorObjectOwned> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
             .send(Message::Request {
@@ -277,9 +283,11 @@ impl Client {
                 response: tx,
             })
             .await
-            .map_err(|e| CallError::Failed(e.into()))?;
+            .map_err(errors::internal_error)?;
 
-        rx.await.map_err(|e| CallError::Failed(e.into()))?
+        rx.await
+            .map_err(errors::internal_error)?
+            .map_err(errors::map_error)
     }
 
     #[instrument(skip(self, params, unsubscribe))]
@@ -298,9 +306,9 @@ impl Client {
                 response: tx,
             })
             .await
-            .map_err(|e| CallError::Failed(e.into()))?;
+            .map_err(errors::failed)?;
 
-        rx.await.map_err(|e| CallError::Failed(e.into()))?
+        rx.await.map_err(errors::failed)?
     }
 
     #[instrument(skip(self))]
