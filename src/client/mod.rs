@@ -283,10 +283,10 @@ impl Client {
                 response: tx,
             })
             .await
-            .map_err(|e| errors::internal_error(e))?;
+            .map_err(errors::internal_error)?;
 
         rx.await
-            .map_err(|e| errors::internal_error(e))?
+            .map_err(errors::internal_error)?
             .map_err(errors::map_error)
     }
 
@@ -306,9 +306,9 @@ impl Client {
                 response: tx,
             })
             .await
-            .map_err(|e| errors::failed(e))?;
+            .map_err(errors::failed)?;
 
-        rx.await.map_err(|e| errors::failed(e))?
+        rx.await.map_err(errors::failed)?
     }
 
     #[instrument(skip(self))]

@@ -44,7 +44,7 @@ impl TestServerBuilder {
                         .await
                         .unwrap();
                     let res = resp_rx.await;
-                    res.map_err(|e| errors::failed(e))
+                    res.map_err(errors::failed)
                 }
             })
             .unwrap();
