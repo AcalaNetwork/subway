@@ -59,11 +59,9 @@ pub fn enable_logger(tracer: Option<Tracer>) {
         if let Some(tracer) = tracer {
             let _ = match log_format.as_str() {
                 "json" => registry
-                    .with(tracing_opentelemetry::layer().with_tracer(tracer))
                     .with(tracing_subscriber::fmt::layer().json().with_filter(filter))
                     .try_init(),
                 "pretty" => registry
-                    .with(tracing_opentelemetry::layer().with_tracer(tracer))
                     .with(
                         tracing_subscriber::fmt::layer()
                             .pretty()
@@ -71,7 +69,6 @@ pub fn enable_logger(tracer: Option<Tracer>) {
                     )
                     .try_init(),
                 "compact" => registry
-                    .with(tracing_opentelemetry::layer().with_tracer(tracer))
                     .with(
                         tracing_subscriber::fmt::layer()
                             .compact()
@@ -79,7 +76,6 @@ pub fn enable_logger(tracer: Option<Tracer>) {
                     )
                     .try_init(),
                 _ => registry
-                    .with(tracing_opentelemetry::layer().with_tracer(tracer))
                     .with(tracing_subscriber::fmt::layer().with_filter(filter))
                     .try_init(),
             };
