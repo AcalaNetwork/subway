@@ -18,9 +18,10 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+const TRACER: helpers::telemetry::Tracer = helpers::telemetry::Tracer::new("client");
+
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
-    tracer: helpers::telemetry::Tracer,
 }
 
 #[derive(Debug)]
@@ -267,10 +268,7 @@ impl Client {
             }
         });
 
-        Ok(Self {
-            sender: tx,
-            tracer: helpers::telemetry::Tracer::new("client"),
-        })
+        Ok(Self { sender: tx })
     }
 
     pub async fn request(
@@ -278,7 +276,7 @@ impl Client {
         method: &str,
         params: Vec<JsonValue>,
     ) -> Result<JsonValue, ErrorObjectOwned> {
-        let cx = self.tracer.context(method.to_string());
+        let cx = TRACER.context(method.to_string());
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
             .send(Message::Request {
@@ -301,7 +299,7 @@ impl Client {
         params: Vec<JsonValue>,
         unsubscribe: &str,
     ) -> Result<Subscription<JsonValue>, Error> {
-        let cx = self.tracer.context(subscribe.to_string());
+        let cx = TRACER.context(subscribe.to_string());
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
