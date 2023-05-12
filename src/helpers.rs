@@ -39,3 +39,31 @@ pub mod errors {
         }
     }
 }
+
+pub mod telemetry {
+    use opentelemetry::{
+        global::{self, BoxedSpan},
+        trace::{TraceContextExt, Tracer as _},
+        Context,
+    };
+    use std::borrow::Cow;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Tracer(&'static str);
+
+    impl Tracer {
+        pub const fn new(name: &'static str) -> Self {
+            Self(name)
+        }
+
+        pub fn span(&self, span_name: impl Into<Cow<'static, str>>) -> BoxedSpan {
+            global::tracer(self.0).start(span_name)
+        }
+
+        pub fn context(&self, span_name: impl Into<Cow<'static, str>>) -> Context {
+            let span = self.span(span_name);
+            let cx = Context::current_with_span(span);
+            cx
+        }
+    }
+}

@@ -1,13 +1,12 @@
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
-use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::{
     api::{SubstrateApi, ValueHandle},
     config::MethodParam,
-    helper::errors,
+    helpers::errors,
     middleware::call::CallRequest,
 };
 
@@ -78,7 +77,6 @@ pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for InjectParamsMiddleware {
-    #[instrument(skip_all)]
     async fn call(
         &self,
         mut request: CallRequest,

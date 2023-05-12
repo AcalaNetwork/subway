@@ -2,7 +2,7 @@ pub mod api;
 pub mod cache;
 pub mod client;
 pub mod config;
-pub mod helper;
+pub mod helpers;
 pub mod middleware;
 pub mod server;
 pub mod telemetry;

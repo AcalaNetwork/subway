@@ -9,9 +9,9 @@ use jsonrpsee::{
     types::ErrorObjectOwned,
     ws_client::{WsClient, WsClientBuilder},
 };
-use tracing::instrument;
+use opentelemetry::trace::FutureExt;
 
-use crate::helper::errors;
+use crate::helpers::{self, errors};
 
 #[cfg(test)]
 pub mod mock;
@@ -20,6 +20,7 @@ mod tests;
 
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
+    tracer: helpers::telemetry::Tracer,
 }
 
 #[derive(Debug)]
@@ -266,15 +267,18 @@ impl Client {
             }
         });
 
-        Ok(Self { sender: tx })
+        Ok(Self {
+            sender: tx,
+            tracer: helpers::telemetry::Tracer::new("client"),
+        })
     }
 
-    #[instrument(skip(self, params))]
     pub async fn request(
         &self,
         method: &str,
         params: Vec<JsonValue>,
     ) -> Result<JsonValue, ErrorObjectOwned> {
+        let cx = self.tracer.context(method.to_string());
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
             .send(Message::Request {
@@ -285,18 +289,20 @@ impl Client {
             .await
             .map_err(errors::internal_error)?;
 
-        rx.await
+        rx.with_context(cx)
+            .await
             .map_err(errors::internal_error)?
             .map_err(errors::map_error)
     }
 
-    #[instrument(skip(self, params, unsubscribe))]
     pub async fn subscribe(
         &self,
         subscribe: &str,
         params: Vec<JsonValue>,
         unsubscribe: &str,
     ) -> Result<Subscription<JsonValue>, Error> {
+        let cx = self.tracer.context(subscribe.to_string());
+
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
             .send(Message::Subscribe {
@@ -308,10 +314,9 @@ impl Client {
             .await
             .map_err(errors::failed)?;
 
-        rx.await.map_err(errors::failed)?
+        rx.with_context(cx).await.map_err(errors::failed)?
     }
 
-    #[instrument(skip(self))]
     pub async fn rotate_endpoint(&self) -> Result<(), ()> {
         self.sender
             .send(Message::RotateEndpoint)
