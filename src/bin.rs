@@ -12,9 +12,9 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let tracer = setup_telemetry(&config.telemetry)?;
+    let _tracer = setup_telemetry(&config.telemetry)?;
 
-    enable_logger(tracer);
+    enable_logger();
 
     tracing::trace!("{:#?}", config);
 
