@@ -33,7 +33,9 @@ pub fn setup_telemetry(options: &Option<TelemetryOptions>) -> Result<Option<Trac
             Some(tracer)
         }
         TelemetryProvider::Datadog => {
-            let mut tracer = opentelemetry_datadog::new_pipeline().with_service_name(service_name);
+            let mut tracer = opentelemetry_datadog::new_pipeline()
+                .with_service_name(service_name)
+                .with_version(option_env!("SUBWAY_VERSION").unwrap_or("dev"));
 
             let agent_endpoint = env::var("DATADOG_AGENT_ENDPOINT")
                 .ok()

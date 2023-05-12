@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
-use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::{api::EthApi, middleware::call::CallRequest};
@@ -66,7 +65,6 @@ impl BlockTagMiddleware {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for BlockTagMiddleware {
-    #[instrument(skip_all)]
     async fn call(
         &self,
         request: CallRequest,

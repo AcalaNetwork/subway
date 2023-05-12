@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
-use tracing::instrument;
 
 use super::{Middleware, NextFn};
 use crate::client::Client;
@@ -41,7 +40,6 @@ impl UpstreamMiddleware {
 
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for UpstreamMiddleware {
-    #[instrument(skip_all)]
     async fn call(
         &self,
         request: CallRequest,

@@ -2,12 +2,13 @@ use futures::FutureExt;
 use jsonrpsee::core::JsonValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObjectOwned;
+use opentelemetry::trace::FutureExt as _;
 use serde_json::json;
 use std::time::Duration;
 use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 
 use crate::cache::new_cache;
-use crate::helper::errors;
+use crate::helpers::{self, errors};
 use crate::{
     api::{EthApi, SubstrateApi},
     client::Client,
@@ -42,6 +43,8 @@ pub async fn start_server(
         .await?;
 
     let mut module = RpcModule::new(());
+
+    let tracer = helpers::telemetry::Tracer::new("server");
 
     let client = Arc::new(client);
 
@@ -107,7 +110,10 @@ pub async fn start_server(
         let method_name = string_to_static_str(method.method.clone());
         module.register_async_method(method_name, move |params, _| {
             let middlewares = middlewares.clone();
+
             async move {
+                let cx = tracer.context(method_name);
+
                 let parsed = params.parse::<JsonValue>()?;
                 let params = if parsed == JsonValue::Null {
                     vec![]
@@ -119,6 +125,7 @@ pub async fn start_server(
                 };
                 middlewares
                     .call(CallRequest::new(method_name, params))
+                    .with_context(cx)
                     .await
             }
         })?;
@@ -152,7 +159,10 @@ pub async fn start_server(
             unsubscribe_name,
             move |params, sink, _| {
                 let middlewares = middlewares.clone();
+
                 async move {
+                    let cx = tracer.context(name);
+
                     let parsed = params.parse::<JsonValue>()?;
                     let params = if parsed == JsonValue::Null {
                         vec![]
@@ -169,6 +179,7 @@ pub async fn start_server(
                             unsubscribe: unsubscribe_name.into(),
                             sink,
                         })
+                        .with_context(cx)
                         .await
                 }
             },

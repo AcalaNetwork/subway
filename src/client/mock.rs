@@ -73,7 +73,7 @@ impl TestServerBuilder {
     }
 
     pub async fn build(self) -> (SocketAddr, ServerHandle) {
-        enable_logger(None);
+        enable_logger();
 
         let server = ServerBuilder::default()
             .set_id_provider(RandomStringIdProvider::new(16))
@@ -94,7 +94,7 @@ pub async fn dummy_server() -> (
     mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
     mpsc::Receiver<(JsonValue, SubscriptionSink)>,
 ) {
-    enable_logger(None);
+    enable_logger();
 
     let mut builder = TestServerBuilder::new();
 
