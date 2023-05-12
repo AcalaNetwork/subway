@@ -62,8 +62,7 @@ pub mod telemetry {
 
         pub fn context(&self, span_name: impl Into<Cow<'static, str>>) -> Context {
             let span = self.span(span_name);
-            let cx = Context::current_with_span(span);
-            cx
+            Context::current_with_span(span)
         }
     }
 }
