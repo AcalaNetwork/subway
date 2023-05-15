@@ -3,12 +3,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
 
-pub mod block_tag;
-pub mod cache;
-pub mod call;
-pub mod inject_params;
-pub mod merge_subscription;
-pub mod subscription;
+pub mod methods;
+pub mod subscriptions;
+
+pub use methods::*;
+pub use subscriptions::*;
 
 type NextFn<Request, Result> = Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync>;
 

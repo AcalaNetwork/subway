@@ -3,11 +3,10 @@ use blake2::Blake2b512;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
-use super::{Middleware, NextFn};
 use crate::{
     cache::{Cache, CacheKey},
     helpers,
-    middleware::call::CallRequest,
+    middleware::{call::CallRequest, Middleware, NextFn},
 };
 
 pub struct CacheMiddleware {

@@ -5,8 +5,10 @@ use jsonrpsee::{
 };
 use std::sync::Arc;
 
-use super::{Middleware, NextFn};
-use crate::client::Client;
+use crate::{
+    client::Client,
+    middleware::{Middleware, NextFn},
+};
 
 pub struct SubscriptionRequest {
     pub subscribe: String,

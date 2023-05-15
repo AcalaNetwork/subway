@@ -2,12 +2,11 @@ use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
 
-use super::{Middleware, NextFn};
 use crate::{
     api::{SubstrateApi, ValueHandle},
     config::MethodParam,
     helpers::errors,
-    middleware::call::CallRequest,
+    middleware::{call::CallRequest, Middleware, NextFn},
 };
 
 pub enum InjectType {

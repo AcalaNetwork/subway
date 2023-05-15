@@ -3,8 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 
-use super::{Middleware, NextFn};
-use crate::client::Client;
+use crate::{
+    client::Client,
+    middleware::{Middleware, NextFn},
+};
 
 #[derive(Debug, Default)]
 pub struct Extra {
