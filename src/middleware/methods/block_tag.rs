@@ -2,8 +2,10 @@ use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
 
-use super::{Middleware, NextFn};
-use crate::{api::EthApi, middleware::call::CallRequest};
+use crate::{
+    api::EthApi,
+    middleware::{call::CallRequest, Middleware, NextFn},
+};
 
 pub struct BlockTagMiddleware {
     api: Arc<EthApi>,

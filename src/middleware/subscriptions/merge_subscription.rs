@@ -12,10 +12,11 @@ use std::{
 };
 use tokio::sync::{broadcast, RwLock};
 
-use super::{Middleware, NextFn};
 use crate::{
-    cache::CacheKey, client::Client, config::MergeStrategy,
-    middleware::subscription::SubscriptionRequest,
+    cache::CacheKey,
+    client::Client,
+    config::MergeStrategy,
+    middleware::{subscription::SubscriptionRequest, Middleware, NextFn},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
