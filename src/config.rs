@@ -70,10 +70,22 @@ pub struct RpcDefinitions {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct RpcDefinitionsWithBase {
+    #[serde(default)]
+    pub base: Option<RpcOptions>,
+    #[serde(default)]
+    pub methods: Vec<RpcMethod>,
+    #[serde(default)]
+    pub subscriptions: Vec<RpcSubscription>,
+    #[serde(default)]
+    pub aliases: Vec<(String, String)>,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum RpcOptions {
     Path(String),
-    Custom(RpcDefinitions),
+    Custom(Box<RpcDefinitionsWithBase>),
 }
 
 impl From<RpcOptions> for RpcDefinitions {
@@ -87,7 +99,64 @@ impl From<RpcOptions> for RpcDefinitions {
                     serde_yaml::from_reader(file).expect("Invalid rpc config file")
                 }
             },
-            RpcOptions::Custom(defs) => defs,
+            RpcOptions::Custom(defs) => {
+                if let Some(base) = defs.base {
+                    let base: RpcDefinitions = base.into();
+
+                    let mut methods = base.methods;
+                    methods.sort_by(|a, b| a.method.cmp(&b.method));
+                    for m in defs.methods {
+                        let idx = methods.binary_search_by(|probe| probe.method.cmp(&m.method));
+                        match idx {
+                            Ok(i) => {
+                                methods[i] = m;
+                            }
+                            Err(i) => {
+                                methods.insert(i, m);
+                            }
+                        }
+                    }
+
+                    let mut subscriptions = base.subscriptions;
+                    subscriptions.sort_by(|a, b| a.name.cmp(&b.name));
+                    for s in defs.subscriptions {
+                        let idx = subscriptions.binary_search_by(|probe| probe.name.cmp(&s.name));
+                        match idx {
+                            Ok(i) => {
+                                subscriptions[i] = s;
+                            }
+                            Err(i) => {
+                                subscriptions.insert(i, s);
+                            }
+                        }
+                    }
+
+                    let mut aliases = base.aliases;
+                    aliases.sort_by(|a, b| a.0.cmp(&b.0));
+                    for a in defs.aliases {
+                        let idx = aliases.binary_search_by(|probe| probe.0.cmp(&a.0));
+                        match idx {
+                            Ok(i) => {
+                                aliases[i] = a;
+                            }
+                            Err(i) => {
+                                aliases.insert(i, a);
+                            }
+                        }
+                    }
+
+                    return RpcDefinitions {
+                        methods,
+                        subscriptions,
+                        aliases,
+                    };
+                }
+                RpcDefinitions {
+                    methods: defs.methods,
+                    subscriptions: defs.subscriptions,
+                    aliases: defs.aliases,
+                }
+            }
         }
     }
 }
