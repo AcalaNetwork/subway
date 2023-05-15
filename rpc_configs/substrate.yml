@@ -105,7 +105,7 @@ methods:
     response: Subway
 
   - method: system_version
-    response: 0.1.0
+    response: 1.0.0-dev
 
   - method: system_chainType
     cache: 1
