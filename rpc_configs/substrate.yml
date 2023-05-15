@@ -102,10 +102,10 @@ methods:
     cache: 1
 
   - method: system_name
-    cache: 1
+    response: Subway
 
   - method: system_version
-    cache: 1
+    response: 0.1.0
 
   - method: system_chainType
     cache: 1
@@ -114,7 +114,7 @@ methods:
     cache: 1
 
   - method: system_nodeRoles
-    cache: 1
+    response: [ 'Full' ]
 
   - method: system_localListenAddresses
     cache: 1

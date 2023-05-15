@@ -1,4 +1,5 @@
 use clap::Parser;
+use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
 use std::fs;
 
@@ -28,6 +29,9 @@ pub struct RpcMethod {
 
     #[serde(default)]
     pub cache: usize,
+
+    #[serde(default)]
+    pub response: Option<JsonValue>,
 }
 
 #[derive(Clone, Deserialize, Debug, Eq, PartialEq)]

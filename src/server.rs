@@ -9,6 +9,7 @@ use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
 
 use crate::cache::new_cache;
 use crate::helpers::{self, errors};
+use crate::middleware::response::ResponseMiddleware;
 use crate::{
     api::{EthApi, SubstrateApi},
     client::Client,
@@ -90,6 +91,10 @@ pub async fn start_server(
                 inject_type,
                 method.params.clone(),
             )));
+        }
+
+        if let Some(ref resp) = method.response {
+            list.push(Arc::new(ResponseMiddleware::new(resp.clone())));
         }
 
         if let Some(cache_size) = NonZeroUsize::new(method.cache) {
