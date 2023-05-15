@@ -242,31 +242,37 @@ fn config() -> Config {
                     method: helpers::SYNC_FAST_CALL.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_FAST_CALL.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 },
                 RpcMethod {
                     method: helpers::SYNC_MEM_CALL.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_MEM_CALL.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 },
                 RpcMethod {
                     method: helpers::SYNC_SLOW_CALL.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_SLOW_CALL.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_INJECT_CALL.to_string(),
@@ -285,6 +291,7 @@ fn config() -> Config {
                         },
                     ],
                     cache: 0,
+                    response: None,
                 },
             ],
             subscriptions: vec![RpcSubscription {

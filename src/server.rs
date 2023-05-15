@@ -250,6 +250,7 @@ mod tests {
                     method: PHO.to_string(),
                     params: vec![],
                     cache: 0,
+                    response: None,
                 }],
                 subscriptions: vec![],
                 aliases: vec![],
