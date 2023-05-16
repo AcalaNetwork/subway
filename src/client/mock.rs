@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use crate::enable_logger;
+use crate::logger::enable_logger;
 
 use super::*;
 
