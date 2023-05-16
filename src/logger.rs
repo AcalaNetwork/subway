@@ -42,9 +42,9 @@ where
                 let span = cx.span();
                 let span_cx = span.span_context();
 
-                let trace_id = u128::from_le_bytes(span_cx.trace_id().to_bytes());
+                let trace_id = u128::from_be_bytes(span_cx.trace_id().to_bytes());
                 let trace_id = trace_id as u64; // take LSB
-                let span_id = u64::from_le_bytes(span_cx.span_id().to_bytes());
+                let span_id = u64::from_be_bytes(span_cx.span_id().to_bytes());
 
                 serializer.serialize_entry("trace_id", &trace_id)?;
                 serializer.serialize_entry("span_id", &span_id)?;
