@@ -125,7 +125,7 @@ impl Client {
                                     }
                                 }
                                 Err(err) => {
-                                    tracing::debug!("Request failed: {:?}", err);
+                                    tracing::info!("Request failed: {:?}", err);
                                     match err {
                                         Error::RequestTimeout => {
                                             if let Err(e) = tx.send(Message::RotateEndpoint).await {
@@ -248,7 +248,7 @@ impl Client {
             loop {
                 tokio::select! {
                     _ = disconnect_rx.recv() => {
-                        tracing::debug!("Disconnected from endpoint");
+                        tracing::info!("Disconnected from endpoint");
                         ws = build_ws().await;
                     }
                     message = rx.recv() => {
