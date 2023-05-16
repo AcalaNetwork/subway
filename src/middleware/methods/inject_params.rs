@@ -90,7 +90,7 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for InjectPara
             len if len <= idx => {
                 // without current block
                 let to_inject = self.get_parameter().await;
-                tracing::debug!("Injected param {} to method {}", &to_inject, request.method);
+                tracing::trace!("Injected param {} to method {}", &to_inject, request.method);
                 let params_passed = request.params.len();
                 while request.params.len() < idx {
                     let current = request.params.len();

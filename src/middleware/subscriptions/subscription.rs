@@ -59,7 +59,7 @@ impl Middleware<SubscriptionRequest, Result<(), StringError>> for UpstreamMiddle
                 }
             };
             if let Err(e) = sink.send(resp).await {
-                tracing::debug!("Failed to send subscription response: {}", e);
+                tracing::info!("Failed to send subscription response: {}", e);
                 break;
             }
         }
