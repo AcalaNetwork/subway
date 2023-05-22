@@ -151,6 +151,11 @@ subscriptions:
     name: chain_finalizedHead
     merge_strategy: replace
 
+  - subscribe: chain_subscribeAllHeads
+    unsubscribe: chain_unsubscribeAllHeads
+    name: chain_allHead
+    merge_strategy: replace
+
   - subscribe: state_subscribeRuntimeVersion
     unsubscribe: state_unsubscribeRuntimeVersion
     name: state_runtimeVersion
@@ -164,5 +169,6 @@ subscriptions:
 aliases:
   - [ chain_subscribeNewHeads, chain_subscribeNewHead ]
   - [ chain_unsubscribeNewHeads, chain_unsubscribeNewHead ]
+  - [ chain_getBlockHash, chain_getHead ]
   - [ state_getKeysPaged, state_getKeysPagedAt ]
   - [ state_getStorage, state_getStorageAt ]
