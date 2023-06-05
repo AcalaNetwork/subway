@@ -75,8 +75,8 @@ impl Client {
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(30))
                         .connection_timeout(std::time::Duration::from_secs(30))
-                        .max_buffer_capacity_per_subscription(1024)
-                        .max_concurrent_requests(1024)
+                        .max_buffer_capacity_per_subscription(2048)
+                        .max_concurrent_requests(2048)
                         .build(url)
                         .map_err(|e| (e, url.to_string()))
                 };
@@ -99,7 +99,8 @@ impl Client {
                         }
                         Err((e, url)) => {
                             tracing::warn!("Unable to connect to endpoint: '{url}' error: {e}");
-                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                            // TODO: use a backoff strategy
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         }
                     }
                 }
@@ -148,7 +149,14 @@ impl Client {
                                                 );
                                             }
                                         }
-                                        Error::Transport(_) | Error::RestartNeeded(_) => {
+                                        Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::MaxSlotsExceeded => {
+                                            // TODO: use a backoff strategy
+                                            tokio::time::sleep(std::time::Duration::from_millis(
+                                                100,
+                                            ))
+                                            .await;
                                             if let Err(e) = tx
                                                 .send(Message::Request {
                                                     method,
@@ -212,7 +220,9 @@ impl Client {
                                                 );
                                             }
                                         }
-                                        Error::Transport(_) | Error::RestartNeeded(_) => {
+                                        Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::MaxSlotsExceeded => {
                                             if let Err(e) = tx
                                                 .send(Message::Subscribe {
                                                     subscribe,
