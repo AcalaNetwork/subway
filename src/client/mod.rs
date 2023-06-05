@@ -172,6 +172,12 @@ impl Client {
                                                 );
                                             }
                                         }
+                                        Error::MaxSlotsExceeded => {
+                                            // not something we can handle, send it back to the caller
+                                            if let Err(e) = response.send(Err(err)) {
+                                                tracing::warn!("Failed to send response: {:?}", e);
+                                            }
+                                        }
                                         err => {
                                             // not something we can handle, send it back to the caller
                                             if let Err(e) = response.send(Err(err)) {
