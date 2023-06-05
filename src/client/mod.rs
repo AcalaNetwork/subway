@@ -154,9 +154,10 @@ impl Client {
                                         | Error::MaxSlotsExceeded => {
                                             // TODO: use a backoff strategy
                                             tokio::time::sleep(std::time::Duration::from_millis(
-                                                100,
+                                                200,
                                             ))
                                             .await;
+
                                             if let Err(e) = tx
                                                 .send(Message::Request {
                                                     method,
@@ -223,6 +224,12 @@ impl Client {
                                         Error::Transport(_)
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
+                                            // TODO: use a backoff strategy
+                                            tokio::time::sleep(std::time::Duration::from_millis(
+                                                200,
+                                            ))
+                                            .await;
+
                                             if let Err(e) = tx
                                                 .send(Message::Subscribe {
                                                     subscribe,
