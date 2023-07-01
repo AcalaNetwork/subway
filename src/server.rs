@@ -103,7 +103,7 @@ pub async fn start_server(
                 cache_size,
                 method
                     .cache_ttl_seconds
-                    .or_else(|| config.cache_ttl_seconds)
+                    .or(config.cache_ttl_seconds)
                     .map(Duration::from_secs),
             );
             list.push(Arc::new(CacheMiddleware::new(cache)));
