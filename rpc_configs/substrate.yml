@@ -5,6 +5,7 @@ methods:
         ty: Bytes
 
   - method: author_pendingExtrinsics
+    cache_ttl_seconds: 1
 
   - method: chain_getBlockHash
     cache: 2000
@@ -31,6 +32,7 @@ methods:
         inject: true
 
   - method: chain_getFinalizedHead
+    cache_ttl_seconds: 1
 
   - method: state_getRuntimeVersion
     cache: 2000

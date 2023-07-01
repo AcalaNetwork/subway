@@ -1,7 +1,7 @@
 use clap::Parser;
 use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
-use std::fs;
+use std::{fs, num::NonZeroUsize};
 
 const SUBSTRATE_CONFIG: &str = include_str!("../rpc_configs/substrate.yml");
 const ETHEREUM_CONFIG: &str = include_str!("../rpc_configs/ethereum.yml");
@@ -27,11 +27,25 @@ pub struct RpcMethod {
     #[serde(default)]
     pub params: Vec<MethodParam>,
 
+    /// if cache_ttl_seconds is defined, cache default will be 1
     #[serde(default)]
     pub cache: usize,
 
+    // None means use global cache_ttl_seconds
+    #[serde(default)]
+    pub cache_ttl_seconds: Option<u64>,
+
     #[serde(default)]
     pub response: Option<JsonValue>,
+}
+
+impl RpcMethod {
+    pub fn cache_size(&self) -> Option<NonZeroUsize> {
+        if self.cache == 0 && self.cache_ttl_seconds.is_some() {
+            return NonZeroUsize::new(1);
+        }
+        NonZeroUsize::new(self.cache)
+    }
 }
 
 #[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
