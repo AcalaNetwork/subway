@@ -41,10 +41,12 @@ pub struct RpcMethod {
 
 impl RpcMethod {
     pub fn cache_size(&self) -> Option<NonZeroUsize> {
-        if self.cache == 0 && self.cache_ttl_seconds.is_some() {
-            return NonZeroUsize::new(1);
+        match (self.cache, self.cache_ttl_seconds) {
+            (0, None) => None,
+            (0, Some(0)) => None,
+            (0, Some(_)) => NonZeroUsize::new(1),
+            (cache, _) => NonZeroUsize::new(cache),
         }
-        NonZeroUsize::new(self.cache)
     }
 }
 
