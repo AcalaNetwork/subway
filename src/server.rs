@@ -5,7 +5,7 @@ use jsonrpsee::types::ErrorObjectOwned;
 use opentelemetry::trace::FutureExt as _;
 use serde_json::json;
 use std::time::Duration;
-use std::{net::SocketAddr, num::NonZeroUsize, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use crate::cache::new_cache;
 use crate::helpers::{self, errors};
@@ -97,11 +97,14 @@ pub async fn start_server(
             list.push(Arc::new(ResponseMiddleware::new(resp.clone())));
         }
 
-        if let Some(cache_size) = NonZeroUsize::new(method.cache) {
+        if let Some(cache_size) = method.cache_size() {
             // each method has it's own cache
             let cache = new_cache(
                 cache_size,
-                config.cache_ttl_seconds.map(Duration::from_secs),
+                method
+                    .cache_ttl_seconds
+                    .or(config.cache_ttl_seconds)
+                    .map(Duration::from_secs),
             );
             list.push(Arc::new(CacheMiddleware::new(cache)));
         }
@@ -250,6 +253,7 @@ mod tests {
                     method: PHO.to_string(),
                     params: vec![],
                     cache: 0,
+                    cache_ttl_seconds: None,
                     response: None,
                 }],
                 subscriptions: vec![],
