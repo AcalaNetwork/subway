@@ -204,6 +204,12 @@ pub struct TelemetryOptions {
     pub agent_endpoint: Option<String>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct HealthConfig {
+    pub path: String,
+    pub method: String,
+}
+
 #[derive(Debug)]
 pub struct Config {
     pub endpoints: Vec<String>,
@@ -214,6 +220,7 @@ pub struct Config {
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
     pub telemetry: Option<TelemetryOptions>,
+    pub health: Option<HealthConfig>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -227,6 +234,8 @@ pub struct ParseConfig {
     pub rpcs: RpcOptions,
     #[serde(default)]
     pub telemetry: Option<TelemetryOptions>,
+    #[serde(default)]
+    pub health: Option<HealthConfig>,
 }
 
 impl From<ParseConfig> for Config {
@@ -239,6 +248,7 @@ impl From<ParseConfig> for Config {
             server: val.server,
             rpcs: val.rpcs.into(),
             telemetry: val.telemetry,
+            health: val.health,
         }
     }
 }

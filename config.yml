@@ -13,3 +13,7 @@ telemetry:
   provider: none
 
 rpcs: substrate
+
+health:
+  path: /health
+  method: system_health
