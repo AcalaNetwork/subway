@@ -1,5 +1,6 @@
 use futures::FutureExt;
 use jsonrpsee::core::JsonValue;
+use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObjectOwned;
 use opentelemetry::trace::FutureExt as _;
@@ -34,7 +35,11 @@ pub async fn start_server(
     config: &Config,
     client: Client,
 ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-    let service_builder = tower::ServiceBuilder::new();
+    let service_builder =
+        tower::ServiceBuilder::new().option_layer(config.health.as_ref().map(|h| {
+            ProxyGetRequestLayer::new(h.path.clone(), h.method.clone())
+                .expect("Invalid health config")
+        }));
 
     let server = ServerBuilder::default()
         .set_middleware(service_builder)
@@ -260,6 +265,7 @@ mod tests {
                 aliases: vec![],
             },
             telemetry: None,
+            health: None,
         };
         let client = Client::new(&config.endpoints).await.unwrap();
         let (addr, server) = start_server(&config, client).await.unwrap();
