@@ -265,6 +265,7 @@ mod tests {
                 aliases: vec![],
             },
             telemetry: None,
+            health: None,
         };
         let client = Client::new(&config.endpoints).await.unwrap();
         let (addr, server) = start_server(&config, client).await.unwrap();
