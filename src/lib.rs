@@ -7,7 +7,6 @@ pub mod middlewares;
 // pub mod server;
 pub mod extension;
 pub mod extensions;
-pub mod telemetry;
 pub mod utils;
 
 #[cfg(test)]

@@ -9,8 +9,9 @@ use crate::{
     utils::{TypeRegistry, TypeRegistryRef},
 };
 
-mod api;
-mod client;
+pub mod api;
+pub mod client;
+pub mod telemetry;
 
 macro_rules! define_all_extensions {
     (
@@ -82,4 +83,5 @@ define_all_extensions! {
     client: client::Client,
     substrate_api: api::SubstrateApi,
     eth_api: api::EthApi,
+    telemetry: telemetry::Telemetry,
 }

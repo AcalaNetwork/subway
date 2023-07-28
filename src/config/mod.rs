@@ -188,23 +188,6 @@ impl From<RpcOptions> for RpcDefinitions {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum TelemetryProvider {
-    None,
-    Datadog,
-    Jaeger,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct TelemetryOptions {
-    pub provider: TelemetryProvider,
-    #[serde(default)]
-    pub service_name: Option<String>,
-    #[serde(default)]
-    pub agent_endpoint: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct HealthConfig {
     pub path: String,
     pub method: String,
@@ -219,7 +202,6 @@ pub struct Config {
     pub merge_subscription_keep_alive_seconds: Option<u64>,
     pub server: ServerConfig,
     pub rpcs: RpcDefinitions,
-    pub telemetry: Option<TelemetryOptions>,
     pub health: Option<HealthConfig>,
 }
 
@@ -233,8 +215,6 @@ pub struct ParseConfig {
     pub server: ServerConfig,
     pub rpcs: RpcOptions,
     #[serde(default)]
-    pub telemetry: Option<TelemetryOptions>,
-    #[serde(default)]
     pub health: Option<HealthConfig>,
 }
 
@@ -247,7 +227,6 @@ impl From<ParseConfig> for Config {
             merge_subscription_keep_alive_seconds: val.merge_subscription_keep_alive_seconds,
             server: val.server,
             rpcs: val.rpcs.into(),
-            telemetry: val.telemetry,
             health: val.health,
         }
     }
