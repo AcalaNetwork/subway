@@ -3,21 +3,17 @@ use futures::{future::BoxFuture, FutureExt};
 use std::sync::Arc;
 
 pub trait Provider<T, P> {
-    const NAME: &'static str;
-
-    fn new() -> Self;
-
     fn provide(&self, params: &P) -> T;
 }
 
 type NextFn<Request, Result> = Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync>;
 
 #[async_trait]
-pub trait Middleware: Send + Sync {
+pub trait Middleware<Request, Result>: Send + Sync {
     async fn call(&self, request: Request, next: NextFn<Request, Result>) -> Result;
 }
 
-pub struct Middlewares {
+pub struct Middlewares<Request, Result> {
     middlewares: Vec<Arc<dyn Middleware<Request, Result>>>,
     fallback: Arc<dyn Fn(Request) -> BoxFuture<'static, Result> + Send + Sync>,
 }

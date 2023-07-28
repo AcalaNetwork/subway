@@ -11,6 +11,9 @@ pub enum Request {
     Subscriptions,
 }
 
+type Response = String;
+
 pub fn registry() {
-    let mut registry = Registry::<Box<dyn Provider<Box<dyn Middleware>>>>::new();
+    let mut registry =
+        Registry::<Box<dyn Provider<Box<dyn Middleware<Request, Response>>, Request>>>::new();
 }

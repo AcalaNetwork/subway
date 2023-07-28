@@ -1,13 +1,13 @@
 use std::net::SocketAddr;
 
-use crate::api::substrate::SubstrateApi;
 use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
+use super::substrate::SubstrateApi;
 use super::*;
 
-use crate::client::mock::TestServerBuilder;
+use crate::extensions::client::mock::TestServerBuilder;
 
 async fn create_server() -> (
     SocketAddr,

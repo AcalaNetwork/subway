@@ -1,5 +1,7 @@
 use std::sync::{atomic::AtomicUsize, Arc};
 
+use anyhow::anyhow;
+use async_trait::async_trait;
 use futures::TryFutureExt;
 use jsonrpsee::{
     core::{
@@ -10,8 +12,13 @@ use jsonrpsee::{
     ws_client::{WsClient, WsClientBuilder},
 };
 use opentelemetry::trace::FutureExt;
+use serde::Deserialize;
 
-use crate::helpers::{self, errors};
+use crate::{
+    extension::Extension,
+    helpers::{self, errors},
+    utils::TypeRegistryRef,
+};
 
 #[cfg(test)]
 pub mod mock;
@@ -22,6 +29,11 @@ const TRACER: helpers::telemetry::Tracer = helpers::telemetry::Tracer::new("clie
 
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ClientConfig {
+    pub endpoints: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -40,15 +52,24 @@ enum Message {
     RotateEndpoint,
 }
 
+#[async_trait]
+impl Extension for Client {
+    type Config = ClientConfig;
+
+    async fn from_config(
+        config: &Self::Config,
+        _registry: &TypeRegistryRef,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(Self::new(config.endpoints.iter())?)
+    }
+}
+
 impl Client {
-    pub async fn new(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, String> {
-        let endpoints: Vec<_> = endpoints
-            .into_iter()
-            .map(|e| e.as_ref().to_string())
-            .collect();
+    pub fn new(endpoints: impl Iterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
+        let endpoints: Vec<_> = endpoints.map(|e| e.as_ref().to_string()).collect();
 
         if endpoints.is_empty() {
-            return Err("No endpoints provided".into());
+            return Err(anyhow!("No endpoints provided"));
         }
 
         tracing::debug!("New client with endpoints: {:?}", endpoints);
@@ -170,12 +191,6 @@ impl Client {
                                                     "Failed to send request message: {:?}",
                                                     e
                                                 );
-                                            }
-                                        }
-                                        Error::MaxSlotsExceeded => {
-                                            // not something we can handle, send it back to the caller
-                                            if let Err(e) = response.send(Err(err)) {
-                                                tracing::warn!("Failed to send response: {:?}", e);
                                             }
                                         }
                                         err => {

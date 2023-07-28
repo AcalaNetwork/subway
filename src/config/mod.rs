@@ -3,8 +3,8 @@ use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
 use std::{fs, num::NonZeroUsize};
 
-const SUBSTRATE_CONFIG: &str = include_str!("../rpc_configs/substrate.yml");
-const ETHEREUM_CONFIG: &str = include_str!("../rpc_configs/ethereum.yml");
+const SUBSTRATE_CONFIG: &str = include_str!("../../rpc_configs/substrate.yml");
+const ETHEREUM_CONFIG: &str = include_str!("../../rpc_configs/ethereum.yml");
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
