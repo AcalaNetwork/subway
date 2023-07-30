@@ -10,7 +10,11 @@ use crate::{
 };
 
 pub mod api;
+pub mod cache;
 pub mod client;
+pub mod event_bus;
+pub mod merge_subscriptions;
+pub mod server;
 pub mod telemetry;
 
 macro_rules! define_all_extensions {
@@ -80,8 +84,12 @@ macro_rules! define_all_extensions {
 }
 
 define_all_extensions! {
+    telemetry: telemetry::Telemetry,
+    cache: cache::Cache,
     client: client::Client,
+    merge_subscriptions: merge_subscriptions::MergeSubscriptions,
     substrate_api: api::SubstrateApi,
     eth_api: api::EthApi,
-    telemetry: telemetry::Telemetry,
+    server: server::Server,
+    event_bus: event_bus::EventBus,
 }

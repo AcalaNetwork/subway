@@ -1,19 +1,217 @@
-endpoints:
-  - wss://acala-rpc.dwellir.com:443
-  - wss://acala-rpc-0.aca-api.network:443
+extensions:  
+  client:
+    endpoints:
+      - wss://acala-rpc.dwellir.com:443
+      - wss://acala-rpc-0.aca-api.network:443
+  event_bus:
+  substrate_api:
+    stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+  telemetry:
+    provider: none
+  cache:
+    default_ttl_seconds: 60
+    default_size: 500
+  merge_subscriptions:
+    keep_alive_seconds: 60
+  server:
+    port: 9944
+    listen_address: '0.0.0.0'
+    max_connections: 2000
+    health:
+      path: /health
+      method: system_health
 
-stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+middlewares:
+  methods:
+    - response
+    - cache
+    - inject_params_substrate
+    - upstream
+  subscrptions:
+    - merge_subscriptions
+    - upstream
 
-server:
-  port: 9944
-  listen_address: '0.0.0.0'
-  max_connections: 2000
+rpcs:
+  methods:
+    author_submitExtrinsic:
+      cache:
+        size: 0
+      params:
+        - name: extrinsic
+          ty: Bytes
 
-telemetry:
-  provider: none
+    author_pendingExtrinsics:
+      cache:
+        size: 1
+        ttl_seconds: 3
 
-rpcs: substrate
+    chain_getBlockHash:
+      params:
+        - name: blockNumber
+          ty: BlockNumber
+          optional: true
+          inject: true
 
-health:
-  path: /health
-  method: system_health
+    chain_getHeader:
+      params:
+        - name: hash
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    chain_getBlock:
+      params:
+        - name: hash
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    chain_getFinalizedHead:
+      cache:
+        size: 1
+        ttl_seconds: 6
+        invalidate_at: OnNewFinalizedHead
+
+    state_getRuntimeVersion:
+      params:
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    state_getMetadata:
+      params:
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    state_getStorage:
+      params:
+        - name: key
+          ty: StorageKey
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    state_getKeysPaged:
+      params:
+        - name: key
+          ty: StorageKey
+        - name: count
+          ty: u32
+        - name: startKey
+          ty: StorageKey
+          optional: true
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    state_queryStorageAt:
+      params:
+        - name: keys
+          ty: 'Vec<StorageKey>'
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    state_call:
+      cache:
+        size: 200
+        ttl_seconds: 30
+      params:
+        - name: method
+          ty: String
+        - name: data
+          ty: Bytes
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    system_chain:
+      cache:
+        size: 1
+
+    system_properties:
+      cache:
+        size: 1
+
+    system_name:
+      response: Subway
+
+    system_version:
+      response: 1.0.0-dev
+
+    system_chainType:
+      cache:
+        size: 1
+
+    system_localPeerId:
+      cache:
+        size: 1
+
+    system_nodeRoles:
+      response: [ 'Full' ]
+
+    system_localListenAddresses:
+      cache:
+        size: 1
+
+    system_health:
+      cache:
+        size: 1
+        ttl_seconds: 5
+
+    system_dryRun:
+      cache:
+        size: 200
+        ttl_seconds: 30
+      params:
+        - name: extrinsic
+          ty: Bytes
+        - name: at
+          ty: BlockHash
+          optional: true
+          inject: true
+
+    system_accountNextIndex:
+      cache:
+        size: 0
+      params:
+        - name: accountId
+          ty: AccountId
+
+  subscriptions:
+    - subscribe: author_submitAndWatchExtrinsic
+      unsubscribe: author_unwatchExtrinsic
+      name: author_extrinsicUpdate
+
+    - subscribe: chain_subscribeNewHeads
+      unsubscribe: chain_unsubscribeNewHeads
+      name: chain_newHead
+      merge_strategy: replace
+
+    - subscribe: chain_subscribeFinalizedHeads
+      unsubscribe: chain_unsubscribeFinalizedHeads
+      name: chain_finalizedHead
+      merge_strategy: replace
+
+    - subscribe: state_subscribeRuntimeVersion
+      unsubscribe: state_unsubscribeRuntimeVersion
+      name: state_runtimeVersion
+      merge_strategy: replace
+
+    - subscribe: state_subscribeStorage
+      unsubscribe: state_unsubscribeStorage
+      name: state_storage
+      merge_strategy: merge_storage_changes
+
+  aliases:
+    - [ chain_subscribeNewHeads, chain_subscribeNewHead ]
+    - [ chain_unsubscribeNewHeads, chain_unsubscribeNewHead ]
+    - [ state_getKeysPaged, state_getKeysPagedAt ]
+    - [ state_getStorage, state_getStorageAt ]

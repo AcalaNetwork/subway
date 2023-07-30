@@ -3,7 +3,7 @@
 
 use crate::middleware::{
     registry::Registry,
-    traits::{Middleware, Provider},
+    traits::{Middleware, MiddlewareBuilder},
 };
 
 pub enum Request {
@@ -14,6 +14,6 @@ pub enum Request {
 type Response = String;
 
 pub fn registry() {
-    let mut registry =
-        Registry::<Box<dyn Provider<Box<dyn Middleware<Request, Response>>, Request>>>::new();
+    // let mut registry =
+    // Registry::<Box<dyn MiddlewareBuilder<Box<dyn Middleware<Request, Response>>>>>::new();
 }

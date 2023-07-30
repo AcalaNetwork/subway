@@ -1,7 +1,10 @@
+use std::{fs, num::NonZeroUsize};
+
 use clap::Parser;
 use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
-use std::{fs, num::NonZeroUsize};
+
+use crate::extensions::ExtensionsConfig;
 
 const SUBSTRATE_CONFIG: &str = include_str!("../../rpc_configs/substrate.yml");
 const ETHEREUM_CONFIG: &str = include_str!("../../rpc_configs/ethereum.yml");
@@ -12,13 +15,6 @@ struct Command {
     /// The config file to use
     #[arg(short, long, default_value = "./config.yml")]
     config: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ServerConfig {
-    pub listen_address: String,
-    pub port: u16,
-    pub max_connections: u32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -188,46 +184,28 @@ impl From<RpcOptions> for RpcDefinitions {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct HealthConfig {
-    pub path: String,
-    pub method: String,
+pub struct MiddlewaresConfig {
+    pub methods: Vec<String>,
+    pub subscriptions: Vec<String>,
 }
 
 #[derive(Debug)]
 pub struct Config {
-    pub endpoints: Vec<String>,
-    pub stale_timeout_seconds: u64,
-    // None means no cache expiration
-    pub cache_ttl_seconds: Option<u64>,
-    pub merge_subscription_keep_alive_seconds: Option<u64>,
-    pub server: ServerConfig,
+    pub extensions: ExtensionsConfig,
     pub rpcs: RpcDefinitions,
-    pub health: Option<HealthConfig>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ParseConfig {
-    pub endpoints: Vec<String>,
-    pub stale_timeout_seconds: u64,
-    #[serde(default)]
-    pub cache_ttl_seconds: Option<u64>,
-    pub merge_subscription_keep_alive_seconds: Option<u64>,
-    pub server: ServerConfig,
+    pub extensions: ExtensionsConfig,
     pub rpcs: RpcOptions,
-    #[serde(default)]
-    pub health: Option<HealthConfig>,
 }
 
 impl From<ParseConfig> for Config {
     fn from(val: ParseConfig) -> Self {
         Config {
-            endpoints: val.endpoints,
-            stale_timeout_seconds: val.stale_timeout_seconds,
-            cache_ttl_seconds: val.cache_ttl_seconds,
-            merge_subscription_keep_alive_seconds: val.merge_subscription_keep_alive_seconds,
-            server: val.server,
+            extensions: val.extensions,
             rpcs: val.rpcs.into(),
-            health: val.health,
         }
     }
 }
@@ -241,21 +219,21 @@ pub fn read_config() -> Result<Config, String> {
         .map_err(|e| format!("Unable to parse config file: {e}"))?;
     let mut config: Config = config.into();
 
-    if let Ok(endpoints) = std::env::var("ENDPOINTS") {
-        log::debug!("Override endpoints with env.ENDPOINTS");
-        config.endpoints = endpoints
-            .split(',')
-            .map(|x| x.trim().to_string())
-            .collect::<Vec<_>>();
-    }
+    // if let Ok(endpoints) = std::env::var("ENDPOINTS") {
+    //     log::debug!("Override endpoints with env.ENDPOINTS");
+    //     config.endpoints = endpoints
+    //         .split(',')
+    //         .map(|x| x.trim().to_string())
+    //         .collect::<Vec<_>>();
+    // }
 
-    if let Ok(env_port) = std::env::var("PORT") {
-        log::debug!("Override port with env.PORT");
-        let port = env_port.parse::<u16>();
-        if let Ok(port) = port {
-            config.server.port = port;
-        }
-    }
+    // if let Ok(env_port) = std::env::var("PORT") {
+    //     log::debug!("Override port with env.PORT");
+    //     let port = env_port.parse::<u16>();
+    //     if let Ok(port) = port {
+    //         config.server.port = port;
+    //     }
+    // }
 
     validate_config(&config)?;
 
@@ -263,15 +241,15 @@ pub fn read_config() -> Result<Config, String> {
 }
 
 fn validate_config(config: &Config) -> Result<(), String> {
-    // validate endpoints
-    for endpoint in &config.endpoints {
-        if endpoint
-            .parse::<jsonrpsee::client_transport::ws::Uri>()
-            .is_err()
-        {
-            return Err(format!("Invalid endpoint {}", endpoint));
-        }
-    }
+    // // validate endpoints
+    // for endpoint in &config.endpoints {
+    //     if endpoint
+    //         .parse::<jsonrpsee::client_transport::ws::Uri>()
+    //         .is_err()
+    //     {
+    //         return Err(format!("Invalid endpoint {}", endpoint));
+    //     }
+    // }
 
     // ensure each method has only one param with inject=true
     for method in &config.rpcs.methods {

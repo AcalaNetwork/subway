@@ -2,8 +2,10 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
 use std::sync::Arc;
 
-pub trait Provider<T, P> {
-    fn provide(&self, params: &P) -> T;
+pub trait MiddlewareBuilder<T> {
+    type Config;
+
+    fn build(&self, config: &Self::Config) -> T;
 }
 
 type NextFn<Request, Result> = Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync>;
