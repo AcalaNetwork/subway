@@ -1,7 +1,11 @@
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 
-use crate::middleware::{call::CallRequest, Middleware, NextFn};
+use crate::{
+    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult},
+    utils::{TypeRegistry, TypeRegistryRef},
+};
 
 pub struct ResponseMiddleware {
     resp: JsonValue,
@@ -14,12 +18,26 @@ impl ResponseMiddleware {
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for ResponseMiddleware {
+impl MiddlewareBuilder<CallRequest, CallResult> for ResponseMiddleware {
+    async fn build(
+        method: &RpcMethod,
+        _extensions: &TypeRegistryRef,
+    ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
+        method.response.as_ref().map(|resp| {
+            Box::new(ResponseMiddleware::new(resp.clone()))
+                as Box<dyn Middleware<CallRequest, CallResult>>
+        })
+    }
+}
+
+#[async_trait]
+impl Middleware<CallRequest, CallResult> for ResponseMiddleware {
     async fn call(
         &self,
         _request: CallRequest,
-        _next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
-    ) -> Result<JsonValue, ErrorObjectOwned> {
+        _context: TypeRegistry,
+        _next: NextFn<CallRequest, CallResult>,
+    ) -> CallResult {
         Ok(self.resp.clone())
     }
 }
