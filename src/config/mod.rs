@@ -1,10 +1,13 @@
-use std::{fs, num::NonZeroUsize};
+use std::fs;
 
 use clap::Parser;
 use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
 
 use crate::extensions::ExtensionsConfig;
+pub use rpc::*;
+
+mod rpc;
 
 const SUBSTRATE_CONFIG: &str = include_str!("../../rpc_configs/substrate.yml");
 const ETHEREUM_CONFIG: &str = include_str!("../../rpc_configs/ethereum.yml");
@@ -15,74 +18,6 @@ struct Command {
     /// The config file to use
     #[arg(short, long, default_value = "./config.yml")]
     config: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct RpcMethod {
-    pub method: String,
-    #[serde(default)]
-    pub params: Vec<MethodParam>,
-
-    /// if cache_ttl_seconds is defined, cache default will be 1
-    #[serde(default)]
-    pub cache: usize,
-
-    // None means use global cache_ttl_seconds
-    #[serde(default)]
-    pub cache_ttl_seconds: Option<u64>,
-
-    #[serde(default)]
-    pub response: Option<JsonValue>,
-}
-
-impl RpcMethod {
-    pub fn cache_size(&self) -> Option<NonZeroUsize> {
-        match (self.cache, self.cache_ttl_seconds) {
-            (0, None) => None,
-            (0, Some(0)) => None,
-            (0, Some(_)) => NonZeroUsize::new(1),
-            (cache, _) => NonZeroUsize::new(cache),
-        }
-    }
-}
-
-#[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
-pub struct MethodParam {
-    pub name: String,
-    #[serde(default)]
-    pub ty: String,
-    #[serde(default)]
-    pub optional: bool,
-    #[serde(default)]
-    pub inject: bool,
-}
-
-#[derive(Copy, Clone, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum MergeStrategy {
-    // Replace old value with new value
-    Replace,
-    // Merge old storage changes with new changes
-    MergeStorageChanges,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct RpcSubscription {
-    pub subscribe: String,
-    pub unsubscribe: String,
-    pub name: String,
-
-    #[serde(default)]
-    pub merge_strategy: Option<MergeStrategy>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct RpcDefinitions {
-    pub methods: Vec<RpcMethod>,
-    #[serde(default)]
-    pub subscriptions: Vec<RpcSubscription>,
-    #[serde(default)]
-    pub aliases: Vec<(String, String)>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -219,37 +154,47 @@ pub fn read_config() -> Result<Config, String> {
         .map_err(|e| format!("Unable to parse config file: {e}"))?;
     let mut config: Config = config.into();
 
-    // if let Ok(endpoints) = std::env::var("ENDPOINTS") {
-    //     log::debug!("Override endpoints with env.ENDPOINTS");
-    //     config.endpoints = endpoints
-    //         .split(',')
-    //         .map(|x| x.trim().to_string())
-    //         .collect::<Vec<_>>();
-    // }
+    if let Ok(endpoints) = std::env::var("ENDPOINTS") {
+        log::debug!("Override endpoints with env.ENDPOINTS");
+        let endpoints = endpoints
+            .split(',')
+            .map(|x| x.trim().to_string())
+            .collect::<Vec<String>>();
 
-    // if let Ok(env_port) = std::env::var("PORT") {
-    //     log::debug!("Override port with env.PORT");
-    //     let port = env_port.parse::<u16>();
-    //     if let Ok(port) = port {
-    //         config.server.port = port;
-    //     }
-    // }
+        config.extensions.client.as_mut().map(|x| {
+            x.endpoints = endpoints;
+        });
+    }
 
+    if let Ok(env_port) = std::env::var("PORT") {
+        log::debug!("Override port with env.PORT");
+        let port = env_port.parse::<u16>();
+        if let Ok(port) = port {
+            config.extensions.server.as_mut().map(|x| {
+                x.port = port;
+            });
+        } else {
+            return Err(format!("Invalid port: {}", env_port));
+        }
+    }
+
+    // TODO: shouldn't need to do this here. Creating a server should validates everything
     validate_config(&config)?;
 
     Ok(config)
 }
 
 fn validate_config(config: &Config) -> Result<(), String> {
-    // // validate endpoints
-    // for endpoint in &config.endpoints {
-    //     if endpoint
-    //         .parse::<jsonrpsee::client_transport::ws::Uri>()
-    //         .is_err()
-    //     {
-    //         return Err(format!("Invalid endpoint {}", endpoint));
-    //     }
-    // }
+    // TODO: validate logic should be in each individual extensions
+    // validate endpoints
+    for endpoint in &config.extensions.client.as_ref().unwrap().endpoints {
+        if endpoint
+            .parse::<jsonrpsee::client_transport::ws::Uri>()
+            .is_err()
+        {
+            return Err(format!("Invalid endpoint {}", endpoint));
+        }
+    }
 
     // ensure each method has only one param with inject=true
     for method in &config.rpcs.methods {

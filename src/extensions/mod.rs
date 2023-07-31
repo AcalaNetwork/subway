@@ -27,7 +27,7 @@ macro_rules! define_all_extensions {
         pub struct ExtensionsConfig {
             $(
                 #[serde(default)]
-                $ext_name: Option<<$ext_type as Extension>::Config>,
+                pub $ext_name: Option<<$ext_type as Extension>::Config>,
             )*
         }
 
