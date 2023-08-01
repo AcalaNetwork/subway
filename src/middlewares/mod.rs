@@ -1,13 +1,17 @@
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
+use jsonrpsee::{
+    core::{JsonValue, StringError},
+    types::ErrorObjectOwned,
+    PendingSubscriptionSink,
+};
 
 use crate::{
-    config::RpcMethod,
+    config::{RpcMethod, RpcSubscription},
     middleware::{Middleware, MiddlewareBuilder},
     utils::TypeRegistryRef,
 };
 
 pub mod methods;
-// pub mod subscriptions;
+pub mod subscriptions;
 
 #[derive(Debug)]
 pub struct CallRequest {
@@ -39,6 +43,29 @@ pub async fn create_method_middleware(
         "cache" => cache::CacheMiddleware::build(method, extensions).await,
         "block_tag" => block_tag::BlockTagMiddleware::build(method, extensions).await,
         "inject_params" => inject_params::InjectParamsMiddleware::build(method, extensions).await,
+        _ => None,
+    }
+}
+
+#[derive(Debug)]
+pub struct SubscriptionRequest {
+    pub subscribe: String,
+    pub params: Vec<JsonValue>,
+    pub unsubscribe: String,
+    pub sink: PendingSubscriptionSink,
+}
+
+pub type SubscriptionResult = Result<(), StringError>;
+
+pub async fn create_subscription_middleware(
+    name: &str,
+    method: &RpcSubscription,
+    extensions: &TypeRegistryRef,
+) -> Option<Box<dyn Middleware<SubscriptionRequest, SubscriptionResult>>> {
+    use subscriptions::*;
+
+    match name {
+        "upstream" => upstream::UpstreamMiddleware::build(method, extensions).await,
         _ => None,
     }
 }

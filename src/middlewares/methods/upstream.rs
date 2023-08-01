@@ -21,7 +21,7 @@ impl UpstreamMiddleware {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<CallRequest, CallResult> for UpstreamMiddleware {
+impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for UpstreamMiddleware {
     async fn build(
         _method: &RpcMethod,
         extensions: &TypeRegistryRef,

@@ -18,7 +18,7 @@ pub struct BlockTagMiddleware {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<CallRequest, CallResult> for BlockTagMiddleware {
+impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for BlockTagMiddleware {
     async fn build(
         method: &RpcMethod,
         extensions: &TypeRegistryRef,

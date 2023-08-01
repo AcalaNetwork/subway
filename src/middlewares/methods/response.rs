@@ -18,7 +18,7 @@ impl ResponseMiddleware {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<CallRequest, CallResult> for ResponseMiddleware {
+impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for ResponseMiddleware {
     async fn build(
         method: &RpcMethod,
         _extensions: &TypeRegistryRef,

@@ -3,12 +3,15 @@ use futures::{future::BoxFuture, FutureExt};
 use std::sync::Arc;
 
 use crate::utils::TypeRegistryRef;
-pub use crate::{config::RpcMethod, utils::TypeRegistry};
+pub use crate::{
+    config::{RpcMethod, RpcSubscription},
+    utils::TypeRegistry,
+};
 
 #[async_trait]
-pub trait MiddlewareBuilder<Request, Result> {
+pub trait MiddlewareBuilder<Method, Request, Result> {
     async fn build(
-        method: &RpcMethod,
+        method: &Method,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<Request, Result>>>;
 }

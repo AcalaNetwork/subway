@@ -13,7 +13,7 @@ pub mod api;
 pub mod cache;
 pub mod client;
 pub mod event_bus;
-pub mod merge_subscriptions;
+pub mod merge_subscription;
 pub mod server;
 pub mod telemetry;
 
@@ -87,7 +87,7 @@ define_all_extensions! {
     telemetry: telemetry::Telemetry,
     cache: cache::Cache,
     client: client::Client,
-    merge_subscriptions: merge_subscriptions::MergeSubscriptions,
+    merge_subscription: merge_subscription::MergeSubscription,
     substrate_api: api::SubstrateApi,
     eth_api: api::EthApi,
     server: server::Server,

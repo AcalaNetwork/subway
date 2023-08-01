@@ -25,7 +25,7 @@ impl CacheMiddleware {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<CallRequest, CallResult> for CacheMiddleware {
+impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
     async fn build(
         method: &RpcMethod,
         extensions: &TypeRegistryRef,

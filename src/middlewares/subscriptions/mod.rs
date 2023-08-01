@@ -1,2 +1,2 @@
 pub mod merge_subscription;
-pub mod subscription;
+pub mod upstream;

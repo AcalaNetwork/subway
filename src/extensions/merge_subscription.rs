@@ -3,19 +3,19 @@ use serde::Deserialize;
 
 use crate::{extension::Extension, utils::TypeRegistryRef};
 
-pub struct MergeSubscriptions {
-    config: MergeSubscriptionsConfig,
+pub struct MergeSubscription {
+    pub config: MergeSubscriptionConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct MergeSubscriptionsConfig {
+pub struct MergeSubscriptionConfig {
     #[serde(default)]
     pub keep_alive_seconds: Option<u64>,
 }
 
 #[async_trait]
-impl Extension for MergeSubscriptions {
-    type Config = MergeSubscriptionsConfig;
+impl Extension for MergeSubscription {
+    type Config = MergeSubscriptionConfig;
 
     async fn from_config(
         config: &Self::Config,
@@ -25,8 +25,8 @@ impl Extension for MergeSubscriptions {
     }
 }
 
-impl MergeSubscriptions {
-    pub fn new(config: MergeSubscriptionsConfig) -> Self {
+impl MergeSubscription {
+    pub fn new(config: MergeSubscriptionConfig) -> Self {
         Self { config }
     }
 }

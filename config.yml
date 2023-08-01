@@ -11,7 +11,7 @@ extensions:
   cache:
     default_ttl_seconds: 60
     default_size: 500
-  merge_subscriptions:
+  merge_subscription:
     keep_alive_seconds: 60
   server:
     port: 9944
@@ -28,7 +28,7 @@ middlewares:
     - inject_params
     - upstream
   subscrptions:
-    - merge_subscriptions
+    - merge_subscription
     - upstream
 
 rpcs:

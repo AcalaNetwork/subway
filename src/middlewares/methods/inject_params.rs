@@ -39,7 +39,7 @@ fn inject_type(params: &[MethodParam]) -> Option<InjectType> {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<CallRequest, CallResult> for InjectParamsMiddleware {
+impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for InjectParamsMiddleware {
     async fn build(
         method: &RpcMethod,
         extensions: &TypeRegistryRef,
