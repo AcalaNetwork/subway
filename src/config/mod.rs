@@ -1,7 +1,6 @@
 use std::fs;
 
 use clap::Parser;
-use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
 
 use crate::extensions::ExtensionsConfig;

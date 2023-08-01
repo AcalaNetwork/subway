@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
+use jsonrpsee::core::JsonValue;
 
 use crate::{
     middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},

@@ -23,7 +23,7 @@ impl UpstreamMiddleware {
 #[async_trait]
 impl MiddlewareBuilder<CallRequest, CallResult> for UpstreamMiddleware {
     async fn build(
-        method: &RpcMethod,
+        _method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
         let client = extensions

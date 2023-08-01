@@ -3,10 +3,12 @@ use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
 
 use crate::{
-    api::{SubstrateApi, ValueHandle},
     config::MethodParam,
-    helpers::errors,
-    middleware::{call::CallRequest, Middleware, NextFn},
+    extensions::api::{SubstrateApi, ValueHandle},
+    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult},
+    utils::errors,
+    utils::{TypeRegistry, TypeRegistryRef},
 };
 
 pub enum InjectType {
@@ -18,6 +20,42 @@ pub struct InjectParamsMiddleware {
     head: ValueHandle<(JsonValue, u64)>,
     inject: InjectType,
     params: Vec<MethodParam>,
+}
+
+fn inject_type(params: &[MethodParam]) -> Option<InjectType> {
+    let maybe_block_num = params
+        .iter()
+        .position(|p| p.inject && p.ty == "BlockNumber");
+    if let Some(block_num) = maybe_block_num {
+        return Some(InjectType::BlockNumberAt(block_num));
+    }
+
+    let maybe_block_hash = params.iter().position(|p| p.inject && p.ty == "BlockHash");
+    if let Some(block_hash) = maybe_block_hash {
+        return Some(InjectType::BlockHashAt(block_hash));
+    }
+
+    None
+}
+
+#[async_trait]
+impl MiddlewareBuilder<CallRequest, CallResult> for InjectParamsMiddleware {
+    async fn build(
+        method: &RpcMethod,
+        extensions: &TypeRegistryRef,
+    ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
+        let Some(inject_type) = inject_type(&method.params) else {
+            return None;
+        };
+
+        let api = extensions
+            .read()
+            .await
+            .get::<SubstrateApi>()
+            .expect("SubstrateApi extension not found");
+
+        Some(Box::new(Self::new(api, inject_type, method.params.clone())))
+    }
 }
 
 impl InjectParamsMiddleware {
@@ -58,34 +96,19 @@ impl InjectParamsMiddleware {
     }
 }
 
-pub fn inject(params: &[MethodParam]) -> Option<InjectType> {
-    let maybe_block_num = params
-        .iter()
-        .position(|p| p.inject && p.ty == "BlockNumber");
-    if let Some(block_num) = maybe_block_num {
-        return Some(InjectType::BlockNumberAt(block_num));
-    }
-
-    let maybe_block_hash = params.iter().position(|p| p.inject && p.ty == "BlockHash");
-    if let Some(block_hash) = maybe_block_hash {
-        return Some(InjectType::BlockHashAt(block_hash));
-    }
-
-    None
-}
-
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for InjectParamsMiddleware {
     async fn call(
         &self,
         mut request: CallRequest,
+        context: TypeRegistry,
         next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
     ) -> Result<JsonValue, ErrorObjectOwned> {
         let idx = self.get_index();
         match request.params.len() {
             len if len == idx + 1 => {
                 // full params with current block
-                return next(request).await;
+                return next(request, context).await;
             }
             len if len <= idx => {
                 // without current block
@@ -108,11 +131,11 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for InjectPara
                 }
                 request.params.push(to_inject);
 
-                return next(request).await;
+                return next(request, context).await;
             }
             _ => {
                 // unexpected number of params
-                next(request).await
+                next(request, context).await
             }
         }
     }

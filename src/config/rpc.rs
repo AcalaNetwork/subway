@@ -4,7 +4,7 @@ use serde::Deserialize;
 #[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct CacheParams {
     #[serde(default)]
-    pub size: u32,
+    pub size: Option<u32>,
     #[serde(default)]
     pub ttl_seconds: Option<u32>,
 }

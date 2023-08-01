@@ -1,5 +1,5 @@
 reorder_imports = true
 
 ignore = [
-    "vendor",
+    "vendor/*",
 ]

@@ -2,9 +2,8 @@ use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 
 use crate::{
     config::RpcMethod,
-    extensions,
-    middleware::{Middleware, MiddlewareBuilder, NextFn},
-    utils::{TypeRegistry, TypeRegistryRef},
+    middleware::{Middleware, MiddlewareBuilder},
+    utils::TypeRegistryRef,
 };
 
 pub mod methods;
@@ -17,8 +16,11 @@ pub struct CallRequest {
 }
 
 impl CallRequest {
-    pub fn new(method: String, params: Vec<JsonValue>) -> Self {
-        Self { method, params }
+    pub fn new(method: impl ToString, params: Vec<JsonValue>) -> Self {
+        Self {
+            method: method.to_string(),
+            params,
+        }
     }
 }
 
@@ -34,6 +36,9 @@ pub async fn create_method_middleware(
     match name {
         "response" => response::ResponseMiddleware::build(method, extensions).await,
         "upstream" => upstream::UpstreamMiddleware::build(method, extensions).await,
+        "cache" => cache::CacheMiddleware::build(method, extensions).await,
+        "block_tag" => block_tag::BlockTagMiddleware::build(method, extensions).await,
+        "inject_params" => inject_params::InjectParamsMiddleware::build(method, extensions).await,
         _ => None,
     }
 }

@@ -1,15 +1,44 @@
-use async_trait::async_trait;
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
+
 use crate::{
-    api::EthApi,
-    middleware::{call::CallRequest, Middleware, NextFn},
+    extensions::api::EthApi,
+    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult},
+    utils::{TypeRegistry, TypeRegistryRef},
 };
+
+use super::cache::BypassCache;
 
 pub struct BlockTagMiddleware {
     api: Arc<EthApi>,
     index: usize,
+}
+
+#[async_trait]
+impl MiddlewareBuilder<CallRequest, CallResult> for BlockTagMiddleware {
+    async fn build(
+        method: &RpcMethod,
+        extensions: &TypeRegistryRef,
+    ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
+        let Some(index) = method
+            .params
+            .iter()
+            .position(|p| p.ty == "BlockTag" && p.inject)
+        else {
+            return None;
+        };
+
+        let eth_api = extensions
+            .read()
+            .await
+            .get::<EthApi>()
+            .expect("EthApi extension not found");
+
+        Some(Box::new(BlockTagMiddleware::new(eth_api, index)))
+    }
 }
 
 impl BlockTagMiddleware {
@@ -17,12 +46,16 @@ impl BlockTagMiddleware {
         Self { api, index }
     }
 
-    async fn replace(&self, mut request: CallRequest) -> CallRequest {
+    async fn replace(
+        &self,
+        mut request: CallRequest,
+        mut context: TypeRegistry,
+    ) -> (CallRequest, TypeRegistry) {
         let maybe_value = {
             if let Some(param) = request.params.get(self.index).cloned() {
                 if !param.is_string() {
                     // nothing to do here
-                    return request;
+                    return (request, context);
                 }
                 match param.as_str().unwrap_or_default() {
                     "finalized" => {
@@ -31,7 +64,7 @@ impl BlockTagMiddleware {
                             Some(format!("0x{:x}", finalized_number).into())
                         } else {
                             // cannot determine finalized
-                            request.extra.bypass_cache = true;
+                            context.insert(BypassCache(true));
                             None
                         }
                     }
@@ -41,7 +74,7 @@ impl BlockTagMiddleware {
                     }
                     "earliest" => None, // no need to replace earliest because it's always going to be genesis
                     "pending" | "safe" => {
-                        request.extra.bypass_cache = true;
+                        context.insert(BypassCache(true));
                         None
                     }
                     _ => None,
@@ -61,7 +94,7 @@ impl BlockTagMiddleware {
             request.params.insert(self.index, value);
         }
 
-        request
+        (request, context)
     }
 }
 
@@ -70,10 +103,11 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for BlockTagMi
     async fn call(
         &self,
         request: CallRequest,
+        context: TypeRegistry,
         next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
     ) -> Result<JsonValue, ErrorObjectOwned> {
-        let request = self.replace(request).await;
-        next(request).await
+        let (request, context) = self.replace(request, context).await;
+        next(request, context).await
     }
 }
 

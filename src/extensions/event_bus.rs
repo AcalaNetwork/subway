@@ -1,14 +1,7 @@
-use std::sync::Arc;
-
-use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::{
-    extension::Extension,
-    helpers::{self, errors},
-    utils::TypeRegistryRef,
-};
+use crate::{extension::Extension, utils::TypeRegistryRef};
 
 pub struct EventBus {
     config: EventBusConfig,

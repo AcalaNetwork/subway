@@ -16,8 +16,8 @@ use serde::Deserialize;
 
 use crate::{
     extension::Extension,
-    helpers::{self, errors},
     utils::TypeRegistryRef,
+    utils::{self, errors},
 };
 
 #[cfg(test)]
@@ -25,7 +25,7 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-const TRACER: helpers::telemetry::Tracer = helpers::telemetry::Tracer::new("client");
+const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client");
 
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,

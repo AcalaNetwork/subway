@@ -9,7 +9,7 @@ use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
 
 use crate::cache::new_cache;
-use crate::helpers::{self, errors};
+use crate::utils::{self, errors};
 use crate::middleware::response::ResponseMiddleware;
 use crate::{
     api::{EthApi, SubstrateApi},
@@ -50,7 +50,7 @@ pub async fn start_server(
 
     let mut module = RpcModule::new(());
 
-    let tracer = helpers::telemetry::Tracer::new("server");
+    let tracer = utils::telemetry::Tracer::new("server");
 
     let client = Arc::new(client);
 
