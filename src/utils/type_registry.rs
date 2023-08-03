@@ -51,6 +51,10 @@ impl TypeRegistry {
         self.map.insert(TypeId::of::<T>(), Arc::new(val));
     }
 
+    pub fn insert_raw<T: Send + Sync + 'static>(&mut self, val: Arc<dyn Any + Send + Sync>) {
+        self.map.insert(TypeId::of::<T>(), val);
+    }
+
     pub fn get<T: 'static>(&self) -> Option<Arc<T>> {
         self.map
             .get(&TypeId::of::<T>())

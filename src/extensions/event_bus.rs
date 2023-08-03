@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::{extension::Extension, utils::TypeRegistryRef};
+use crate::{extension::Extension, middleware::ExtensionRegistry};
 
 pub struct EventBus;
 
@@ -14,7 +14,7 @@ impl Extension for EventBus {
 
     async fn from_config(
         _config: &Self::Config,
-        _registry: &TypeRegistryRef,
+        _registry: &ExtensionRegistry,
     ) -> Result<Self, anyhow::Error> {
         Ok(EventBus)
     }

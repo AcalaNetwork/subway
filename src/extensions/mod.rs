@@ -1,4 +1,7 @@
-use std::{any::TypeId, sync::Arc};
+use std::{
+    any::{Any, TypeId},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -33,8 +36,8 @@ macro_rules! define_all_extensions {
 
         #[async_trait]
         impl ExtensionBuilder for ExtensionsConfig {
-            fn has<T: 'static>(&self) -> bool {
-                match TypeId::of::<T>() {
+            fn has(&self, type_id: TypeId) -> bool {
+                match type_id {
                     $(
                         id if id == TypeId::of::<$ext_type>() => self.$ext_name.is_some(),
                     )*
@@ -42,19 +45,13 @@ macro_rules! define_all_extensions {
                 }
             }
 
-            async fn build<T: 'static>(&self, registry: &TypeRegistryRef) -> Result<(), anyhow::Error> {
-                match TypeId::of::<T>() {
+            async fn build(&self, type_id: TypeId, registry: &ExtensionRegistry) -> anyhow::Result<Arc<dyn Any + Send + Sync>> {
+                match type_id {
                     $(
                         id if id == TypeId::of::<$ext_type>() => {
                             if let Some(config) = &self.$ext_name {
                                 let ext = <$ext_type as Extension>::from_config(&config, &registry).await?;
-                                let mut reg = registry.write().await;
-                                if reg.has::<$ext_type>() {
-                                    // some bad race condition???
-                                    panic!("Extension already registered: {}", stringify!($ext_name));
-                                }
-                                reg.insert(ext);
-                                Ok(())
+                                Ok(Arc::new(ext))
                             } else {
                                 anyhow::bail!("No config for extension: {}", stringify!($ext_name));
                             }
@@ -70,7 +67,7 @@ macro_rules! define_all_extensions {
         impl ExtensionsConfig {
             pub async fn create_registry(self) -> Result<TypeRegistryRef, anyhow::Error> {
                 let reg = Arc::new(RwLock::new(TypeRegistry::new()));
-                let ext_reg = ExtensionRegistry::new(reg.clone(), self);
+                let ext_reg = ExtensionRegistry::new(reg.clone(), Arc::new(self));
 
                 // ensure all the extensions are created
                 $(

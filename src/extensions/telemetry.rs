@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use opentelemetry::{global, sdk::trace::Tracer, trace::TraceError};
 use serde::Deserialize;
 
-use crate::{extension::Extension, utils::TypeRegistryRef};
+use crate::{extension::Extension, middleware::ExtensionRegistry};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -33,7 +33,7 @@ impl Extension for Telemetry {
 
     async fn from_config(
         config: &Self::Config,
-        _registry: &TypeRegistryRef,
+        _registry: &ExtensionRegistry,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self::new(config)?)
     }

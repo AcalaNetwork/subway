@@ -17,7 +17,7 @@ use serde::Deserialize;
 
 use crate::{
     extension::Extension,
-    utils::TypeRegistryRef,
+    middleware::ExtensionRegistry,
     utils::{self, errors},
 };
 
@@ -65,7 +65,7 @@ impl Extension for Client {
 
     async fn from_config(
         config: &Self::Config,
-        _registry: &TypeRegistryRef,
+        _registry: &ExtensionRegistry,
     ) -> Result<Self, anyhow::Error> {
         if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();

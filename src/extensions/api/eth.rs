@@ -11,7 +11,7 @@ use crate::{
         api::{BaseApi, ValueHandle},
         client::Client,
     },
-    utils::TypeRegistryRef,
+    middleware::ExtensionRegistry,
 };
 
 pub struct EthApi {
@@ -30,13 +30,9 @@ impl Extension for EthApi {
 
     async fn from_config(
         config: &Self::Config,
-        registry: &TypeRegistryRef,
+        registry: &ExtensionRegistry,
     ) -> Result<Self, anyhow::Error> {
-        let client = registry
-            .read()
-            .await
-            .get::<Client>()
-            .expect("Client not found");
+        let client = registry.get::<Client>().await.expect("Client not found");
 
         Ok(Self::new(
             client,

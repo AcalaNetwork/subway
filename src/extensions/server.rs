@@ -7,7 +7,7 @@ use jsonrpsee::server::{
 };
 use serde::Deserialize;
 
-use crate::{extension::Extension, utils::TypeRegistryRef};
+use crate::{extension::Extension, middleware::ExtensionRegistry};
 
 pub struct Server {
     config: ServerConfig,
@@ -34,7 +34,7 @@ impl Extension for Server {
 
     async fn from_config(
         config: &Self::Config,
-        _registry: &TypeRegistryRef,
+        _registry: &ExtensionRegistry,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self::new(config.clone()))
     }
