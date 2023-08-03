@@ -4,8 +4,10 @@ use futures::FutureExt;
 use jsonrpsee::{
     core::JsonValue,
     server::{RpcModule, ServerHandle},
+    types::ErrorObjectOwned,
 };
 use opentelemetry::trace::FutureExt as _;
+use serde_json::json;
 
 use crate::{
     config::Config,
@@ -141,9 +143,114 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                 )?;
             }
 
+            let mut rpc_methods = module
+                .method_names()
+                .map(|x| x.to_owned())
+                .collect::<Vec<_>>();
+
+            rpc_methods.sort();
+
+            module.register_method("rpc_methods", move |_, _| {
+                Ok::<JsonValue, ErrorObjectOwned>(json!({
+                    "version": 1,
+                    "methods": rpc_methods
+                }))
+            })?;
+
             Ok(module)
         })
         .await?;
 
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use jsonrpsee::{
+        core::client::ClientT,
+        rpc_params,
+        server::ServerHandle,
+        ws_client::{WsClient, WsClientBuilder},
+        RpcModule,
+    };
+
+    use super::*;
+    use crate::config::{RpcDefinitions, RpcMethod, ServerConfig};
+
+    const PHO: &str = "pho";
+    const BAR: &str = "bar";
+    const WS_SERVER_ENDPOINT: &str = "127.0.0.1:9955";
+
+    async fn server() -> (String, ServerHandle) {
+        let config = Config {
+            endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
+            stale_timeout_seconds: 60,
+            cache_ttl_seconds: None,
+            merge_subscription_keep_alive_seconds: None,
+            server: ServerConfig {
+                listen_address: "127.0.0.1".to_string(),
+                port: 9944,
+                max_connections: 1024,
+            },
+            rpcs: RpcDefinitions {
+                methods: vec![RpcMethod {
+                    method: PHO.to_string(),
+                    params: vec![],
+                    cache: 0,
+                    cache_ttl_seconds: None,
+                    response: None,
+                }],
+                subscriptions: vec![],
+                aliases: vec![],
+            },
+            telemetry: None,
+            health: None,
+        };
+        let client = Client::new(&config.endpoints).await.unwrap();
+        let (addr, server) = start_server(&config, client).await.unwrap();
+        (format!("ws://{}", addr), server)
+    }
+
+    async fn ws_server(url: &str) -> (String, ServerHandle) {
+        let server = ServerBuilder::default()
+            .max_request_body_size(u32::MAX)
+            .max_response_body_size(u32::MAX)
+            .max_connections(10 * 1024)
+            .build(url)
+            .await
+            .unwrap();
+
+        let mut module = RpcModule::new(());
+        module
+            .register_method(PHO, |_, _| {
+                Ok::<std::string::String, ErrorObjectOwned>(BAR.to_string())
+            })
+            .unwrap();
+        let addr = format!("ws://{}", server.local_addr().unwrap());
+        let handle = server.start(module).unwrap();
+        (addr, handle)
+    }
+
+    async fn ws_client(url: &str) -> WsClient {
+        WsClientBuilder::default()
+            .max_request_size(u32::MAX)
+            .max_concurrent_requests(1024 * 1024)
+            .build(url)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn null_param_works() {
+        let (_url1, _server1) = ws_server(WS_SERVER_ENDPOINT).await;
+        let (url, _server) = server().await;
+        let client = ws_client(&url).await;
+        assert_eq!(
+            BAR,
+            client
+                .request::<String, _>(PHO, rpc_params!())
+                .await
+                .unwrap()
+        );
+    }
 }
