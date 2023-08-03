@@ -41,7 +41,7 @@ impl Extension for Telemetry {
 
 impl Telemetry {
     pub fn new(config: &TelemetryConfig) -> Result<Self, anyhow::Error> {
-        let tracer = setup_telemetry(&config)?;
+        let tracer = setup_telemetry(config)?;
 
         Ok(Self { tracer })
     }

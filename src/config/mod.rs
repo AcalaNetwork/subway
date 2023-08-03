@@ -163,18 +163,24 @@ pub fn read_config() -> Result<Config, String> {
             .map(|x| x.trim().to_string())
             .collect::<Vec<String>>();
 
-        config.extensions.client.as_mut().map(|x| {
-            x.endpoints = endpoints;
-        });
+        config
+            .extensions
+            .client
+            .as_mut()
+            .expect("Client extension not configured")
+            .endpoints = endpoints;
     }
 
     if let Ok(env_port) = std::env::var("PORT") {
         log::debug!("Override port with env.PORT");
         let port = env_port.parse::<u16>();
         if let Ok(port) = port {
-            config.extensions.server.as_mut().map(|x| {
-                x.port = port;
-            });
+            config
+                .extensions
+                .server
+                .as_mut()
+                .expect("Server extension not configured")
+                .port = port;
         } else {
             return Err(format!("Invalid port: {}", env_port));
         }

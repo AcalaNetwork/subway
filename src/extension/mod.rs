@@ -49,7 +49,7 @@ impl ExtensionRegistry {
             drop(reg);
             let ext = self
                 .builder
-                .build(TypeId::of::<T>(), &self)
+                .build(TypeId::of::<T>(), self)
                 .await
                 .expect("Failed to build extension");
             self.registry.write().await.insert_raw(ext);

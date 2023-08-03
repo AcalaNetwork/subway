@@ -51,7 +51,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
             for method in rpcs.methods {
                 let mut method_middlewares: Vec<Arc<_>> = vec![];
 
-                for ref middleware_name in &middlewares.methods {
+                for middleware_name in &middlewares.methods {
                     if let Some(middleware) =
                         create_method_middleware(middleware_name, &method, &extensions).await
                     {
@@ -96,7 +96,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
 
                 let mut subscription_middlewares: Vec<Arc<_>> = vec![];
 
-                for ref middleware_name in &middlewares.subscriptions {
+                for middleware_name in &middlewares.subscriptions {
                     if let Some(middleware) =
                         create_subscription_middleware(middleware_name, &subscription, &extensions)
                             .await
