@@ -32,6 +32,7 @@ impl Hasher for IdHasher {
     }
 }
 
+#[derive(Default, Debug)]
 pub struct TypeRegistry {
     map: AnyMap,
 }
@@ -51,15 +52,14 @@ impl TypeRegistry {
         self.map.insert(TypeId::of::<T>(), Arc::new(val));
     }
 
-    pub fn insert_raw<T: Send + Sync + 'static>(&mut self, val: Arc<dyn Any + Send + Sync>) {
-        self.map.insert(TypeId::of::<T>(), val);
+    pub fn insert_raw(&mut self, val: Arc<dyn Any + Send + Sync>) {
+        self.map.insert(val.as_ref().type_id(), val);
     }
 
-    pub fn get<T: 'static>(&self) -> Option<Arc<T>> {
+    pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.map
             .get(&TypeId::of::<T>())
-            .and_then(|boxed| boxed.downcast_ref())
-            .map(|boxed: &Arc<T>| boxed.clone())
+            .and_then(|boxed| boxed.clone().downcast().ok())
     }
 
     pub fn remove<T: Send + Sync + 'static>(&mut self) {

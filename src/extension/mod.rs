@@ -1,5 +1,5 @@
 use std::{
-    any::{Any, TypeId},
+    any::{type_name, Any, TypeId},
     sync::Arc,
 };
 
@@ -52,9 +52,11 @@ impl ExtensionRegistry {
                 .build(TypeId::of::<T>(), &self)
                 .await
                 .expect("Failed to build extension");
-            self.registry.write().await.insert_raw::<T>(ext);
+            self.registry.write().await.insert_raw(ext);
             let reg = self.registry.read().await;
-            reg.get::<T>()
+            let ext = reg.get::<T>();
+            assert!(ext.is_some());
+            ext
         } else {
             ext
         }
