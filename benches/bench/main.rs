@@ -3,19 +3,22 @@ use futures::{future::join_all, stream::FuturesUnordered};
 use futures_util::FutureExt;
 use jsonrpsee::core::params::BatchRequestBuilder;
 use pprof::criterion::{Output, PProfProfiler};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::runtime::Runtime as TokioRuntime;
 
-use helpers::client::{
-    rpc_params, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT,
+use helpers::{
+    client::{rpc_params, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT},
+    ASYNC_INJECT_CALL, KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME,
 };
-use helpers::{ASYNC_INJECT_CALL, KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use subway::client::Client;
-use subway::config::{
-    Config, MergeStrategy, MethodParam, RpcDefinitions, RpcMethod, RpcSubscription, ServerConfig,
+
+use subway::{
+    config::{
+        Config, MergeStrategy, MethodParam, MiddlewaresConfig, RpcDefinitions, RpcMethod,
+        RpcSubscription,
+    },
+    extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
+    server::start_server,
 };
-use subway::server::start_server;
 
 mod helpers;
 
@@ -224,61 +227,63 @@ impl RequestBencher for SyncBencher {
 
 fn config() -> Config {
     Config {
-        endpoints: vec![
-            format!("ws://{}", SERVER_ONE_ENDPOINT),
-            format!("ws://{}", SERVER_TWO_ENDPOINT),
-        ],
-        stale_timeout_seconds: 60,
-        cache_ttl_seconds: None,
-        merge_subscription_keep_alive_seconds: None,
-        server: ServerConfig {
-            listen_address: SUBWAY_SERVER_ADDR.to_string(),
-            port: SUBWAY_SERVER_PORT,
-            max_connections: 1024 * 1024,
+        extensions: ExtensionsConfig {
+            client: Some(ClientConfig {
+                endpoints: vec![
+                    format!("ws://{}", SERVER_ONE_ENDPOINT),
+                    format!("ws://{}", SERVER_TWO_ENDPOINT),
+                ],
+                shuffle_endpoints: false,
+            }),
+            server: Some(ServerConfig {
+                listen_address: SUBWAY_SERVER_ADDR.to_string(),
+                port: SUBWAY_SERVER_PORT,
+                max_connections: 1024 * 1024,
+                health: None,
+            }),
+            ..Default::default()
+        },
+        middlewares: MiddlewaresConfig {
+            methods: vec!["inject_params".to_string(), "upstream".to_string()],
+            subscriptions: vec!["upstream".to_string()],
         },
         rpcs: RpcDefinitions {
             methods: vec![
                 RpcMethod {
                     method: helpers::SYNC_FAST_CALL.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_FAST_CALL.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
                 RpcMethod {
                     method: helpers::SYNC_MEM_CALL.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_MEM_CALL.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
                 RpcMethod {
                     method: helpers::SYNC_SLOW_CALL.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_SLOW_CALL.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_INJECT_CALL.to_string(),
@@ -296,9 +301,8 @@ fn config() -> Config {
                             inject: true,
                         },
                     ],
-                    cache: 0,
-                    cache_ttl_seconds: None,
                     response: None,
+                    cache: None,
                 },
             ],
             subscriptions: vec![RpcSubscription {
@@ -309,15 +313,12 @@ fn config() -> Config {
             }],
             aliases: vec![],
         },
-        telemetry: None,
-        health: None,
     }
 }
 
 async fn server() -> (String, jsonrpsee::server::ServerHandle) {
     let config = config();
-    let client = Client::new(&config.endpoints).await.unwrap();
-    let (addr, handle) = start_server(&config, client).await.unwrap();
+    let (addr, handle) = start_server(config).await.unwrap();
     (format!("ws://{}", addr), handle)
 }
 

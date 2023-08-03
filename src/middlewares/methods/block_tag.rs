@@ -150,7 +150,7 @@ mod tests {
 
         let (addr, _server) = builder.build().await;
 
-        let client = Client::new(&[format!("ws://{addr}")]).unwrap();
+        let client = Client::new([format!("ws://{addr}")]).unwrap();
         let api = EthApi::new(Arc::new(client), Duration::from_secs(100));
 
         (

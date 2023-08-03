@@ -95,7 +95,7 @@ async fn merge_subscription_works() {
 
     let (addr, server) = start_server(config).await.unwrap();
 
-    let client = Client::new(&[format!("ws://{addr}")]).unwrap();
+    let client = Client::new([format!("ws://{addr}")]).unwrap();
     let mut first_sub = client
         .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await
