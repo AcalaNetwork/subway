@@ -143,6 +143,12 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                 )?;
             }
 
+            for (alias_old, alias_new) in rpcs.aliases {
+                let alias_old = string_to_static_str(alias_old);
+                let alias_new = string_to_static_str(alias_new);
+                module.register_alias(alias_new, alias_old)?;
+            }
+
             let mut rpc_methods = module
                 .method_names()
                 .map(|x| x.to_owned())

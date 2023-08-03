@@ -1,14 +1,17 @@
 methods:
   - method: author_submitExtrinsic
+    cache:
+      size: 0
     params:
       - name: extrinsic
         ty: Bytes
 
   - method: author_pendingExtrinsics
-    cache_ttl_seconds: 1
+    cache:
+      size: 1
+      ttl_seconds: 3
 
   - method: chain_getBlockHash
-    cache: 2000
     params:
       - name: blockNumber
         ty: BlockNumber
@@ -16,7 +19,6 @@ methods:
         inject: true
 
   - method: chain_getHeader
-    cache: 2000
     params:
       - name: hash
         ty: BlockHash
@@ -24,7 +26,6 @@ methods:
         inject: true
 
   - method: chain_getBlock
-    cache: 2000
     params:
       - name: hash
         ty: BlockHash
@@ -32,10 +33,12 @@ methods:
         inject: true
 
   - method: chain_getFinalizedHead
-    cache_ttl_seconds: 1
+    cache:
+      size: 1
+      ttl_seconds: 6
+      invalidate_at: OnNewFinalizedHead
 
   - method: state_getRuntimeVersion
-    cache: 2000
     params:
       - name: at
         ty: BlockHash
@@ -43,7 +46,6 @@ methods:
         inject: true
 
   - method: state_getMetadata
-    cache: 2000
     params:
       - name: at
         ty: BlockHash
@@ -51,7 +53,6 @@ methods:
         inject: true
 
   - method: state_getStorage
-    cache: 2000
     params:
       - name: key
         ty: StorageKey
@@ -61,7 +62,6 @@ methods:
         inject: true
 
   - method: state_getKeysPaged
-    cache: 2000
     params:
       - name: key
         ty: StorageKey
@@ -76,7 +76,6 @@ methods:
         inject: true
 
   - method: state_queryStorageAt
-    cache: 2000
     params:
       - name: keys
         ty: 'Vec<StorageKey>'
@@ -86,7 +85,9 @@ methods:
         inject: true
 
   - method: state_call
-    cache: 2000
+    cache:
+      size: 200
+      ttl_seconds: 30
     params:
       - name: method
         ty: String
@@ -98,10 +99,12 @@ methods:
         inject: true
 
   - method: system_chain
-    cache: 1
+    cache:
+      size: 1
 
   - method: system_properties
-    cache: 1
+    cache:
+      size: 1
 
   - method: system_name
     response: Subway
@@ -110,21 +113,29 @@ methods:
     response: 1.0.0-dev
 
   - method: system_chainType
-    cache: 1
+    cache:
+      size: 1
 
   - method: system_localPeerId
-    cache: 1
+    cache:
+      size: 1
 
   - method: system_nodeRoles
     response: [ 'Full' ]
 
   - method: system_localListenAddresses
-    cache: 1
+    cache:
+      size: 1
 
   - method: system_health
+    cache:
+      size: 1
+      ttl_seconds: 5
 
   - method: system_dryRun
-    cache: 100
+    cache:
+      size: 200
+      ttl_seconds: 30
     params:
       - name: extrinsic
         ty: Bytes
@@ -134,6 +145,8 @@ methods:
         inject: true
 
   - method: system_accountNextIndex
+    cache:
+      size: 0
     params:
       - name: accountId
         ty: AccountId
