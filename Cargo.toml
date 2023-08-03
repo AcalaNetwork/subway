@@ -13,7 +13,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "subway"
-path = "src/bin.rs"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.68"

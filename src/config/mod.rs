@@ -126,12 +126,14 @@ pub struct MiddlewaresConfig {
 #[derive(Debug)]
 pub struct Config {
     pub extensions: ExtensionsConfig,
+    pub middlewares: MiddlewaresConfig,
     pub rpcs: RpcDefinitions,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ParseConfig {
     pub extensions: ExtensionsConfig,
+    pub middlewares: MiddlewaresConfig,
     pub rpcs: RpcOptions,
 }
 
@@ -139,6 +141,7 @@ impl From<ParseConfig> for Config {
     fn from(val: ParseConfig) -> Self {
         Config {
             extensions: val.extensions,
+            middlewares: val.middlewares,
             rpcs: val.rpcs.into(),
         }
     }

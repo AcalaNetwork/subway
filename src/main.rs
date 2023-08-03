@@ -1,22 +1,20 @@
 use opentelemetry::global::shutdown_tracer_provider;
 use rand::{seq::SliceRandom, thread_rng};
 
-// use subway::{client, config, logger::enable_logger, server, telemetry::setup_telemetry};
+use subway::{config, logger::enable_logger};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let config = match config::read_config() {
-    //     Ok(config) => config,
-    //     Err(e) => {
-    //         return Err(anyhow::anyhow!(e));
-    //     }
-    // };
+    let config = match config::read_config() {
+        Ok(config) => config,
+        Err(e) => {
+            return Err(anyhow::anyhow!(e));
+        }
+    };
 
-    // let _tracer = setup_telemetry(&config.telemetry)?;
+    enable_logger();
 
-    // enable_logger();
-
-    // tracing::trace!("{:#?}", config);
+    tracing::trace!("{:#?}", config);
 
     // let mut endpoints = config.endpoints.clone();
     // endpoints.shuffle(&mut thread_rng());

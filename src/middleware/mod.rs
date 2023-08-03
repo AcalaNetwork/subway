@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
 use std::sync::Arc;
 
-use crate::utils::TypeRegistryRef;
 pub use crate::{
     config::{RpcMethod, RpcSubscription},
-    utils::TypeRegistry,
+    extension::ExtensionRegistry,
+    utils::{TypeRegistry, TypeRegistryRef},
 };
 
 #[async_trait]
@@ -32,6 +32,15 @@ pub trait Middleware<Request, Result>: Send + Sync {
 pub struct Middlewares<Request, Result> {
     middlewares: Vec<Arc<dyn Middleware<Request, Result>>>,
     fallback: Arc<dyn Fn(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync>,
+}
+
+impl<Request, Result> Clone for Middlewares<Request, Result> {
+    fn clone(&self) -> Self {
+        Self {
+            middlewares: self.middlewares.clone(),
+            fallback: self.fallback.clone(),
+        }
+    }
 }
 
 impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
