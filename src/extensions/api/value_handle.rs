@@ -39,7 +39,7 @@ impl<T: Clone> ValueHandle<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::ValueHandle;
+    use super::*;
     use std::time::Duration;
 
     #[tokio::test]

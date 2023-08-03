@@ -169,13 +169,17 @@ mod tests {
     use jsonrpsee::{
         core::client::ClientT,
         rpc_params,
+        server::ServerBuilder,
         server::ServerHandle,
         ws_client::{WsClient, WsClientBuilder},
         RpcModule,
     };
 
     use super::*;
-    use crate::config::{RpcDefinitions, RpcMethod, ServerConfig};
+    use crate::{
+        config::{MiddlewaresConfig, RpcDefinitions, RpcMethod},
+        extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
+    };
 
     const PHO: &str = "pho";
     const BAR: &str = "bar";
@@ -183,31 +187,35 @@ mod tests {
 
     async fn server() -> (String, ServerHandle) {
         let config = Config {
-            endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
-            stale_timeout_seconds: 60,
-            cache_ttl_seconds: None,
-            merge_subscription_keep_alive_seconds: None,
-            server: ServerConfig {
-                listen_address: "127.0.0.1".to_string(),
-                port: 9944,
-                max_connections: 1024,
+            extensions: ExtensionsConfig {
+                client: Some(ClientConfig {
+                    endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
+                    shuffle_endpoints: false,
+                }),
+                server: Some(ServerConfig {
+                    listen_address: "127.0.0.1".to_string(),
+                    port: 9944,
+                    max_connections: 1024,
+                    health: None,
+                }),
+                ..Default::default()
+            },
+            middlewares: MiddlewaresConfig {
+                methods: vec!["upstream".to_string()],
+                subscriptions: vec![],
             },
             rpcs: RpcDefinitions {
                 methods: vec![RpcMethod {
                     method: PHO.to_string(),
                     params: vec![],
-                    cache: 0,
-                    cache_ttl_seconds: None,
+                    cache: None,
                     response: None,
                 }],
                 subscriptions: vec![],
                 aliases: vec![],
             },
-            telemetry: None,
-            health: None,
         };
-        let client = Client::new(&config.endpoints).await.unwrap();
-        let (addr, server) = start_server(&config, client).await.unwrap();
+        let (addr, server) = start_server(config).await.unwrap();
         (format!("ws://{}", addr), server)
     }
 

@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
 use serde_json::json;
@@ -7,7 +8,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::substrate::SubstrateApi;
 use super::*;
 
-use crate::extensions::client::mock::TestServerBuilder;
+use crate::extensions::client::{mock::TestServerBuilder, Client};
 
 async fn create_server() -> (
     SocketAddr,
@@ -46,7 +47,7 @@ async fn create_client() -> (
 ) {
     let (addr, server, head_rx, finalized_head_rx, block_hash_rx) = create_server().await;
 
-    let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+    let client = Client::new(&[format!("ws://{addr}")]).unwrap();
 
     (client, server, head_rx, finalized_head_rx, block_hash_rx)
 }
@@ -168,11 +169,7 @@ async fn rotate_endpoint_on_stale() {
     let (addr, server, mut head_rx, _, mut block_rx) = create_server().await;
     let (addr2, server2, mut head_rx2, _, mut block_rx2) = create_server().await;
 
-    println!("{} {}", addr, addr2);
-
-    let client = Client::new(&[format!("ws://{addr}"), format!("ws://{addr2}")])
-        .await
-        .unwrap();
+    let client = Client::new(&[format!("ws://{addr}"), format!("ws://{addr2}")]).unwrap();
     let api = SubstrateApi::new(Arc::new(client), std::time::Duration::from_millis(10));
 
     let head = api.get_head();

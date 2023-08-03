@@ -115,10 +115,12 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for BlockTagMi
 mod tests {
     use super::*;
 
-    use crate::api::EthApi;
-    use crate::client::mock::{run_sink_tasks, SinkTask};
-    use crate::client::{mock::TestServerBuilder, Client};
     use crate::config::MethodParam;
+    use crate::extensions::api::EthApi;
+    use crate::extensions::client::{
+        mock::{run_sink_tasks, SinkTask, TestServerBuilder},
+        Client,
+    };
     use futures::FutureExt;
     use jsonrpsee::{server::ServerHandle, SubscriptionSink};
     use serde_json::json;
@@ -148,7 +150,7 @@ mod tests {
 
         let (addr, _server) = builder.build().await;
 
-        let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+        let client = Client::new(&[format!("ws://{addr}")]).unwrap();
         let api = EthApi::new(Arc::new(client), Duration::from_secs(100));
 
         (
@@ -202,7 +204,8 @@ mod tests {
             middleware
                 .call(
                     CallRequest::new("state_getStorage", params.clone()),
-                    Box::new(move |req: CallRequest| {
+                    Default::default(),
+                    Box::new(move |req: CallRequest, _| {
                         async move {
                             assert_eq!(req.params, params);
                             Ok(json!("0x1111"))
@@ -272,7 +275,8 @@ mod tests {
             middleware
                 .call(
                     CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("latest")]),
-                    Box::new(move |req: CallRequest| {
+                    Default::default(),
+                    Box::new(move |req: CallRequest, _| {
                         async move {
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x4321")]);
                             Ok(json!("0x1111"))
@@ -292,7 +296,8 @@ mod tests {
                         "state_getStorage",
                         vec![json!("0x1234"), json!("finalized")],
                     ),
-                    Box::new(move |req: CallRequest| {
+                    Default::default(),
+                    Box::new(move |req: CallRequest, _| {
                         async move {
                             assert_eq!(req.params, vec![json!("0x1234"), json!("finalized")]);
                             Ok(json!("0x1111"))
@@ -315,7 +320,8 @@ mod tests {
                         "state_getStorage",
                         vec![json!("0x1234"), json!("finalized")],
                     ),
-                    Box::new(move |req: CallRequest| {
+                    Default::default(),
+                    Box::new(move |req: CallRequest, _| {
                         async move {
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x5430")]);
                             Ok(json!("0x1111"))
@@ -332,7 +338,8 @@ mod tests {
             middleware
                 .call(
                     CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("latest")]),
-                    Box::new(move |req: CallRequest| {
+                    Default::default(),
+                    Box::new(move |req: CallRequest, _| {
                         async move {
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x5432")]);
                             Ok(json!("0x1111"))

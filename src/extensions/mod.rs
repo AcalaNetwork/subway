@@ -26,7 +26,7 @@ macro_rules! define_all_extensions {
             $ext_name:ident: $ext_type:ty
         ),* $(,)?
     ) => {
-        #[derive(Deserialize, Debug)]
+        #[derive(Deserialize, Debug, Default)]
         pub struct ExtensionsConfig {
             $(
                 #[serde(default)]

@@ -11,7 +11,7 @@ use tokio::sync::{mpsc, oneshot};
 async fn basic_request() {
     let (addr, handle, mut rx, _) = dummy_server().await;
 
-    let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+    let client = Client::new(&[format!("ws://{addr}")]).unwrap();
 
     let task = tokio::spawn(async move {
         let (params, resp_tx) = rx.recv().await.unwrap();
@@ -31,7 +31,7 @@ async fn basic_request() {
 async fn basic_subscription() {
     let (addr, handle, _, mut rx) = dummy_server().await;
 
-    let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+    let client = Client::new(&[format!("ws://{addr}")]).unwrap();
 
     let task = tokio::spawn(async move {
         let (params, sink) = rx.recv().await.unwrap();
@@ -76,7 +76,6 @@ async fn multiple_endpoints() {
         format!("ws://{addr2}"),
         format!("ws://{addr3}"),
     ])
-    .await
     .unwrap();
 
     let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
@@ -128,7 +127,7 @@ async fn multiple_endpoints() {
 async fn concurrent_requests() {
     let (addr, handle, mut rx, _) = dummy_server().await;
 
-    let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+    let client = Client::new(&[format!("ws://{addr}")]).unwrap();
 
     let task = tokio::spawn(async move {
         let (_, tx1) = rx.recv().await.unwrap();
@@ -160,9 +159,7 @@ async fn retry_requests() {
     let (addr1, handle1, mut rx1, _) = dummy_server().await;
     let (addr2, handle2, mut rx2, _) = dummy_server().await;
 
-    let client = Client::new(&[format!("ws://{addr1}"), format!("ws://{addr2}")])
-        .await
-        .unwrap();
+    let client = Client::new(&[format!("ws://{addr1}"), format!("ws://{addr2}")]).unwrap();
 
     let h1 = tokio::spawn(async move {
         let (_, tx) = rx1.recv().await.unwrap();

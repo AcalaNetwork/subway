@@ -99,7 +99,6 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddl
 
 #[cfg(test)]
 mod tests {
-    use crate::cache::new_cache;
     use futures::FutureExt;
     use serde_json::json;
     use std::num::NonZeroUsize;
@@ -114,7 +113,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(1)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
@@ -126,7 +126,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { panic!() }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { panic!() }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
@@ -135,7 +136,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(22)]),
-                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(2)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(2));
@@ -144,7 +146,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test2", vec![json!(22)]),
-                Box::new(move |_| async move { Ok(json!(3)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(3)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(3));
@@ -153,7 +156,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { panic!() }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { panic!() }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
@@ -162,7 +166,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test2", vec![json!(33)]),
-                Box::new(move |_| async move { Ok(json!(4)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(4)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(4));
@@ -171,7 +176,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(22)]),
-                Box::new(move |_| async move { Ok(json!(5)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(5)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(5));
@@ -184,7 +190,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { Ok(JsonValue::Null) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(JsonValue::Null) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), JsonValue::Null);
@@ -196,7 +203,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(2)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(2));
@@ -212,7 +220,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { Ok(json!(1)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(1)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
@@ -224,7 +233,8 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { panic!() }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { panic!() }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
@@ -236,9 +246,53 @@ mod tests {
         let res = middleware
             .call(
                 CallRequest::new("test", vec![json!(11)]),
-                Box::new(move |_| async move { Ok(json!(2)) }.boxed()),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(2)) }.boxed()),
             )
             .await;
         assert_eq!(res.unwrap(), json!(2));
+    }
+
+    #[tokio::test]
+    async fn bypass_cache() {
+        let middleware = CacheMiddleware::new(Cache::new(3));
+
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                Default::default(),
+                Box::new(move |_, _| async move { Ok(json!(1)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        // wait for cache write
+        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+
+        let mut context = TypeRegistry::new();
+        context.insert(BypassCache(true));
+
+        // bypass cache
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                context,
+                Box::new(move |_, _| async move { Ok(json!(2)) }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(2));
+
+        let mut context = TypeRegistry::new();
+        context.insert(BypassCache(false));
+
+        // do not bypass cache, value from bypass cache request is not cached
+        let res = middleware
+            .call(
+                CallRequest::new("test", vec![json!(11)]),
+                context,
+                Box::new(move |_, _| async move { panic!() }.boxed()),
+            )
+            .await;
+        assert_eq!(res.unwrap(), json!(1));
     }
 }

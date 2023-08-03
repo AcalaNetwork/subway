@@ -70,16 +70,21 @@ impl Extension for Client {
         if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();
             endpoints.shuffle(&mut thread_rng());
-            Ok(Self::new(endpoints.iter())?)
+            Ok(Self::new(endpoints)?)
         } else {
-            Ok(Self::new(config.endpoints.iter())?)
+            Ok(Self::new(config.endpoints.clone())?)
         }
     }
 }
 
 impl Client {
-    pub fn new(endpoints: impl Iterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
-        let endpoints: Vec<_> = endpoints.map(|e| e.as_ref().to_string()).collect();
+    pub fn new(
+        endpoints: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Result<Self, anyhow::Error> {
+        let endpoints: Vec<_> = endpoints
+            .into_iter()
+            .map(|e| e.as_ref().to_string())
+            .collect();
 
         if endpoints.is_empty() {
             return Err(anyhow!("No endpoints provided"));
