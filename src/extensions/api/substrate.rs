@@ -22,7 +22,7 @@ pub struct SubstrateApi {
 
 #[derive(Deserialize, Debug)]
 pub struct SubstrateApiConfig {
-    stale_timeout: Duration,
+    stale_timeout_seconds: u64,
 }
 
 #[async_trait]
@@ -39,7 +39,10 @@ impl Extension for SubstrateApi {
             .get::<Client>()
             .expect("Client not found");
 
-        Ok(Self::new(client, config.stale_timeout))
+        Ok(Self::new(
+            client,
+            Duration::from_secs(config.stale_timeout_seconds),
+        ))
     }
 }
 

@@ -21,7 +21,7 @@ pub struct EthApi {
 
 #[derive(Deserialize, Debug)]
 pub struct EthApiConfig {
-    stale_timeout: Duration,
+    stale_timeout_seconds: u64,
 }
 
 #[async_trait]
@@ -38,7 +38,10 @@ impl Extension for EthApi {
             .get::<Client>()
             .expect("Client not found");
 
-        Ok(Self::new(client, config.stale_timeout))
+        Ok(Self::new(
+            client,
+            Duration::from_secs(config.stale_timeout_seconds),
+        ))
     }
 }
 
