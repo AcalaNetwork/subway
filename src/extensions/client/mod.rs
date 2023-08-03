@@ -12,6 +12,7 @@ use jsonrpsee::{
     ws_client::{WsClient, WsClientBuilder},
 };
 use opentelemetry::trace::FutureExt;
+use rand::{seq::SliceRandom, thread_rng};
 use serde::Deserialize;
 
 use crate::{
@@ -34,6 +35,12 @@ pub struct Client {
 #[derive(Deserialize, Debug)]
 pub struct ClientConfig {
     pub endpoints: Vec<String>,
+    #[serde(default = "bool_true")]
+    pub shuffle_endpoints: bool,
+}
+
+pub fn bool_true() -> bool {
+    true
 }
 
 #[derive(Debug)]
@@ -60,7 +67,13 @@ impl Extension for Client {
         config: &Self::Config,
         _registry: &TypeRegistryRef,
     ) -> Result<Self, anyhow::Error> {
-        Ok(Self::new(config.endpoints.iter())?)
+        if config.shuffle_endpoints {
+            let mut endpoints = config.endpoints.clone();
+            endpoints.shuffle(&mut thread_rng());
+            Ok(Self::new(endpoints.iter())?)
+        } else {
+            Ok(Self::new(config.endpoints.iter())?)
+        }
     }
 }
 

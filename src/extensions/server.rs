@@ -45,7 +45,7 @@ impl Server {
         Self { config }
     }
 
-    pub async fn create_server<Fut: Future<Output = anyhow::Result<(RpcModule<()>)>>>(
+    pub async fn create_server<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
