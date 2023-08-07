@@ -3,15 +3,13 @@ extensions:
     endpoints:
       - wss://eth-rpc-karura-testnet.aca-staging.network:443
   event_bus:
-  substrate_api:
+  eth_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
   telemetry:
     provider: none
   cache:
     default_ttl_seconds: 60
     default_size: 500
-  merge_subscription:
-    keep_alive_seconds: 60
   server:
     port: 8545
     listen_address: '0.0.0.0'
@@ -21,10 +19,9 @@ middlewares:
   methods:
     - response
     - cache
-    - inject_params
+    - block_tag
     - upstream
   subscriptions:
-    - merge_subscription
     - upstream
 
 rpcs: ethereum
