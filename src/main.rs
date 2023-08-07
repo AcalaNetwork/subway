@@ -1,7 +1,6 @@
 use opentelemetry::global::shutdown_tracer_provider;
-use rand::{seq::SliceRandom, thread_rng};
 
-use subway::{client, config, logger::enable_logger, server, telemetry::setup_telemetry};
+use subway::{config, logger::enable_logger, server};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -12,19 +11,11 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let _tracer = setup_telemetry(&config.telemetry)?;
-
     enable_logger();
 
     tracing::trace!("{:#?}", config);
 
-    let mut endpoints = config.endpoints.clone();
-    endpoints.shuffle(&mut thread_rng());
-    let client = client::Client::new(endpoints)
-        .await
-        .map_err(anyhow::Error::msg)?;
-
-    let (addr, server) = server::start_server(&config, client).await?;
+    let (addr, server) = server::start_server(config).await?;
 
     tracing::info!("Server running at {addr}");
 

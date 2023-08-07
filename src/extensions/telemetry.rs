@@ -1,14 +1,57 @@
 use std::env;
 
+use async_trait::async_trait;
 use opentelemetry::{global, sdk::trace::Tracer, trace::TraceError};
+use serde::Deserialize;
 
-use crate::config::{TelemetryOptions, TelemetryProvider};
+use crate::{extension::Extension, middleware::ExtensionRegistry};
 
-pub fn setup_telemetry(options: &Option<TelemetryOptions>) -> Result<Option<Tracer>, TraceError> {
-    let Some(options) = options else {
-        return Ok(None);
-    };
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum TelemetryProvider {
+    None,
+    Datadog,
+    Jaeger,
+}
 
+#[derive(Deserialize, Debug)]
+pub struct TelemetryConfig {
+    pub provider: TelemetryProvider,
+    #[serde(default)]
+    pub service_name: Option<String>,
+    #[serde(default)]
+    pub agent_endpoint: Option<String>,
+}
+
+pub struct Telemetry {
+    tracer: Option<Tracer>,
+}
+
+#[async_trait]
+impl Extension for Telemetry {
+    type Config = TelemetryConfig;
+
+    async fn from_config(
+        config: &Self::Config,
+        _registry: &ExtensionRegistry,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(Self::new(config)?)
+    }
+}
+
+impl Telemetry {
+    pub fn new(config: &TelemetryConfig) -> Result<Self, anyhow::Error> {
+        let tracer = setup_telemetry(config)?;
+
+        Ok(Self { tracer })
+    }
+
+    pub fn tracer(&self) -> Option<&Tracer> {
+        self.tracer.as_ref()
+    }
+}
+
+pub fn setup_telemetry(options: &TelemetryConfig) -> Result<Option<Tracer>, TraceError> {
     global::set_error_handler(|e| {
         log::warn!("OpenTelemetry error: {}", e);
     })

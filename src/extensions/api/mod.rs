@@ -1,8 +1,5 @@
 use jsonrpsee::core::JsonValue;
-use std::sync::Arc;
 use tokio::sync::watch;
-
-use crate::client::Client;
 
 #[cfg(test)]
 mod tests;
@@ -16,19 +13,16 @@ pub use substrate::SubstrateApi;
 pub use value_handle::ValueHandle;
 
 pub(crate) struct BaseApi {
-    pub client: Arc<Client>,
     pub head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
     pub finalized_head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
 }
 
 impl BaseApi {
     pub fn new(
-        client: Arc<Client>,
         head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
         finalized_head_rx: watch::Receiver<Option<(JsonValue, u64)>>,
     ) -> Self {
         Self {
-            client,
             head_rx,
             finalized_head_rx,
         }

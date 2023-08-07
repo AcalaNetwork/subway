@@ -1,12 +1,11 @@
-pub mod api;
-pub mod cache;
-pub mod client;
 pub mod config;
-pub mod helpers;
+pub mod extension;
+pub mod extensions;
 pub mod logger;
 pub mod middleware;
+pub mod middlewares;
 pub mod server;
-pub mod telemetry;
+pub mod utils;
 
 #[cfg(test)]
 mod integration_tests;

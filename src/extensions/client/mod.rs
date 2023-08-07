@@ -1,5 +1,7 @@
 use std::sync::{atomic::AtomicUsize, Arc};
 
+use anyhow::anyhow;
+use async_trait::async_trait;
 use futures::TryFutureExt;
 use jsonrpsee::{
     core::{
@@ -10,18 +12,35 @@ use jsonrpsee::{
     ws_client::{WsClient, WsClientBuilder},
 };
 use opentelemetry::trace::FutureExt;
+use rand::{seq::SliceRandom, thread_rng};
+use serde::Deserialize;
 
-use crate::helpers::{self, errors};
+use crate::{
+    extension::Extension,
+    middleware::ExtensionRegistry,
+    utils::{self, errors},
+};
 
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
 mod tests;
 
-const TRACER: helpers::telemetry::Tracer = helpers::telemetry::Tracer::new("client");
+const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client");
 
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ClientConfig {
+    pub endpoints: Vec<String>,
+    #[serde(default = "bool_true")]
+    pub shuffle_endpoints: bool,
+}
+
+pub fn bool_true() -> bool {
+    true
 }
 
 #[derive(Debug)]
@@ -40,15 +59,35 @@ enum Message {
     RotateEndpoint,
 }
 
+#[async_trait]
+impl Extension for Client {
+    type Config = ClientConfig;
+
+    async fn from_config(
+        config: &Self::Config,
+        _registry: &ExtensionRegistry,
+    ) -> Result<Self, anyhow::Error> {
+        if config.shuffle_endpoints {
+            let mut endpoints = config.endpoints.clone();
+            endpoints.shuffle(&mut thread_rng());
+            Ok(Self::new(endpoints)?)
+        } else {
+            Ok(Self::new(config.endpoints.clone())?)
+        }
+    }
+}
+
 impl Client {
-    pub async fn new(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, String> {
+    pub fn new(
+        endpoints: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Result<Self, anyhow::Error> {
         let endpoints: Vec<_> = endpoints
             .into_iter()
             .map(|e| e.as_ref().to_string())
             .collect();
 
         if endpoints.is_empty() {
-            return Err("No endpoints provided".into());
+            return Err(anyhow!("No endpoints provided"));
         }
 
         tracing::debug!("New client with endpoints: {:?}", endpoints);

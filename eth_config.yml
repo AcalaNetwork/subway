@@ -1,11 +1,27 @@
-endpoints:
-  - wss://eth-rpc-karura-testnet.aca-staging.network:443
+extensions:  
+  client:
+    endpoints:
+      - wss://eth-rpc-karura-testnet.aca-staging.network:443
+  event_bus:
+  eth_api:
+    stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+  telemetry:
+    provider: none
+  cache:
+    default_ttl_seconds: 60
+    default_size: 500
+  server:
+    port: 8545
+    listen_address: '0.0.0.0'
+    max_connections: 2000
 
-stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
-
-server:
-  port: 8545
-  listen_address: '0.0.0.0'
-  max_connections: 2000
+middlewares:
+  methods:
+    - response
+    - cache
+    - block_tag
+    - upstream
+  subscriptions:
+    - upstream
 
 rpcs: ethereum

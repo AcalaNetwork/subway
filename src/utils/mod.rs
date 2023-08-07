@@ -1,3 +1,9 @@
+mod cache;
+mod type_registry;
+
+pub use cache::*;
+pub use type_registry::*;
+
 pub mod errors {
     use jsonrpsee::types::{
         error::{

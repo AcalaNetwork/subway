@@ -1,3 +1,9 @@
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+    time::Duration,
+};
+
 use async_trait::async_trait;
 use blake2::Blake2b512;
 use jsonrpsee::{
@@ -5,18 +11,14 @@ use jsonrpsee::{
     SubscriptionMessage,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-    time::Duration,
-};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::{
-    cache::CacheKey,
-    client::Client,
     config::MergeStrategy,
-    middleware::{subscription::SubscriptionRequest, Middleware, NextFn},
+    extensions::{client::Client, merge_subscription::MergeSubscription},
+    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription},
+    middlewares::{SubscriptionRequest, SubscriptionResult},
+    utils::{CacheKey, TypeRegistry, TypeRegistryRef},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -189,10 +191,38 @@ impl MergeSubscriptionMiddleware {
 }
 
 #[async_trait]
+impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult>
+    for MergeSubscriptionMiddleware
+{
+    async fn build(
+        method: &RpcSubscription,
+        extensions: &TypeRegistryRef,
+    ) -> Option<Box<dyn Middleware<SubscriptionRequest, SubscriptionResult>>> {
+        let Some(merge_strategy) = method.merge_strategy else {
+            return None;
+        };
+
+        let ext = extensions.read().await;
+        let client = ext.get::<Client>().expect("Client extension not found");
+
+        let merge_subscription = ext
+            .get::<MergeSubscription>()
+            .expect("MergeSubscription extension not found");
+
+        Some(Box::new(MergeSubscriptionMiddleware::new(
+            client,
+            merge_strategy,
+            merge_subscription.config.keep_alive_seconds,
+        )))
+    }
+}
+
+#[async_trait]
 impl Middleware<SubscriptionRequest, Result<(), StringError>> for MergeSubscriptionMiddleware {
     async fn call(
         &self,
         request: SubscriptionRequest,
+        _context: TypeRegistry,
         _next: NextFn<SubscriptionRequest, Result<(), StringError>>,
     ) -> Result<(), StringError> {
         let key = CacheKey::new(&request.subscribe, &request.params);

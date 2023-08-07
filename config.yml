@@ -1,19 +1,34 @@
-endpoints:
-  - wss://acala-rpc.dwellir.com:443
-  - wss://acala-rpc-0.aca-api.network:443
+extensions:  
+  client:
+    endpoints:
+      - wss://acala-rpc.dwellir.com:443
+      - wss://acala-rpc-0.aca-api.network:443
+  event_bus:
+  substrate_api:
+    stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+  telemetry:
+    provider: none
+  cache:
+    default_ttl_seconds: 60
+    default_size: 500
+  merge_subscription:
+    keep_alive_seconds: 60
+  server:
+    port: 9944
+    listen_address: '0.0.0.0'
+    max_connections: 2000
+    health:
+      path: /health
+      method: system_health
 
-stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
-
-server:
-  port: 9944
-  listen_address: '0.0.0.0'
-  max_connections: 2000
-
-telemetry:
-  provider: none
+middlewares:
+  methods:
+    - response
+    - cache
+    - inject_params
+    - upstream
+  subscriptions:
+    - merge_subscription
+    - upstream
 
 rpcs: substrate
-
-health:
-  path: /health
-  method: system_health

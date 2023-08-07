@@ -2,7 +2,8 @@ methods:
   - method: eth_blockNumber
 
   - method: eth_chainId
-    cache: 1
+    cache:
+      size: 1
 
   - method: eth_protocolVersion
 
@@ -15,20 +16,24 @@ methods:
   - method: eth_accounts
 
   - method: net_version
-    cache: 1
+    cache:
+      size: 1
 
   - method: net_runtimeVersion
-    cache: 1
+    cache:
+      size: 1
 
   - method: net_health
 
   - method: net_isSafeMode
-    cache: 1
+    cache:
+      size: 1
 
   - method: net_indexer
 
   - method: web3_clientVersion
-    cache: 1
+    cache:
+      size: 1
 
   - method: eth_sign
     params:
@@ -60,7 +65,6 @@ methods:
         ty: BlockHash
 
   - method: eth_getBlockByHash
-    cache: 2000
     params:
       - name: BlockHash
         ty: BlockHash
@@ -68,7 +72,6 @@ methods:
         ty: Boolean
 
   - method: eth_getBlockByNumber
-    cache: 2000
     params:
       - name: blockTag
         ty: BlockTag
@@ -77,26 +80,22 @@ methods:
         ty: Boolean
 
   - method: eth_getBlockTransactionCountByHash
-    cache: 2000
     params:
       - name: BlockHash
         ty: BlockHash
 
   - method: eth_getBlockTransactionCountByNumber
-    cache: 2000
     params:
       - name: blockTag
         ty: BlockTag
         inject: true
 
   - method: eth_getUncleCountByBlockHash
-    cache: 2000
     params:
       - name: BlockHash
         ty: BlockHash
 
   - method: eth_getUncleCountByBlockNumber
-    cache: 2000
     params:
       - name: blockTag
         ty: BlockTag
@@ -117,7 +116,6 @@ methods:
         ty: Bytes
 
   - method: eth_getUncleByBlockHashAndIndex
-    cache: 2000
     params:
       - name: blockHash
         ty: BlockHash
@@ -125,7 +123,6 @@ methods:
         ty: Bytes
 
   - method: eth_getUncleByBlockNumberAndIndex
-    cache: 2000
     params:
       - name: block
         ty: BlockTag
@@ -134,14 +131,12 @@ methods:
         ty: Bytes
 
   - method: eth_isBlockFinalized
-    cache: 2000
     params:
       - name: block
         ty: BlockTag
         inject: true
 
   - method: eth_isTransactionFinalized
-    cache: 2000
     params:
       - name: transactionHash
         ty: Bytes
@@ -176,7 +171,6 @@ methods:
         ty: Bytes
 
   - method: eth_getBalance
-    cache: 2000
     params:
       - name: Address
         ty: Bytes
@@ -185,7 +179,6 @@ methods:
         inject: true
 
   - method: eth_getStorageAt
-    cache: 2000
     params:
       - name: address
         ty: Bytes
@@ -196,7 +189,6 @@ methods:
         inject: true
 
   - method: eth_getCode
-    cache: 2000
     params:
       - name: Address
         ty: Bytes
@@ -205,13 +197,11 @@ methods:
         inject: true
 
   - method: eth_getTransactionByHash
-    cache: 2000
     params:
       - name: transactionHash
         ty: Bytes
 
   - method: eth_getTransactionByBlockHashAndIndex
-    cache: 2000
     params:
       - name: BlockHash
         ty: BlockHash
@@ -219,7 +209,6 @@ methods:
         ty: Bytes
 
   - method: eth_getTransactionByBlockNumberAndIndex
-    cache: 2000
     params:
       - name: blockTag
         ty: BlockTag
@@ -238,7 +227,6 @@ methods:
         ty: Bytes
 
   - method: eth_getTransactionReceipt
-    cache: 2000
     params:
       - name: txHash
         ty: Bytes

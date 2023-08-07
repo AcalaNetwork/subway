@@ -1,30 +1,52 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
+use std::sync::Arc;
 
-pub mod methods;
-pub mod subscriptions;
-
-pub use methods::*;
-pub use subscriptions::*;
-
-type NextFn<Request, Result> = Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync>;
+pub use crate::{
+    config::{RpcMethod, RpcSubscription},
+    extension::ExtensionRegistry,
+    utils::{TypeRegistry, TypeRegistryRef},
+};
 
 #[async_trait]
-pub trait Middleware<Request, Result: 'static>: Send + Sync {
-    async fn call(&self, request: Request, next: NextFn<Request, Result>) -> Result;
+pub trait MiddlewareBuilder<Method, Request, Result> {
+    async fn build(
+        method: &Method,
+        extensions: &TypeRegistryRef,
+    ) -> Option<Box<dyn Middleware<Request, Result>>>;
+}
+
+pub type NextFn<Request, Result> =
+    Box<dyn FnOnce(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync>;
+
+#[async_trait]
+pub trait Middleware<Request, Result>: Send + Sync {
+    async fn call(
+        &self,
+        request: Request,
+        context: TypeRegistry,
+        next: NextFn<Request, Result>,
+    ) -> Result;
 }
 
 pub struct Middlewares<Request, Result> {
     middlewares: Vec<Arc<dyn Middleware<Request, Result>>>,
-    fallback: Arc<dyn Fn(Request) -> BoxFuture<'static, Result> + Send + Sync>,
+    fallback: Arc<dyn Fn(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync>,
+}
+
+impl<Request, Result> Clone for Middlewares<Request, Result> {
+    fn clone(&self) -> Self {
+        Self {
+            middlewares: self.middlewares.clone(),
+            fallback: self.fallback.clone(),
+        }
+    }
 }
 
 impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
     pub fn new(
         middlewares: Vec<Arc<dyn Middleware<Request, Result>>>,
-        fallback: Arc<dyn Fn(Request) -> BoxFuture<'static, Result> + Send + Sync>,
+        fallback: Arc<dyn Fn(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync>,
     ) -> Self {
         Self {
             middlewares,
@@ -35,17 +57,18 @@ impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
     pub async fn call(&self, request: Request) -> Result {
         let iter = self.middlewares.iter().rev();
         let fallback = self.fallback.clone();
-        let mut next: Box<dyn FnOnce(Request) -> BoxFuture<'static, Result> + Send + Sync> =
-            Box::new(move |request| (fallback)(request));
+        let mut next: Box<
+            dyn FnOnce(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync,
+        > = Box::new(move |request, context| (fallback)(request, context));
 
         for middleware in iter {
             let middleware = middleware.clone();
             let next2 = next;
-            next = Box::new(move |request| {
-                async move { middleware.call(request, next2).await }.boxed()
+            next = Box::new(move |request, context| {
+                async move { middleware.call(request, context, next2).await }.boxed()
             });
         }
 
-        (next)(request).await
+        (next)(request, TypeRegistry::new()).await
     }
 }

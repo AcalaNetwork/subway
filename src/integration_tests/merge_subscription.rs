@@ -1,11 +1,18 @@
 use serde_json::json;
 
-use crate::client::{
-    mock::{run_sink_tasks, SinkTask, TestServerBuilder},
-    Client,
+use crate::{
+    config::{Config, MergeStrategy, MiddlewaresConfig, RpcDefinitions, RpcSubscription},
+    extensions::{
+        client::{
+            mock::{run_sink_tasks, SinkTask, TestServerBuilder},
+            Client, ClientConfig,
+        },
+        merge_subscription::MergeSubscriptionConfig,
+        server::ServerConfig,
+        ExtensionsConfig,
+    },
+    server::start_server,
 };
-use crate::config::{Config, MergeStrategy, RpcDefinitions, RpcSubscription, ServerConfig};
-use crate::server::start_server;
 
 #[tokio::test]
 async fn merge_subscription_works() {
@@ -40,14 +47,25 @@ async fn merge_subscription_works() {
     });
 
     let config = Config {
-        endpoints: vec![format!("ws://{addr}")],
-        stale_timeout_seconds: 0,
-        cache_ttl_seconds: None,
-        merge_subscription_keep_alive_seconds: Some(1),
-        server: ServerConfig {
-            listen_address: "0.0.0.0".to_string(),
-            port: 0,
-            max_connections: 10,
+        extensions: ExtensionsConfig {
+            client: Some(ClientConfig {
+                endpoints: vec![format!("ws://{addr}")],
+                shuffle_endpoints: false,
+            }),
+            server: Some(ServerConfig {
+                listen_address: "0.0.0.0".to_string(),
+                port: 0,
+                max_connections: 10,
+                health: None,
+            }),
+            merge_subscription: Some(MergeSubscriptionConfig {
+                keep_alive_seconds: Some(1),
+            }),
+            ..Default::default()
+        },
+        middlewares: MiddlewaresConfig {
+            methods: vec![],
+            subscriptions: vec!["merge_subscription".to_string(), "upstream".to_string()],
         },
         rpcs: RpcDefinitions {
             methods: vec![],
@@ -73,18 +91,11 @@ async fn merge_subscription_works() {
             ],
             aliases: vec![],
         },
-        telemetry: None,
-        health: None,
     };
 
-    let (addr, server) = start_server(
-        &config,
-        Client::new(&[format!("ws://{addr}")]).await.unwrap(),
-    )
-    .await
-    .unwrap();
+    let (addr, server) = start_server(config).await.unwrap();
 
-    let client = Client::new(&[format!("ws://{addr}")]).await.unwrap();
+    let client = Client::new([format!("ws://{addr}")]).unwrap();
     let mut first_sub = client
         .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await

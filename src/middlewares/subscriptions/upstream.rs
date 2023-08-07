@@ -1,21 +1,14 @@
-use async_trait::async_trait;
-use jsonrpsee::{
-    core::{JsonValue, StringError},
-    PendingSubscriptionSink, SubscriptionMessage,
-};
 use std::sync::Arc;
 
-use crate::{
-    client::Client,
-    middleware::{Middleware, NextFn},
-};
+use async_trait::async_trait;
+use jsonrpsee::SubscriptionMessage;
 
-pub struct SubscriptionRequest {
-    pub subscribe: String,
-    pub params: Vec<JsonValue>,
-    pub unsubscribe: String,
-    pub sink: PendingSubscriptionSink,
-}
+use crate::{
+    extensions::client::Client,
+    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription},
+    middlewares::{SubscriptionRequest, SubscriptionResult},
+    utils::{TypeRegistry, TypeRegistryRef},
+};
 
 pub struct UpstreamMiddleware {
     client: Arc<Client>,
@@ -28,12 +21,30 @@ impl UpstreamMiddleware {
 }
 
 #[async_trait]
-impl Middleware<SubscriptionRequest, Result<(), StringError>> for UpstreamMiddleware {
+impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult>
+    for UpstreamMiddleware
+{
+    async fn build(
+        _method: &RpcSubscription,
+        extensions: &TypeRegistryRef,
+    ) -> Option<Box<dyn Middleware<SubscriptionRequest, SubscriptionResult>>> {
+        let client = extensions
+            .read()
+            .await
+            .get::<Client>()
+            .expect("Client extension not found");
+        Some(Box::new(UpstreamMiddleware::new(client)))
+    }
+}
+
+#[async_trait]
+impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware {
     async fn call(
         &self,
         request: SubscriptionRequest,
-        _next: NextFn<SubscriptionRequest, Result<(), StringError>>,
-    ) -> Result<(), StringError> {
+        _context: TypeRegistry,
+        _next: NextFn<SubscriptionRequest, SubscriptionResult>,
+    ) -> SubscriptionResult {
         let sink = request.sink;
 
         let mut sub = self
