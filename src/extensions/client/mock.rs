@@ -82,7 +82,7 @@ impl TestServerBuilder {
             .unwrap();
 
         let addr = server.local_addr().unwrap();
-        let handle = server.start(self.module).unwrap();
+        let handle = server.start(self.module);
 
         (addr, handle)
     }

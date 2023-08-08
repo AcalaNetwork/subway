@@ -241,7 +241,7 @@ mod tests {
             })
             .unwrap();
         let addr = format!("ws://{}", server.local_addr().unwrap());
-        let handle = server.start(module).unwrap();
+        let handle = server.start(module);
         (addr, handle)
     }
 

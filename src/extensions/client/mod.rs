@@ -111,11 +111,13 @@ impl Client {
 
                     tracing::info!("Connecting to endpoint: {}", url);
 
+                    // TODO: make those configurable
                     WsClientBuilder::default()
                         .request_timeout(std::time::Duration::from_secs(30))
                         .connection_timeout(std::time::Duration::from_secs(30))
                         .max_buffer_capacity_per_subscription(2048)
                         .max_concurrent_requests(2048)
+                        .max_response_size(20 * 1024 * 1024)
                         .build(url)
                         .map_err(|e| (e, url.to_string()))
                 };
