@@ -65,7 +65,7 @@ impl Server {
         let module = builder().await?;
 
         let addr = server.local_addr()?;
-        let server = server.start(module)?;
+        let server = server.start(module);
 
         Ok((addr, server))
     }
