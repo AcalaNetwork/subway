@@ -127,7 +127,7 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 }
 
 pub mod client {
-    use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
+    use jsonrpsee::client_transport::ws::{Url, WsTransportClientBuilder};
     use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
     pub use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
@@ -144,11 +144,11 @@ pub mod client {
     }
 
     pub async fn ws_handshake(url: &str, headers: HeaderMap) {
-        let uri: Uri = url.parse().unwrap();
+        let url: Url = url.parse().unwrap();
         WsTransportClientBuilder::default()
             .max_request_size(u32::MAX)
             .set_headers(headers)
-            .build(uri)
+            .build(url)
             .await
             .unwrap();
     }

@@ -2,7 +2,7 @@ use std::{future::Future, net::SocketAddr};
 
 use async_trait::async_trait;
 use jsonrpsee::server::{
-    middleware::proxy_get_request::ProxyGetRequestLayer,
+    middleware::ProxyGetRequestLayer,
     {RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
 };
 use serde::Deserialize;

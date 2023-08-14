@@ -1127,9 +1127,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-net"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a66b4e3c7d9ed8d315fd6b97c8b1f74a7c6ecbbc2320e65ae7ed38b7068cc620"
+checksum = "8ac9e8288ae2c632fa9f8657ac70bfe38a1530f345282d7ba66a1f70b72b7dc4"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -1160,9 +1160,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-utils"
-version = "0.1.7"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037fcb07216cb3a30f7292bd0176b050b7b9a052ba830ef7d5d65f6dc64ba58e"
+checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
 dependencies = [
  "js-sys",
  "serde",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1624,12 +1624,13 @@ dependencies = [
  "tokio-rustls",
  "tokio-util 0.7.8",
  "tracing",
+ "url",
  "webpki-roots",
 ]
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -1637,7 +1638,6 @@ dependencies = [
  "beef",
  "futures-timer",
  "futures-util",
- "globset",
  "hyper",
  "jsonrpsee-types",
  "parking_lot 0.12.1",
@@ -1654,7 +1654,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "async-trait",
  "hyper",
@@ -1667,11 +1667,12 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "url",
 ]
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -1682,15 +1683,18 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-server"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "futures-util",
+ "http",
  "hyper",
  "jsonrpsee-core",
  "jsonrpsee-types",
+ "route-recognizer",
  "serde",
  "serde_json",
  "soketto",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.8",
@@ -1700,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "anyhow",
  "beef",
@@ -1712,7 +1716,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-wasm-client"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -1721,12 +1725,13 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-types",
+ "url",
 ]
 
 [[package]]
@@ -2741,6 +2746,12 @@ dependencies = [
  "num-traits",
  "paste",
 ]
+
+[[package]]
+name = "route-recognizer"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 
 [[package]]
 name = "rustc-demangle"
