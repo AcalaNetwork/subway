@@ -1,7 +1,7 @@
 extensions:  
   client:
     endpoints:
-      - wss://eth-rpc-karura-testnet.aca-staging.network:443
+      - wss://eth-rpc-karura-testnet.aca-staging.network
   event_bus:
   eth_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes

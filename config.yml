@@ -1,8 +1,8 @@
 extensions:  
   client:
     endpoints:
-      - wss://acala-rpc.dwellir.com:443
-      - wss://acala-rpc-0.aca-api.network:443
+      - wss://acala-rpc.dwellir.com
+      - wss://acala-rpc-0.aca-api.network
   event_bus:
   substrate_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
