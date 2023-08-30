@@ -167,7 +167,7 @@ impl Client {
                                     }
                                 }
                                 Err(err) => {
-                                    tracing::info!("Request failed: {:?}", err);
+                                    tracing::debug!("Request failed: {:?}", err);
                                     match err {
                                         Error::RequestTimeout => {
                                             if let Err(e) = tx.send(Message::RotateEndpoint).await {
@@ -307,6 +307,8 @@ impl Client {
                 tokio::select! {
                     _ = disconnect_rx.recv() => {
                         tracing::info!("Disconnected from endpoint");
+                        // TODO: use a backoff strategy
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         ws = build_ws().await;
                     }
                     message = rx.recv() => {
