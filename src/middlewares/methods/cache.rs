@@ -2,6 +2,7 @@ use std::num::NonZeroUsize;
 
 use async_trait::async_trait;
 use blake2::Blake2b512;
+use futures::FutureExt as _;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
@@ -9,7 +10,7 @@ use crate::{
     extensions::cache::Cache as CacheExtension,
     middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     middlewares::{CallRequest, CallResult},
-    utils::{new_cache, telemetry, Cache, CacheKey, TypeRegistry, TypeRegistryRef},
+    utils::{telemetry, Cache, CacheKey, TypeRegistry, TypeRegistryRef},
 };
 
 pub struct BypassCache(pub bool);
@@ -43,7 +44,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
         let size =
             NonZeroUsize::new(params.size.unwrap_or(cache_ext.config.default_size) as usize)?;
 
-        let cache = new_cache(
+        let cache = Cache::new(
             size,
             params
                 .ttl_seconds
@@ -72,21 +73,16 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddl
 
             let key = CacheKey::<Blake2b512>::new(&request.method, &request.params);
 
-            if let Some(value) = self.cache.get(&key) {
-                return Ok(value);
-            }
-
-            let result = next(request, context).await;
+            let result = self
+                .cache
+                .get_or_insert_with(&key, || next(request, context).boxed())
+                .await;
 
             if let Ok(ref value) = result {
                 // avoid caching null value because it usually means data not available
                 // but it could be available in the future
-                if !value.is_null() {
-                    let cache = self.cache.clone();
-                    let value = value.clone();
-                    tokio::spawn(async move {
-                        cache.insert(key, value).await;
-                    });
+                if value.is_null() {
+                    self.cache.remove(&key).await;
                 }
             }
 
@@ -108,7 +104,8 @@ mod tests {
 
     #[tokio::test]
     async fn handle_ok_resp() {
-        let middleware = CacheMiddleware::new(Cache::new(3));
+        let cache = Cache::new(NonZeroUsize::try_from(1).unwrap(), None);
+        let middleware = CacheMiddleware::new(cache.clone());
 
         let res = middleware
             .call(
@@ -118,9 +115,6 @@ mod tests {
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
-
-        // wait for cache write
-        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
 
         // cache hit
         let res = middleware
@@ -172,6 +166,9 @@ mod tests {
             .await;
         assert_eq!(res.unwrap(), json!(4));
 
+        // ensure cache is fully updated
+        cache.sync();
+
         // cache miss due to entry pruned
         let res = middleware
             .call(
@@ -185,7 +182,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_not_cache_null() {
-        let middleware = CacheMiddleware::new(Cache::new(3));
+        let middleware = CacheMiddleware::new(Cache::new(NonZeroUsize::try_from(3).unwrap(), None));
 
         let res = middleware
             .call(
@@ -212,7 +209,7 @@ mod tests {
 
     #[tokio::test]
     async fn cache_ttl_works() {
-        let middleware = CacheMiddleware::new(new_cache(
+        let middleware = CacheMiddleware::new(Cache::new(
             NonZeroUsize::new(1).unwrap(),
             Some(Duration::from_millis(10)),
         ));
@@ -255,7 +252,7 @@ mod tests {
 
     #[tokio::test]
     async fn bypass_cache() {
-        let middleware = CacheMiddleware::new(Cache::new(3));
+        let middleware = CacheMiddleware::new(Cache::new(NonZeroUsize::try_from(3).unwrap(), None));
 
         let res = middleware
             .call(
@@ -294,5 +291,31 @@ mod tests {
             )
             .await;
         assert_eq!(res.unwrap(), json!(1));
+    }
+
+    #[tokio::test]
+    async fn avoid_repeated_requests() {
+        let middleware = CacheMiddleware::new(Cache::new(NonZeroUsize::try_from(3).unwrap(), None));
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let res = middleware.call(
+            CallRequest::new("test", vec![json!(11)]),
+            Default::default(),
+            Box::new(move |_, _| async move { Ok(rx.recv().await.unwrap()) }.boxed()),
+        );
+
+        let res2 = middleware.call(
+            CallRequest::new("test", vec![json!(11)]),
+            Default::default(),
+            Box::new(move |_, _| async move { panic!() }.boxed()),
+        );
+
+        tx.send(json!(1)).await.unwrap();
+
+        let res = res.await;
+        let res2 = res2.await;
+
+        assert_eq!(res.unwrap(), json!(1));
+        assert_eq!(res2.unwrap(), json!(1));
     }
 }
