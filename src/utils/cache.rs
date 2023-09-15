@@ -80,10 +80,10 @@ impl<D: Digest + 'static> Cache<D> {
                 let _ = rx.changed().await;
                 let value = rx.borrow();
                 if value.is_some() {
-                    return value.clone().unwrap().ok();
+                    value.clone().unwrap().ok()
                 } else {
                     tracing::error!("Cache: Unreachable code");
-                    return None;
+                    None
                 }
             }
             None => None,
