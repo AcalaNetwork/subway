@@ -100,12 +100,12 @@ impl SubstrateApi {
 
                                     let number = super::get_number(&val)?;
 
-                                    let res = client
+                                    let hash = client
                                         .request("chain_getBlockHash", vec![number.into()])
                                         .await?;
 
-                                    tracing::debug!("New head: {number} {res}");
-                                    head_tx.send_replace(Some((res, number)));
+                                    tracing::debug!("New head: {number} {hash}");
+                                    head_tx.send_replace(Some((hash, number)));
                                 } else {
                                     break;
                                 }
@@ -145,12 +145,22 @@ impl SubstrateApi {
                     while let Some(Ok(val)) = sub.next().await {
                         let number = super::get_number(&val)?;
 
-                        let res = client
+                        let hash = client
                             .request("chain_getBlockHash", vec![number.into()])
                             .await?;
 
-                        tracing::debug!("New finalized head: {number} {res}");
-                        finalized_head_tx.send_replace(Some((res, number)));
+                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash)
+                        {
+                            tracing::error!("Error in background task: {e}");
+                            client
+                                .rotate_endpoint()
+                                .await
+                                .expect("Failed to rotate endpoint");
+                            break;
+                        }
+
+                        tracing::debug!("New finalized head: {number} {hash}");
+                        finalized_head_tx.send_replace(Some((hash, number)));
                     }
 
                     Ok::<(), anyhow::Error>(())

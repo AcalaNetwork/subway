@@ -159,6 +159,16 @@ impl EthApi {
                         let number = super::get_number(&val)?;
                         let hash = super::get_hash(&val)?;
 
+                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash)
+                        {
+                            tracing::error!("Error in background task: {e}");
+                            client
+                                .rotate_endpoint()
+                                .await
+                                .expect("Failed to rotate endpoint");
+                            break;
+                        }
+
                         tracing::debug!("New finalized head: {number} {hash}");
                         finalized_head_tx.send_replace(Some((hash, number)));
                     }
