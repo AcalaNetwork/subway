@@ -75,7 +75,7 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddl
 
             let result = self
                 .cache
-                .get_or_insert_with(&key, || next(request, context).boxed())
+                .get_or_insert_with(key.clone(), || next(request, context).boxed())
                 .await;
 
             if let Ok(ref value) = result {
