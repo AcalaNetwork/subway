@@ -17,9 +17,11 @@ extensions:
     port: 9944
     listen_address: '0.0.0.0'
     max_connections: 2000
-    health:
-      path: /health
-      method: system_health
+    http_methods:
+      - path: /health
+        method: system_health
+      - path: /liveness
+        method: chain_getBlockHash
 
 middlewares:
   methods:

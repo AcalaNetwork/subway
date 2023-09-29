@@ -1,20 +1,22 @@
 use std::{future::Future, net::SocketAddr};
 
 use async_trait::async_trait;
-use jsonrpsee::server::{
-    middleware::ProxyGetRequestLayer,
-    {RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
-};
+use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use serde::Deserialize;
 
 use crate::{extension::Extension, middleware::ExtensionRegistry};
+use proxy_get_request::ProxyGetRequestLayer;
+
+use self::proxy_get_request::ProxyGetRequestMethod;
+
+mod proxy_get_request;
 
 pub struct Server {
     config: ServerConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct HealthConfig {
+pub struct HttpMethodsConfig {
     pub path: String,
     pub method: String,
 }
@@ -25,7 +27,7 @@ pub struct ServerConfig {
     pub listen_address: String,
     pub max_connections: u32,
     #[serde(default)]
-    pub health: Option<HealthConfig>,
+    pub http_methods: Vec<HttpMethodsConfig>,
 }
 
 #[async_trait]
@@ -49,11 +51,19 @@ impl Server {
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-        let service_builder =
-            tower::ServiceBuilder::new().option_layer(self.config.health.as_ref().map(|h| {
-                ProxyGetRequestLayer::new(h.path.clone(), h.method.clone())
-                    .expect("Invalid health config")
-            }));
+        let service_builder = tower::ServiceBuilder::new().layer(
+            ProxyGetRequestLayer::new(
+                self.config
+                    .http_methods
+                    .iter()
+                    .map(|m| ProxyGetRequestMethod {
+                        path: m.path.clone(),
+                        method: m.method.clone(),
+                    })
+                    .collect(),
+            )
+            .expect("Invalid health config"),
+        );
 
         let server = ServerBuilder::default()
             .set_middleware(service_builder)
