@@ -61,12 +61,12 @@ pub(crate) fn validate_new_head(
 ) -> anyhow::Result<()> {
     if let Some((current_hash, current_number)) = tx.borrow().as_ref() {
         if *current_number > number {
-            return Err(anyhow::Error::msg("Head number is not increasing, current_number: {current_number} new_number: {number}"));
+            return Err(anyhow::Error::msg(format!("Head number is not increasing, current_number: {current_number} new_number: {number}")));
         }
 
         if *current_number == number && current_hash != hash {
             return Err(anyhow::Error::msg(
-                "Head number is the same but hash is not matching, current_hash: {current_hash} new_hash: {hash}"
+                format!("Head number is the same but hash is not matching, current_hash: {current_hash} new_hash: {hash}")
             ));
         }
     }
