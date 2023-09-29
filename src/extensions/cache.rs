@@ -12,7 +12,7 @@ pub struct CacheConfig {
     // None means no cache expiration
     #[serde(default)]
     pub default_ttl_seconds: Option<u64>,
-    pub default_size: u32,
+    pub default_size: usize,
 }
 
 #[async_trait]

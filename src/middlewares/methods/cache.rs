@@ -7,6 +7,7 @@ use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
 use crate::{
+    config::CacheParams,
     extensions::cache::Cache as CacheExtension,
     middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     middlewares::{CallRequest, CallResult},
@@ -31,24 +32,27 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
         method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        let params = method.cache.as_ref()?;
-        if params.size == Some(0) {
-            return None;
-        }
         let cache_ext = extensions
             .read()
             .await
             .get::<CacheExtension>()
             .expect("Cache extension not found");
 
-        let size =
-            NonZeroUsize::new(params.size.unwrap_or(cache_ext.config.default_size) as usize)?;
+        // do not cache if size is 0, otherwise use default size
+        let size = match method.cache {
+            Some(CacheParams { size: Some(0), .. }) => return None,
+            Some(CacheParams { size, .. }) => size.unwrap_or(cache_ext.config.default_size),
+            None => cache_ext.config.default_size,
+        };
+
+        let ttl_seconds = match method.cache {
+            Some(CacheParams { ttl_seconds, .. }) => ttl_seconds,
+            None => cache_ext.config.default_ttl_seconds,
+        };
 
         let cache = Cache::new(
-            size,
-            params
-                .ttl_seconds
-                .map(|s| std::time::Duration::from_secs(s as u64)),
+            NonZeroUsize::new(size)?,
+            ttl_seconds.map(std::time::Duration::from_secs),
         );
 
         Some(Box::new(Self::new(cache)))
