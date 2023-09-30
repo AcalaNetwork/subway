@@ -1,5 +1,7 @@
 methods:
   - method: eth_blockNumber
+    cache:
+      ttl_seconds: 1
 
   - method: eth_chainId
     cache:
@@ -43,21 +45,29 @@ methods:
         ty: String
 
   - method: eth_sendTransaction
+    cache:
+      size: 0
     params:
       - name: Transaction
         ty: Bytes
 
   - method: eth_sendRawTransaction
+    cache:
+      size: 0
     params:
       - name: transaction
         ty: Bytes
 
   - method: eth_call
+    cache:
+      ttl_seconds: 3
     params:
       - name: transaction
         ty: Bytes
 
   - method: eth_getTransactionCount
+    cache:
+      ttl_seconds: 3
     params:
       - name: address
         ty: Bytes
@@ -102,6 +112,8 @@ methods:
         inject: true
 
   - method: eth_estimateGas
+    cache:
+      ttl_seconds: 3
     params:
       - name: transaction
         ty: Bytes
@@ -131,41 +143,59 @@ methods:
         ty: Bytes
 
   - method: eth_isBlockFinalized
+    cache:
+      ttl_seconds: 3
     params:
       - name: block
         ty: BlockTag
         inject: true
 
   - method: eth_isTransactionFinalized
+    cache:
+      ttl_seconds: 3
     params:
       - name: transactionHash
         ty: Bytes
 
   - method: eth_newFilter
+    cache:
+      size: 0
     params:
       - name: Filter
         ty: Bytes
 
   - method: eth_newBlockFilter
+    cache:
+      size: 0
 
   - method: eth_newPendingTransactionFilter
+    cache:
+      size: 0
 
   - method: eth_getFilterChanges
+    cache:
+      size: 0
     params:
       - name: address
         ty: Bytes
 
   - method: eth_getFilterLogs
+    cache:
+      size: 0
     params:
       - name: address
         ty: Bytes
 
   - method: eth_uninstallFilter
+    cache:
+      size: 0
     params:
       - name: FilterIdentifier
         ty: Bytes
 
   - method: eth_getLogs
+    cache:
+      size: 0
     params:
       - name: Filter
         ty: Bytes

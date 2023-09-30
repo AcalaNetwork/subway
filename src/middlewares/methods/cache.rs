@@ -7,6 +7,7 @@ use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
 use crate::{
+    config::CacheParams,
     extensions::cache::Cache as CacheExtension,
     middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     middlewares::{CallRequest, CallResult},
@@ -31,24 +32,34 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
         method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        let params = method.cache.as_ref()?;
-        if params.size == Some(0) {
-            return None;
-        }
         let cache_ext = extensions
             .read()
             .await
             .get::<CacheExtension>()
             .expect("Cache extension not found");
 
-        let size =
-            NonZeroUsize::new(params.size.unwrap_or(cache_ext.config.default_size) as usize)?;
+        // do not cache if size is 0, otherwise use default size
+        let size = match method.cache {
+            Some(CacheParams { size: Some(0), .. }) => return None,
+            Some(CacheParams { size, .. }) => size.unwrap_or(cache_ext.config.default_size),
+            None => cache_ext.config.default_size,
+        };
+
+        let ttl_seconds = match method.cache {
+            // ttl zero means cache forever
+            Some(CacheParams {
+                ttl_seconds: Some(0),
+                ..
+            }) => None,
+            Some(CacheParams { ttl_seconds, .. }) => {
+                ttl_seconds.or(cache_ext.config.default_ttl_seconds)
+            }
+            None => cache_ext.config.default_ttl_seconds,
+        };
 
         let cache = Cache::new(
-            size,
-            params
-                .ttl_seconds
-                .map(|s| std::time::Duration::from_secs(s as u64)),
+            NonZeroUsize::new(size)?,
+            ttl_seconds.map(std::time::Duration::from_secs),
         );
 
         Some(Box::new(Self::new(cache)))
@@ -317,5 +328,80 @@ mod tests {
 
         assert_eq!(res.unwrap(), json!(1));
         assert_eq!(res2.unwrap(), json!(1));
+    }
+
+    #[tokio::test]
+    async fn cache_builder_works() {
+        let ext = crate::extensions::ExtensionsConfig {
+            cache: Some(crate::extensions::cache::CacheConfig {
+                default_size: 100,
+                default_ttl_seconds: Some(10),
+            }),
+            ..Default::default()
+        }
+        .create_registry()
+        .await
+        .expect("Failed to create registry");
+
+        // disable cache with size = 0
+        let cache_middleware = CacheMiddleware::build(
+            &RpcMethod {
+                method: "foo".to_string(),
+                cache: Some(CacheParams {
+                    size: Some(0),
+                    ttl_seconds: None,
+                }),
+                params: vec![],
+                response: None,
+            },
+            &ext,
+        )
+        .await;
+        assert!(cache_middleware.is_none(), "Cache should be disabled");
+
+        // size none, use default size
+        let cache_middleware = CacheMiddleware::build(
+            &RpcMethod {
+                method: "foo".to_string(),
+                cache: Some(CacheParams {
+                    size: None,
+                    ttl_seconds: None,
+                }),
+                params: vec![],
+                response: None,
+            },
+            &ext,
+        )
+        .await;
+        assert!(cache_middleware.is_some(), "Cache should be enabled");
+
+        // custom size
+        let cache_middleware = CacheMiddleware::build(
+            &RpcMethod {
+                method: "foo".to_string(),
+                cache: Some(CacheParams {
+                    size: Some(1),
+                    ttl_seconds: None,
+                }),
+                params: vec![],
+                response: None,
+            },
+            &ext,
+        )
+        .await;
+        assert!(cache_middleware.is_some(), "Cache should be enabled");
+
+        // no cache params
+        let cache_middleware = CacheMiddleware::build(
+            &RpcMethod {
+                method: "foo".to_string(),
+                cache: None,
+                params: vec![],
+                response: None,
+            },
+            &ext,
+        )
+        .await;
+        assert!(cache_middleware.is_some(), "Cache should be enabled");
     }
 }
