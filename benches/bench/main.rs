@@ -239,7 +239,7 @@ fn config() -> Config {
                 listen_address: SUBWAY_SERVER_ADDR.to_string(),
                 port: SUBWAY_SERVER_PORT,
                 max_connections: 1024 * 1024,
-                health: None,
+                http_methods: Vec::new(),
             }),
             ..Default::default()
         },
