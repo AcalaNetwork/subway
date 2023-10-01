@@ -202,7 +202,7 @@ mod tests {
                     listen_address: "127.0.0.1".to_string(),
                     port: 9944,
                     max_connections: 1024,
-                    health: None,
+                    http_methods: Vec::new(),
                 }),
                 ..Default::default()
             },
