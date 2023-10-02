@@ -102,38 +102,52 @@ impl<D: Digest + 'static> Cache<D> {
     where
         F: FnOnce() -> BoxFuture<'static, Result<JsonValue, ErrorObjectOwned>>,
     {
+        let fetch = || async {
+            let (tx, rx) = watch::channel(None);
+            self.cache
+                .insert(key.clone(), CacheValue::Pending(rx))
+                .await;
+            let value = f().await;
+            let _ = tx.send(Some(value.clone()));
+            match &value {
+                Ok(value) => {
+                    self.cache
+                        .insert(key.clone(), CacheValue::Value(value.clone()))
+                        .await;
+                }
+                Err(_) => {
+                    self.cache.remove(&key).await;
+                }
+            };
+            value
+        };
+
         match self.cache.get(&key) {
             Some(CacheValue::Value(value)) => Ok(value),
             Some(CacheValue::Pending(mut rx)) => {
                 {
+                    // limit the scope of value
                     let value = rx.borrow();
                     if value.is_some() {
                         return value.clone().unwrap();
                     }
                 }
+
                 let _ = rx.changed().await;
-                let value = rx.borrow();
-                value.clone().expect("Cache: should always be Some")
-            }
-            None => {
-                let (tx, rx) = watch::channel(None);
-                self.cache
-                    .insert(key.clone(), CacheValue::Pending(rx))
-                    .await;
-                let value = f().await;
-                let _ = tx.send(Some(value.clone()));
-                match &value {
-                    Ok(value) => {
-                        self.cache
-                            .insert(key.clone(), CacheValue::Value(value.clone()))
-                            .await;
+
+                {
+                    // limit the scope of value
+                    let value = rx.borrow();
+                    if let Some(value) = &*value {
+                        return value.clone();
                     }
-                    Err(_) => {
-                        self.cache.remove(&key).await;
-                    }
-                };
-                value
+                }
+
+                // this only happens initial fetch request got canceled for some reason
+                // in that case we need to fetch again
+                fetch().await
             }
+            None => fetch().await,
         }
     }
 
@@ -152,6 +166,7 @@ impl<D: Digest + 'static> Cache<D> {
 mod tests {
     use super::*;
     use futures::FutureExt as _;
+    use jsonrpsee::types::error::reject_too_big_request;
     use serde_json::json;
 
     #[tokio::test]
@@ -199,8 +214,6 @@ mod tests {
         let cache2 = cache.clone();
         let key2 = key.clone();
         let h2 = tokio::spawn(async move {
-            println!("5");
-
             let value = cache2
                 .get_or_insert_with(key2, || {
                     async {
@@ -220,5 +233,49 @@ mod tests {
         h2.await.unwrap();
 
         assert_eq!(cache.get(&key).await, Some(json!("value")));
+    }
+
+    #[tokio::test]
+    async fn get_or_insert_with_handle_error() {
+        let cache = Cache::<blake2::Blake2b512>::new(NonZeroUsize::new(1).unwrap(), None);
+
+        let key = CacheKey::<blake2::Blake2b512>::new(&"key".to_string(), &[]);
+
+        let (_tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+        let cache2 = cache.clone();
+        let key2 = key.clone();
+        let h1 = tokio::spawn(async move {
+            let _ = cache2
+                .get_or_insert_with(key2.clone(), || {
+                    async move {
+                        let _ = rx.await;
+                        panic!();
+                    }
+                    .boxed()
+                })
+                .await;
+            unreachable!();
+        });
+
+        tokio::task::yield_now().await;
+
+        let cache2 = cache.clone();
+        let key2 = key.clone();
+        let h2 = tokio::spawn(async move {
+            let value = cache2
+                .get_or_insert_with(key2, || async { Err(reject_too_big_request(100)) }.boxed())
+                .await;
+            assert_eq!(value, Err(reject_too_big_request(100)));
+        });
+
+        tokio::task::yield_now().await;
+
+        h1.abort(); // first request failed for whatever reason
+
+        h1.await.unwrap_err();
+        h2.await.unwrap(); // second request should still work
+
+        assert_eq!(cache.get(&key).await, None);
     }
 }

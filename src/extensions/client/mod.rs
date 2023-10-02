@@ -141,7 +141,7 @@ impl Client {
                         Err((e, url)) => {
                             tracing::warn!("Unable to connect to endpoint: '{url}' error: {e}");
                             // TODO: use a backoff strategy
-                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                         }
                     }
                 }
