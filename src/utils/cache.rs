@@ -143,7 +143,7 @@ impl<D: Digest + 'static> Cache<D> {
                     }
                 }
 
-                // this only happens initial fetch request got canceled for some reason
+                // this only happens when initial fetch request got canceled for some reason
                 // in that case we need to fetch again
                 fetch().await
             }
@@ -236,7 +236,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_or_insert_with_handle_error() {
+    async fn get_or_insert_with_handle_canceled_request() {
         let cache = Cache::<blake2::Blake2b512>::new(NonZeroUsize::new(1).unwrap(), None);
 
         let key = CacheKey::<blake2::Blake2b512>::new(&"key".to_string(), &[]);
@@ -264,9 +264,9 @@ mod tests {
         let key2 = key.clone();
         let h2 = tokio::spawn(async move {
             let value = cache2
-                .get_or_insert_with(key2, || async { Err(reject_too_big_request(100)) }.boxed())
+                .get_or_insert_with(key2, || async { Ok(json!("value")) }.boxed())
                 .await;
-            assert_eq!(value, Err(reject_too_big_request(100)));
+            assert_eq!(value, Ok(json!("value")));
         });
 
         tokio::task::yield_now().await;
@@ -275,6 +275,22 @@ mod tests {
 
         h1.await.unwrap_err();
         h2.await.unwrap(); // second request should still work
+
+        assert_eq!(cache.get(&key).await, Some(json!("value")));
+    }
+
+    #[tokio::test]
+    async fn get_or_insert_with_error() {
+        let cache = Cache::<blake2::Blake2b512>::new(NonZeroUsize::new(1).unwrap(), None);
+
+        let key = CacheKey::<blake2::Blake2b512>::new(&"key".to_string(), &[]);
+
+        let value = cache
+            .get_or_insert_with(key.clone(), || {
+                async move { Err(reject_too_big_request(100)) }.boxed()
+            })
+            .await;
+        assert_eq!(value, Err(reject_too_big_request(100)));
 
         assert_eq!(cache.get(&key).await, None);
     }
