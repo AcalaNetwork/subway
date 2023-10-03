@@ -20,10 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Install toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain
       with:
-        toolchain: nightly-2023-08-16
-        components: rustfmt, clippy
+        profile: minimal
     - uses: actions/checkout@v3
       with:
         submodules: recursive
