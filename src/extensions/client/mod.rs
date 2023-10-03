@@ -130,8 +130,11 @@ impl Client {
                             let ws = Arc::new(ws);
                             let ws2 = ws.clone();
 
+                            tracing::info!("Endpoint connected");
+
                             tokio::spawn(async move {
                                 ws2.on_disconnect().await;
+                                tracing::info!("Endpoint disconnected");
                                 if let Err(e) = disconnect_tx.send(()).await {
                                     tracing::warn!("Unable to send disconnect: {}", e);
                                 }
@@ -315,6 +318,7 @@ impl Client {
                         tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
+                                tracing::info!("Rotate endpoint");
                                 ws = build_ws().await;
                             }
                             Some(message) => handle_message(message, ws.clone()),
