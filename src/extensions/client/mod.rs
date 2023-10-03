@@ -1,5 +1,3 @@
-use std::sync::{atomic::AtomicUsize, Arc};
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::TryFutureExt;
@@ -14,6 +12,8 @@ use jsonrpsee::{
 use opentelemetry::trace::FutureExt;
 use rand::{seq::SliceRandom, thread_rng};
 use serde::Deserialize;
+use std::sync::{atomic::AtomicUsize, Arc};
+use tokio::sync::Notify;
 
 use crate::{
     extension::Extension,
@@ -30,6 +30,7 @@ const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client")
 
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
+    rotation_notify: Arc<Notify>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -97,6 +98,9 @@ impl Client {
         let tx2 = tx.clone();
 
         let (disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel::<()>(10);
+
+        let rotation_notify = Arc::new(Notify::new());
+        let rotating = rotation_notify.clone();
 
         tokio::spawn(async move {
             let tx = tx2;
@@ -315,6 +319,7 @@ impl Client {
                         tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
+                                rotating.notify_waiters();
                                 ws = build_ws().await;
                             }
                             Some(message) => handle_message(message, ws.clone()),
@@ -328,7 +333,10 @@ impl Client {
             }
         });
 
-        Ok(Self { sender: tx })
+        Ok(Self {
+            sender: tx,
+            rotation_notify,
+        })
     }
 
     pub async fn request(
@@ -375,10 +383,15 @@ impl Client {
         rx.with_context(cx).await.map_err(errors::failed)?
     }
 
-    pub async fn rotate_endpoint(&self) -> Result<(), ()> {
+    pub async fn rotate_endpoint(&self) {
         self.sender
             .send(Message::RotateEndpoint)
             .await
-            .map_err(|_| ())
+            .expect("Failed to rotate endpoint");
+    }
+
+    /// Returns a future that resolves when the endpoint is rotated.
+    pub async fn on_rotation(&self) {
+        self.rotation_notify.notified().await
     }
 }
