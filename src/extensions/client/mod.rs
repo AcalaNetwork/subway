@@ -108,7 +108,7 @@ impl Client {
             let tx = tx2;
 
             let connect_backoff_counter = Arc::new(AtomicU32::new(0));
-            let subscribe_backoff_counter = Arc::new(AtomicU32::new(0));
+            let request_backoff_counter = Arc::new(AtomicU32::new(0));
 
             let current_endpoint = AtomicUsize::new(0);
 
@@ -165,7 +165,7 @@ impl Client {
             let handle_message = |message: Message, ws: Arc<WsClient>| {
                 let tx = tx.clone();
                 let connect_backoff_counter = connect_backoff_counter.clone();
-                let subscribe_backoff_counter = subscribe_backoff_counter.clone();
+                let request_backoff_counter = request_backoff_counter.clone();
 
                 tokio::spawn(async move {
                     match message {
@@ -209,7 +209,7 @@ impl Client {
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
                                             tokio::time::sleep(get_backoff_time(
-                                                &connect_backoff_counter,
+                                                &request_backoff_counter,
                                             ))
                                             .await;
 
@@ -247,7 +247,7 @@ impl Client {
                                 ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
                             match result {
                                 result @ Ok(_) => {
-                                    subscribe_backoff_counter
+                                    request_backoff_counter
                                         .store(0, std::sync::atomic::Ordering::Relaxed);
 
                                     if let Err(e) = response.send(result) {
@@ -283,7 +283,7 @@ impl Client {
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
                                             tokio::time::sleep(get_backoff_time(
-                                                &subscribe_backoff_counter,
+                                                &request_backoff_counter,
                                             ))
                                             .await;
 
