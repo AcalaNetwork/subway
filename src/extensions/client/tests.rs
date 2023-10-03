@@ -90,7 +90,7 @@ async fn multiple_endpoints() {
 
     assert_eq!(result.to_string(), "2");
 
-    client.rotate_endpoint().await.unwrap();
+    client.rotate_endpoint().await;
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 

@@ -114,7 +114,11 @@ impl EthApi {
                             }
                             _ = interval.tick() => {
                                 tracing::warn!("No new blocks for {stale_timeout:?} seconds, rotating endpoint");
-                                client.rotate_endpoint().await.expect("Failed to rotate endpoint");
+                                client.rotate_endpoint().await;
+                                break;
+                            }
+                            _ = client.on_rotation() => {
+                                // endpoint is rotated, break the loop and restart subscription
                                 break;
                             }
                         }
@@ -140,18 +144,31 @@ impl EthApi {
                         .subscribe("eth_subscribe", ["newFinalizedHeads".into()].into(), "eth_unsubscribe")
                         .await?;
 
-                    while let Some(Ok(val)) = sub.next().await {
-                        let number = super::get_number(&val)?;
-                        let hash = super::get_hash(&val)?;
+                    loop {
+                        tokio::select! {
+                            val = sub.next() => {
+                                if let Some(Ok(val)) = val {
+                                    let number = super::get_number(&val)?;
+                                    let hash = super::get_hash(&val)?;
 
-                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash) {
-                            tracing::error!("Error in background task: {e}");
-                            client.rotate_endpoint().await.expect("Failed to rotate endpoint");
-                            break;
+                                    if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash)
+                                    {
+                                        tracing::error!("Error in background task: {e}");
+                                        client.rotate_endpoint().await;
+                                        break;
+                                    }
+
+                                    tracing::debug!("New finalized head: {number} {hash}");
+                                    finalized_head_tx.send_replace(Some((hash, number)));
+                                } else {
+                                    break;
+                                }
+                            }
+                            _ = client.on_rotation() => {
+                                // endpoint is rotated, break the loop and restart subscription
+                                break;
+                            }
                         }
-
-                        tracing::debug!("New finalized head: {number} {hash}");
-                        finalized_head_tx.send_replace(Some((hash, number)));
                     }
 
                     Ok::<(), anyhow::Error>(())

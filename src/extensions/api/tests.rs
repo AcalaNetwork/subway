@@ -241,8 +241,7 @@ async fn rotate_endpoint_on_head_mismatch() {
     let client = Client::new([format!("ws://{addr1}"), format!("ws://{addr2}")]).unwrap();
 
     let client = Arc::new(client);
-    // TODO: investigate why it takes a while to connect to another endpoint
-    let api = SubstrateApi::new(client.clone(), std::time::Duration::from_millis(5_000));
+    let api = SubstrateApi::new(client.clone(), std::time::Duration::from_millis(100));
 
     let head = api.get_head();
     let finalized_head = api.get_finalized_head();
@@ -311,6 +310,12 @@ async fn rotate_endpoint_on_head_mismatch() {
         assert_eq!(params, json!([0x01]));
         tx.send(json!("0xaa")).unwrap();
     }
+
+    // wait a bit to process tasks
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+    assert!(head_sink.is_closed());
+    assert!(finalized_head_sink.is_closed());
 
     // current finalized head is still 2
     assert_eq!(api.get_finalized_head().read().await, (json!("0xbb"), 0x02));
