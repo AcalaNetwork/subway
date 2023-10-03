@@ -177,6 +177,9 @@ impl Client {
                             let result = ws.request(&method, params.clone()).await;
                             match result {
                                 result @ Ok(_) => {
+                                    request_backoff_counter
+                                        .store(0, std::sync::atomic::Ordering::Relaxed);
+
                                     if let Err(e) = response.send(result) {
                                         tracing::warn!("Failed to send response: {:?}", e);
                                     }
