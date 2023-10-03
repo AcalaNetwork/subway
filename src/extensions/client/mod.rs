@@ -1,4 +1,10 @@
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::{
+    sync::{
+        atomic::{AtomicU32, AtomicUsize},
+        Arc,
+    },
+    time::Duration,
+};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -101,6 +107,9 @@ impl Client {
         tokio::spawn(async move {
             let tx = tx2;
 
+            let connect_backoff_counter = Arc::new(AtomicU32::new(0));
+            let subscribe_backoff_counter = Arc::new(AtomicU32::new(0));
+
             let current_endpoint = AtomicUsize::new(0);
 
             let build_ws = || async {
@@ -131,6 +140,7 @@ impl Client {
                             let ws2 = ws.clone();
 
                             tracing::info!("Endpoint connected");
+                            connect_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
 
                             tokio::spawn(async move {
                                 ws2.on_disconnect().await;
@@ -143,8 +153,7 @@ impl Client {
                         }
                         Err((e, url)) => {
                             tracing::warn!("Unable to connect to endpoint: '{url}' error: {e}");
-                            // TODO: use a backoff strategy
-                            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                            tokio::time::sleep(get_backoff_time(counter)).await;
                         }
                     }
                 }
@@ -154,6 +163,7 @@ impl Client {
 
             let handle_message = |message: Message, ws: Arc<WsClient>| {
                 let tx = tx.clone();
+                let connect_backoff_counter = connect_backoff_counter.clone();
 
                 tokio::spawn(async move {
                     match message {
@@ -196,9 +206,8 @@ impl Client {
                                         Error::Transport(_)
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
-                                            // TODO: use a backoff strategy
-                                            tokio::time::sleep(std::time::Duration::from_millis(
-                                                200,
+                                            tokio::time::sleep(get_backoff_time(
+                                                connect_backoff_counter,
                                             ))
                                             .await;
 
@@ -236,6 +245,9 @@ impl Client {
                                 ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
                             match result {
                                 result @ Ok(_) => {
+                                    subscribe_backoff_counter
+                                        .store(0, std::sync::atomic::Ordering::Relaxed);
+
                                     if let Err(e) = response.send(result) {
                                         tracing::warn!("Failed to send response: {:?}", e);
                                     }
@@ -268,9 +280,8 @@ impl Client {
                                         Error::Transport(_)
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
-                                            // TODO: use a backoff strategy
-                                            tokio::time::sleep(std::time::Duration::from_millis(
-                                                200,
+                                            tokio::time::sleep(get_backoff_time(
+                                                subscribe_backoff_counter,
                                             ))
                                             .await;
 
@@ -310,8 +321,7 @@ impl Client {
                 tokio::select! {
                     _ = disconnect_rx.recv() => {
                         tracing::info!("Disconnected from endpoint");
-                        // TODO: use a backoff strategy
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(get_backoff_time(counter)).await;
                         ws = build_ws().await;
                     }
                     message = rx.recv() => {
@@ -385,4 +395,35 @@ impl Client {
             .await
             .map_err(|_| ())
     }
+}
+
+fn get_backoff_time(counter: Arc<AtomicU32>) -> Duration {
+    let min_time = 100u64;
+    let step = 100u64;
+    let max_count = 10u32;
+
+    let backoff_count = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    let backoff_count = backoff_count.min(max_count) as u64;
+    let backoff_time = backoff_count * backoff_count * step;
+
+    Duration::from_millis(backoff_time + min_time)
+}
+
+#[test]
+fn test_get_backoff_time() {
+    let counter = Arc::new(AtomicU32::new(0));
+
+    let mut times = Vec::new();
+
+    for _ in 0..12 {
+        times.push(get_backoff_time(counter.clone()));
+    }
+
+    let times = times.into_iter().map(|t| t.as_millis()).collect::<Vec<_>>();
+
+    assert_eq!(
+        times,
+        vec![100, 200, 500, 1000, 1700, 2600, 3700, 5000, 6500, 8200, 10100, 10100]
+    );
 }
