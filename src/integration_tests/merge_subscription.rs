@@ -31,10 +31,8 @@ async fn merge_subscription_works() {
     let mut builder = TestServerBuilder::new();
 
     let mut head_sub = builder.register_subscription(subscribe_head, update_head, unsubscribe_head);
-    let mut finalized_sub =
-        builder.register_subscription(subscribe_finalized, update_finalized, unsubscribe_finalized);
-    let mut mock_sub_rx =
-        builder.register_subscription(subscribe_mock, update_mock, unsubscribe_mock);
+    let mut finalized_sub = builder.register_subscription(subscribe_finalized, update_finalized, unsubscribe_finalized);
+    let mut mock_sub_rx = builder.register_subscription(subscribe_mock, update_mock, unsubscribe_mock);
 
     let (addr, _upstream_handle) = builder.build().await;
 

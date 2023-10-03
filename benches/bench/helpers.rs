@@ -21,10 +21,7 @@ pub const MIB: usize = 1024 * KIB;
 pub const SLOW_CALL: Duration = Duration::from_millis(1);
 
 /// Run jsonrpsee WebSocket server for benchmarks.
-pub async fn ws_server(
-    handle: tokio::runtime::Handle,
-    url: &str,
-) -> (String, jsonrpsee::server::ServerHandle) {
+pub async fn ws_server(handle: tokio::runtime::Handle, url: &str) -> (String, jsonrpsee::server::ServerHandle) {
     use jsonrpsee::{core::server::SubscriptionMessage, server::ServerBuilder};
 
     let server = ServerBuilder::default()
@@ -58,8 +55,7 @@ pub async fn ws_server(
             "chain_unsubscribeNewHeads",
             |_params, pending, _ctx| async move {
                 let sink = pending.accept().await?;
-                let msg =
-                    SubscriptionMessage::from_json(&serde_json::json!({ "number": "0x4321" }))?;
+                let msg = SubscriptionMessage::from_json(&serde_json::json!({ "number": "0x4321" }))?;
                 sink.send(msg).await?;
                 Ok(())
             },
@@ -84,9 +80,7 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
         .unwrap();
 
     module
-        .register_method(SYNC_MEM_CALL, |_, _| {
-            Ok::<_, ErrorObjectOwned>("A".repeat(MIB))
-        })
+        .register_method(SYNC_MEM_CALL, |_, _| Ok::<_, ErrorObjectOwned>("A".repeat(MIB)))
         .unwrap();
 
     module

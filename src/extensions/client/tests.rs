@@ -36,15 +36,9 @@ async fn basic_subscription() {
     let task = tokio::spawn(async move {
         let (params, sink) = rx.recv().await.unwrap();
         assert_eq!(params.to_string(), "[123]");
-        sink.send(SubscriptionMessage::from_json(&10).unwrap())
-            .await
-            .unwrap();
-        sink.send(SubscriptionMessage::from_json(&11).unwrap())
-            .await
-            .unwrap();
-        sink.send(SubscriptionMessage::from_json(&12).unwrap())
-            .await
-            .unwrap();
+        sink.send(SubscriptionMessage::from_json(&10).unwrap()).await.unwrap();
+        sink.send(SubscriptionMessage::from_json(&11).unwrap()).await.unwrap();
+        sink.send(SubscriptionMessage::from_json(&12).unwrap()).await.unwrap();
     });
 
     let result = client
@@ -52,11 +46,7 @@ async fn basic_subscription() {
         .await
         .unwrap();
 
-    let result = result
-        .map(|v| v.unwrap().to_string())
-        .take(3)
-        .collect::<Vec<_>>()
-        .await;
+    let result = result.map(|v| v.unwrap().to_string()).take(3).collect::<Vec<_>>().await;
 
     assert_eq!(result, ["10", "11", "12"]);
 
@@ -78,8 +68,7 @@ async fn multiple_endpoints() {
     ])
     .unwrap();
 
-    let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
-                           n: u32| {
+    let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>, n: u32| {
         tokio::spawn(async move {
             while let Some((_, resp_tx)) = rx.recv().await {
                 resp_tx.send(JsonValue::Number(n.into())).unwrap();

@@ -12,10 +12,7 @@ use helpers::{
 };
 
 use subway::{
-    config::{
-        Config, MergeStrategy, MethodParam, MiddlewaresConfig, RpcDefinitions, RpcMethod,
-        RpcSubscription,
-    },
+    config::{Config, MergeStrategy, MethodParam, MiddlewaresConfig, RpcDefinitions, RpcMethod, RpcSubscription},
     extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
     server::start_server,
 };
@@ -119,18 +116,10 @@ trait RequestBencher {
 
     fn websocket_benches(crit: &mut Criterion) {
         let rt = TokioRuntime::new().unwrap();
-        let (_url1, _server1) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
-        let (_url2, _server2) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
+        let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
+        let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
         let (url, _server) = rt.block_on(server());
-        ws_custom_headers_handshake(
-            &rt,
-            crit,
-            &url,
-            "ws_custom_headers_handshake",
-            Self::REQUEST_TYPE,
-        );
+        ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
         ws_concurrent_conn_calls(
             &rt,
             crit,
@@ -140,22 +129,14 @@ trait RequestBencher {
             &[2, 4, 8],
         );
         let client = Arc::new(rt.block_on(ws_client(&url)));
-        round_trip(
-            &rt,
-            crit,
-            client.clone(),
-            "ws_round_trip",
-            Self::REQUEST_TYPE,
-        );
+        round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
         batch_round_trip(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
     }
 
     fn websocket_benches_mid(crit: &mut Criterion) {
         let rt = TokioRuntime::new().unwrap();
-        let (_url1, _server1) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
-        let (_url2, _server2) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
+        let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
+        let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
         let (url, _server) = rt.block_on(server());
         ws_concurrent_conn_calls(
             &rt,
@@ -177,10 +158,8 @@ trait RequestBencher {
 
     fn websocket_benches_slow(crit: &mut Criterion) {
         let rt = TokioRuntime::new().unwrap();
-        let (_url1, _server1) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
-        let (_url2, _server2) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
+        let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
+        let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
         let (url, _server) = rt.block_on(server());
         ws_concurrent_conn_calls(
             &rt,
@@ -194,10 +173,8 @@ trait RequestBencher {
 
     fn subscriptions(crit: &mut Criterion) {
         let rt = TokioRuntime::new().unwrap();
-        let (_url1, _server1) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
-        let (_url2, _server2) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
+        let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
+        let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
         let (url, _server) = rt.block_on(server());
         let client = Arc::new(rt.block_on(ws_client(&url)));
         sub_round_trip(&rt, crit, client, "subscriptions");
@@ -205,10 +182,8 @@ trait RequestBencher {
 
     fn websocket_benches_inject(crit: &mut Criterion) {
         let rt = TokioRuntime::new().unwrap();
-        let (_url1, _server1) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
-        let (_url2, _server2) =
-            rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
+        let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
+        let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
         let (url, _server) = rt.block_on(server());
         let client = Arc::new(rt.block_on(ws_client(&url)));
         ws_inject_calls(&rt, crit, client, "ws_inject_calls", Self::REQUEST_TYPE);
@@ -406,11 +381,7 @@ fn ws_concurrent_conn_subs(
 
                             for _ in 0..10 {
                                 let fut = client
-                                    .subscribe::<String, _>(
-                                        SUB_METHOD_NAME,
-                                        rpc_params![],
-                                        UNSUB_METHOD_NAME,
-                                    )
+                                    .subscribe::<String, _>(SUB_METHOD_NAME, rpc_params![], UNSUB_METHOD_NAME)
                                     .then(|sub| async move {
                                         let mut s = sub.unwrap();
 
@@ -432,13 +403,7 @@ fn ws_concurrent_conn_subs(
 }
 
 /// Bench WS handshake with different header sizes.
-fn ws_custom_headers_handshake(
-    rt: &TokioRuntime,
-    crit: &mut Criterion,
-    url: &str,
-    name: &str,
-    request: RequestType,
-) {
+fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
     let mut group = crit.benchmark_group(request.group_name(name));
     for header_size in [0, KIB, 2 * KIB, 4 * KIB] {
         group.bench_function(format!("{}kb", header_size / KIB), |b| {
@@ -455,23 +420,12 @@ fn ws_custom_headers_handshake(
     group.finish();
 }
 
-fn round_trip(
-    rt: &TokioRuntime,
-    crit: &mut Criterion,
-    client: Arc<impl ClientT>,
-    name: &str,
-    request: RequestType,
-) {
+fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>, name: &str, request: RequestType) {
     for method in request.methods() {
         let bench_name = format!("{}/{}", name, method);
         crit.bench_function(&request.group_name(&bench_name), |b| {
             b.to_async(rt).iter(|| async {
-                black_box(
-                    client
-                        .request::<String, _>(method, rpc_params![])
-                        .await
-                        .unwrap(),
-                );
+                black_box(client.request::<String, _>(method, rpc_params![]).await.unwrap());
             })
         });
     }
@@ -497,24 +451,15 @@ fn batch_round_trip(
         }
 
         group.throughput(Throughput::Elements(*batch_size as u64));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(batch_size),
-            batch_size,
-            |b, _| {
-                b.to_async(rt)
-                    .iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
+            b.to_async(rt)
+                .iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
+        });
     }
     group.finish();
 }
 
-fn sub_round_trip(
-    rt: &TokioRuntime,
-    crit: &mut Criterion,
-    client: Arc<impl SubscriptionClientT>,
-    name: &str,
-) {
+fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl SubscriptionClientT>, name: &str) {
     let mut group = crit.benchmark_group(name);
     group.bench_function("subscribe", |b| {
         b.to_async(rt).iter_with_large_drop(|| async {
@@ -534,11 +479,7 @@ fn sub_round_trip(
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
                         client
-                            .subscribe::<String, _>(
-                                SUB_METHOD_NAME,
-                                rpc_params![],
-                                UNSUB_METHOD_NAME,
-                            )
+                            .subscribe::<String, _>(SUB_METHOD_NAME, rpc_params![], UNSUB_METHOD_NAME)
                             .await
                             .unwrap()
                     })
@@ -584,12 +525,7 @@ fn ws_inject_calls(
     let bench_name = format!("{}/{}", name, method);
     crit.bench_function(&request.group_name(&bench_name), |b| {
         b.to_async(rt).iter(|| async {
-            black_box(
-                client
-                    .request::<String, _>(method, rpc_params![0_u64])
-                    .await
-                    .unwrap(),
-            );
+            black_box(client.request::<String, _>(method, rpc_params![0_u64]).await.unwrap());
         })
     });
 }

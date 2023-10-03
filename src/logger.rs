@@ -18,12 +18,7 @@ where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
     N: for<'writer> FormatFields<'writer> + 'static,
 {
-    fn format_event(
-        &self,
-        _ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
-        event: &Event<'_>,
-    ) -> std::fmt::Result
+    fn format_event(&self, _ctx: &FmtContext<'_, S, N>, mut writer: Writer<'_>, event: &Event<'_>) -> std::fmt::Result
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
@@ -70,8 +65,7 @@ impl<'a> WriteAdaptor<'a> {
 
 impl<'a> io::Write for WriteAdaptor<'a> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let s =
-            std::str::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let s = std::str::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         self.fmt_write
             .write_str(s)
@@ -92,17 +86,13 @@ pub fn enable_logger() {
         .with_default_directive(tracing::Level::INFO.into())
         .from_env_lossy();
 
-    let log_format = std::env::var("LOG_FORMAT")
-        .unwrap_or_default()
-        .to_lowercase();
+    let log_format = std::env::var("LOG_FORMAT").unwrap_or_default().to_lowercase();
 
     let fmt_layer = tracing_subscriber::fmt::layer();
 
     #[cfg(tokio_unstable)]
     let log_layer = {
-        let console_layer = console_subscriber::ConsoleLayer::builder()
-            .with_default_env()
-            .spawn();
+        let console_layer = console_subscriber::ConsoleLayer::builder().with_default_env().spawn();
 
         registry.with(console_layer)
     };
@@ -114,12 +104,8 @@ pub fn enable_logger() {
         "json" => log_layer
             .with(fmt_layer.event_format(TraceIdFormat).with_filter(filter))
             .try_init(),
-        "pretty" => log_layer
-            .with(fmt_layer.pretty().with_filter(filter))
-            .try_init(),
-        "compact" => log_layer
-            .with(fmt_layer.compact().with_filter(filter))
-            .try_init(),
+        "pretty" => log_layer.with(fmt_layer.pretty().with_filter(filter)).try_init(),
+        "compact" => log_layer.with(fmt_layer.compact().with_filter(filter)).try_init(),
         _ => log_layer.with(fmt_layer.with_filter(filter)).try_init(),
     };
 }

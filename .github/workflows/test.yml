@@ -11,10 +11,19 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - name: Install toolchain
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        toolchain: nightly-2023-08-16
+        components: rustfmt, clippy
     - uses: actions/checkout@v3
       with:
         submodules: recursive

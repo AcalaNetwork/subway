@@ -31,10 +31,7 @@ pub struct Telemetry {
 impl Extension for Telemetry {
     type Config = TelemetryConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        _registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         Ok(Self::new(config)?)
     }
 }
@@ -57,15 +54,11 @@ pub fn setup_telemetry(options: &TelemetryConfig) -> Result<Option<Tracer>, Trac
     })
     .expect("failed to set OpenTelemetry error handler");
 
-    let service_name = options
-        .service_name
-        .clone()
-        .unwrap_or_else(|| "subway".into());
+    let service_name = options.service_name.clone().unwrap_or_else(|| "subway".into());
 
     let tracer = match options.provider {
         TelemetryProvider::Jaeger => {
-            let mut tracer =
-                opentelemetry_jaeger::new_agent_pipeline().with_service_name(service_name);
+            let mut tracer = opentelemetry_jaeger::new_agent_pipeline().with_service_name(service_name);
 
             if let Some(ref agent_endpoint) = options.agent_endpoint {
                 tracer = tracer.with_endpoint(agent_endpoint.clone());

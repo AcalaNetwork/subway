@@ -23,11 +23,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for BlockTagMiddlewar
         method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        let Some(index) = method
-            .params
-            .iter()
-            .position(|p| p.ty == "BlockTag" && p.inject)
-        else {
+        let Some(index) = method.params.iter().position(|p| p.ty == "BlockTag" && p.inject) else {
             return None;
         };
 
@@ -46,11 +42,7 @@ impl BlockTagMiddleware {
         Self { api, index }
     }
 
-    async fn replace(
-        &self,
-        mut request: CallRequest,
-        mut context: TypeRegistry,
-    ) -> (CallRequest, TypeRegistry) {
+    async fn replace(&self, mut request: CallRequest, mut context: TypeRegistry) -> (CallRequest, TypeRegistry) {
         let maybe_value = {
             if let Some(param) = request.params.get(self.index).cloned() {
                 if !param.is_string() {
@@ -143,8 +135,7 @@ mod tests {
     async fn create_client() -> (ExecutionContext, EthApi) {
         let mut builder = TestServerBuilder::new();
 
-        let subscribe_rx =
-            builder.register_subscription("eth_subscribe", "eth_subscription", "eth_unsubscribe");
+        let subscribe_rx = builder.register_subscription("eth_subscribe", "eth_subscription", "eth_unsubscribe");
 
         let get_block_rx = builder.register_method("eth_getBlockByNumber");
 
@@ -163,16 +154,11 @@ mod tests {
         )
     }
 
-    async fn create_block_tag_middleware(
-        params: Vec<MethodParam>,
-    ) -> (BlockTagMiddleware, ExecutionContext) {
+    async fn create_block_tag_middleware(params: Vec<MethodParam>) -> (BlockTagMiddleware, ExecutionContext) {
         let (context, api) = create_client().await;
 
         (
-            BlockTagMiddleware::new(
-                Arc::new(api),
-                params.iter().position(|p| p.ty == "BlockTag").unwrap(),
-            ),
+            BlockTagMiddleware::new(Arc::new(api), params.iter().position(|p| p.ty == "BlockTag").unwrap()),
             context,
         )
     }
@@ -245,16 +231,10 @@ mod tests {
 
             tokio::time::sleep(Duration::from_millis(10)).await;
             let (value, subscribe_sink) = context.subscribe_rx.recv().await.unwrap();
-            if value
-                .as_array()
-                .unwrap()
-                .contains(&json!("newFinalizedHeads"))
-            {
+            if value.as_array().unwrap().contains(&json!("newFinalizedHeads")) {
                 run_sink_tasks(
                     &subscribe_sink,
-                    vec![SinkTask::Send(
-                        json!({ "number": "0x5430", "hash": "0x00" }),
-                    )],
+                    vec![SinkTask::Send(json!({ "number": "0x5430", "hash": "0x00" }))],
                 )
                 .await
             }
@@ -263,9 +243,7 @@ mod tests {
             if value.as_array().unwrap().contains(&json!("newHeads")) {
                 run_sink_tasks(
                     &subscribe_sink,
-                    vec![SinkTask::Send(
-                        json!({ "number": "0x5432", "hash": "0x02" }),
-                    )],
+                    vec![SinkTask::Send(json!({ "number": "0x5432", "hash": "0x02" }))],
                 )
                 .await
             }
@@ -292,10 +270,7 @@ mod tests {
         assert_eq!(
             middleware
                 .call(
-                    CallRequest::new(
-                        "state_getStorage",
-                        vec![json!("0x1234"), json!("finalized")],
-                    ),
+                    CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("finalized")],),
                     Default::default(),
                     Box::new(move |req: CallRequest, _| {
                         async move {
@@ -316,10 +291,7 @@ mod tests {
         assert_eq!(
             middleware
                 .call(
-                    CallRequest::new(
-                        "state_getStorage",
-                        vec![json!("0x1234"), json!("finalized")],
-                    ),
+                    CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("finalized")],),
                     Default::default(),
                     Box::new(move |req: CallRequest, _| {
                         async move {

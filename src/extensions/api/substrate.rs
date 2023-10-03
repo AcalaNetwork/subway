@@ -29,24 +29,17 @@ pub struct SubstrateApiConfig {
 impl Extension for SubstrateApi {
     type Config = SubstrateApiConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         let client = registry.get::<Client>().await.expect("Client not found");
 
-        Ok(Self::new(
-            client,
-            Duration::from_secs(config.stale_timeout_seconds),
-        ))
+        Ok(Self::new(client, Duration::from_secs(config.stale_timeout_seconds)))
     }
 }
 
 impl SubstrateApi {
     pub fn new(client: Arc<Client>, stale_timeout: Duration) -> Self {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
-        let (finalized_head_tx, finalized_head_rx) =
-            watch::channel::<Option<(JsonValue, u64)>>(None);
+        let (finalized_head_tx, finalized_head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
 
         let this = Self {
             client,
@@ -85,11 +78,7 @@ impl SubstrateApi {
                     interval.reset();
 
                     let mut sub = client
-                        .subscribe(
-                            "chain_subscribeNewHeads",
-                            [].into(),
-                            "chain_unsubscribeNewHeads",
-                        )
+                        .subscribe("chain_subscribeNewHeads", [].into(), "chain_unsubscribeNewHeads")
                         .await?;
 
                     loop {

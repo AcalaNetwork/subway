@@ -30,19 +30,14 @@ impl TestServerBuilder {
         }
     }
 
-    pub fn register_method(
-        &mut self,
-        name: &'static str,
-    ) -> mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)> {
+    pub fn register_method(&mut self, name: &'static str) -> mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)> {
         let (tx, rx) = mpsc::channel::<(JsonValue, oneshot::Sender<JsonValue>)>(100);
         self.module
             .register_async_method(name, move |params, _| {
                 let tx = tx.clone();
                 async move {
                     let (resp_tx, resp_rx) = oneshot::channel();
-                    tx.send((params.parse::<JsonValue>().unwrap(), resp_tx))
-                        .await
-                        .unwrap();
+                    tx.send((params.parse::<JsonValue>().unwrap(), resp_tx)).await.unwrap();
                     let res = resp_rx.await;
                     res.map_err(errors::failed)
                 }
@@ -121,9 +116,7 @@ impl SinkTask {
             }
             SinkTask::Send(msg) => {
                 println!("send msg to sink: {}", msg);
-                sink.send(SubscriptionMessage::from_json(msg).unwrap())
-                    .await
-                    .unwrap()
+                sink.send(SubscriptionMessage::from_json(msg).unwrap()).await.unwrap()
             }
             SinkTask::SinkClosed(duration) => {
                 let begin = std::time::Instant::now();
