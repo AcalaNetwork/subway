@@ -83,7 +83,6 @@ impl SubstrateApi {
 
             loop {
                 let run = async {
-
                     let mut sub = client
                         .subscribe(
                             "chain_subscribeNewHeads",
