@@ -70,16 +70,18 @@ impl SubstrateApi {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(stale_timeout);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
             let client = client.clone();
 
             loop {
                 let run = async {
-                    interval.reset();
-
                     let mut sub = client
                         .subscribe("chain_subscribeNewHeads", [].into(), "chain_unsubscribeNewHeads")
                         .await?;
+
+                    // Reset the interval
+                    interval.reset();
 
                     loop {
                         tokio::select! {

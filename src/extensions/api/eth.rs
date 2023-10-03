@@ -77,12 +77,12 @@ impl EthApi {
         let client2 = client.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(stale_timeout);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
             let client = client2.clone();
 
             loop {
                 let run = async {
-                    interval.reset();
-
                     // query current head
                     let head = client
                         .request("eth_getBlockByNumber", vec!["latest".into(), true.into()])
@@ -96,6 +96,9 @@ impl EthApi {
                     let mut sub = client
                         .subscribe("eth_subscribe", ["newHeads".into()].into(), "eth_unsubscribe")
                         .await?;
+
+                    // Reset the interval
+                    interval.reset();
 
                     loop {
                         tokio::select! {
