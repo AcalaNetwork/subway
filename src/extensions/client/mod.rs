@@ -140,6 +140,7 @@ impl Client {
                             let ws2 = ws.clone();
 
                             tracing::info!("Endpoint connected");
+
                             connect_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
 
                             tokio::spawn(async move {
