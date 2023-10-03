@@ -164,7 +164,6 @@ impl Client {
 
             let handle_message = |message: Message, ws: Arc<WsClient>| {
                 let tx = tx.clone();
-                let connect_backoff_counter = connect_backoff_counter.clone();
                 let request_backoff_counter = request_backoff_counter.clone();
 
                 tokio::spawn(async move {
