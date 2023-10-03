@@ -21,9 +21,7 @@ impl UpstreamMiddleware {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult>
-    for UpstreamMiddleware
-{
+impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware {
     async fn build(
         _method: &RpcSubscription,
         extensions: &TypeRegistryRef,

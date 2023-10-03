@@ -19,11 +19,8 @@ async fn create_server() -> (
 ) {
     let mut builder = TestServerBuilder::new();
 
-    let head_rx = builder.register_subscription(
-        "chain_subscribeNewHeads",
-        "chain_newHead",
-        "chain_unsubscribeNewHeads",
-    );
+    let head_rx =
+        builder.register_subscription("chain_subscribeNewHeads", "chain_newHead", "chain_unsubscribeNewHeads");
 
     let finalized_head_rx = builder.register_subscription(
         "chain_subscribeFinalizedHeads",
@@ -238,10 +235,8 @@ async fn rotate_endpoint_on_stale() {
 
 #[tokio::test]
 async fn rotate_endpoint_on_head_mismatch() {
-    let (addr1, server1, mut head_rx1, mut finalized_head_rx1, mut block_rx1) =
-        create_server().await;
-    let (addr2, server2, mut head_rx2, mut finalized_head_rx2, mut block_rx2) =
-        create_server().await;
+    let (addr1, server1, mut head_rx1, mut finalized_head_rx1, mut block_rx1) = create_server().await;
+    let (addr2, server2, mut head_rx2, mut finalized_head_rx2, mut block_rx2) = create_server().await;
 
     let client = Client::new([format!("ws://{addr1}"), format!("ws://{addr2}")]).unwrap();
 

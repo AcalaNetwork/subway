@@ -34,10 +34,7 @@ pub struct ServerConfig {
 impl Extension for Server {
     type Config = ServerConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        _registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         Ok(Self::new(config.clone()))
     }
 }

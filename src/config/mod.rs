@@ -107,8 +107,7 @@ impl From<RpcOptions> for RpcDefinitions {
                 "eth" | "ethereum" => serde_yaml::from_str(ETHEREUM_CONFIG).unwrap(),
                 _ => {
                     let file = fs::File::open(path).expect("Invalid rpc config path");
-                    let defs: RpcDefinitionsWithBase =
-                        serde_yaml::from_reader(file).expect("Invalid rpc config file");
+                    let defs: RpcDefinitionsWithBase = serde_yaml::from_reader(file).expect("Invalid rpc config file");
                     defs.into()
                 }
             },
@@ -150,10 +149,9 @@ impl From<ParseConfig> for Config {
 pub fn read_config() -> Result<Config, String> {
     let cmd = Command::parse();
 
-    let config =
-        fs::File::open(cmd.config).map_err(|e| format!("Unable to open config file: {e}"))?;
-    let config: ParseConfig = serde_yaml::from_reader(&config)
-        .map_err(|e| format!("Unable to parse config file: {e}"))?;
+    let config = fs::File::open(cmd.config).map_err(|e| format!("Unable to open config file: {e}"))?;
+    let config: ParseConfig =
+        serde_yaml::from_reader(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
     let mut config: Config = config.into();
 
     if let Ok(endpoints) = std::env::var("ENDPOINTS") {
@@ -196,10 +194,7 @@ fn validate_config(config: &Config) -> Result<(), String> {
     // TODO: validate logic should be in each individual extensions
     // validate endpoints
     for endpoint in &config.extensions.client.as_ref().unwrap().endpoints {
-        if endpoint
-            .parse::<jsonrpsee::client_transport::ws::Uri>()
-            .is_err()
-        {
+        if endpoint.parse::<jsonrpsee::client_transport::ws::Uri>().is_err() {
             return Err(format!("Invalid endpoint {}", endpoint));
         }
     }
@@ -207,10 +202,7 @@ fn validate_config(config: &Config) -> Result<(), String> {
     // ensure each method has only one param with inject=true
     for method in &config.rpcs.methods {
         if method.params.iter().filter(|x| x.inject).count() > 1 {
-            return Err(format!(
-                "Method {} has more than one inject param",
-                method.method
-            ));
+            return Err(format!("Method {} has more than one inject param", method.method));
         }
     }
 

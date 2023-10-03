@@ -48,12 +48,9 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
         let ttl_seconds = match method.cache {
             // ttl zero means cache forever
             Some(CacheParams {
-                ttl_seconds: Some(0),
-                ..
+                ttl_seconds: Some(0), ..
             }) => None,
-            Some(CacheParams { ttl_seconds, .. }) => {
-                ttl_seconds.or(cache_ext.config.default_ttl_seconds)
-            }
+            Some(CacheParams { ttl_seconds, .. }) => ttl_seconds.or(cache_ext.config.default_ttl_seconds),
             None => cache_ext.config.default_ttl_seconds,
         };
 

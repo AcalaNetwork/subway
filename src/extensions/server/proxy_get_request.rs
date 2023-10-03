@@ -69,8 +69,7 @@ impl<S> Layer<S> for ProxyGetRequestLayer {
     type Service = ProxyGetRequest<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        ProxyGetRequest::new(inner, self.methods.clone())
-            .expect("Path already validated in ProxyGetRequestLayer; qed")
+        ProxyGetRequest::new(inner, self.methods.clone()).expect("Path already validated in ProxyGetRequestLayer; qed")
     }
 }
 
@@ -94,10 +93,7 @@ impl<S> ProxyGetRequest<S> {
             map.insert(method.path, method.method);
         }
 
-        Ok(Self {
-            inner,
-            methods: map,
-        })
+        Ok(Self { inner, methods: map })
     }
 }
 
@@ -110,8 +106,7 @@ where
 {
     type Response = S::Response;
     type Error = Box<dyn Error + Send + Sync + 'static>;
-    type Future =
-        Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -190,10 +185,7 @@ mod response {
     ) -> hyper::Response<hyper::Body> {
         hyper::Response::builder()
             .status(status)
-            .header(
-                "content-type",
-                hyper::header::HeaderValue::from_static(content_type),
-            )
+            .header("content-type", hyper::header::HeaderValue::from_static(content_type))
             .body(body.into())
             // Parsing `StatusCode` and `HeaderValue` is infalliable but
             // parsing body content is not.

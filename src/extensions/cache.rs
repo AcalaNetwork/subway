@@ -19,10 +19,7 @@ pub struct CacheConfig {
 impl Extension for Cache {
     type Config = CacheConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        _registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         Ok(Self::new(config.clone()))
     }
 }

@@ -27,25 +27,16 @@ struct StorageChanges {
     changes: Vec<(String, Option<String>)>,
 }
 
-fn merge_storage_changes(
-    current_value: JsonValue,
-    new_value: JsonValue,
-) -> Result<JsonValue, serde_json::Error> {
+fn merge_storage_changes(current_value: JsonValue, new_value: JsonValue) -> Result<JsonValue, serde_json::Error> {
     let mut current = serde_json::from_value::<StorageChanges>(current_value)?;
     let StorageChanges { block, changes } = serde_json::from_value::<StorageChanges>(new_value)?;
 
-    let changed_keys = changes
-        .clone()
-        .into_iter()
-        .map(|(key, _)| key)
-        .collect::<BTreeSet<_>>();
+    let changed_keys = changes.clone().into_iter().map(|(key, _)| key).collect::<BTreeSet<_>>();
 
     // replace block hash
     current.block = block;
     // remove changed keys
-    current
-        .changes
-        .retain(|(key, _)| !changed_keys.contains(key));
+    current.changes.retain(|(key, _)| !changed_keys.contains(key));
     // append new changes
     current.changes.extend(changes);
 
@@ -80,11 +71,7 @@ pub struct MergeSubscriptionMiddleware {
 }
 
 impl MergeSubscriptionMiddleware {
-    pub fn new(
-        client: Arc<Client>,
-        merge_strategy: MergeStrategy,
-        keep_alive_seconds: Option<u64>,
-    ) -> Self {
+    pub fn new(client: Arc<Client>, merge_strategy: MergeStrategy, keep_alive_seconds: Option<u64>) -> Self {
         Self {
             client,
             merge_strategy,
@@ -100,10 +87,8 @@ impl MergeSubscriptionMiddleware {
         subscribe: String,
         params: Vec<JsonValue>,
         unsubscribe: String,
-    ) -> Result<
-        Box<dyn FnOnce() -> broadcast::Receiver<SubscriptionMessage> + Sync + Send + 'static>,
-        StringError,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> broadcast::Receiver<SubscriptionMessage> + Sync + Send + 'static>, StringError>
+    {
         if let Some(tx) = self.upstream_subs.read().await.get(&key).cloned() {
             tracing::trace!("Found existing upstream subscription for {}", &subscribe);
             return Ok(Box::new(move || tx.subscribe()));
@@ -111,17 +96,11 @@ impl MergeSubscriptionMiddleware {
 
         tracing::trace!("Create new upstream subscription for {}", &subscribe);
 
-        let mut subscription = self
-            .client
-            .subscribe(&subscribe, params.clone(), &unsubscribe)
-            .await?;
+        let mut subscription = self.client.subscribe(&subscribe, params.clone(), &unsubscribe).await?;
 
         let (tx, _) = broadcast::channel(1024);
 
-        self.upstream_subs
-            .write()
-            .await
-            .insert(key.clone(), tx.clone());
+        self.upstream_subs.write().await.insert(key.clone(), tx.clone());
 
         let merge_strategy = self.merge_strategy;
         let client = self.client.clone();
@@ -191,9 +170,7 @@ impl MergeSubscriptionMiddleware {
 }
 
 #[async_trait]
-impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult>
-    for MergeSubscriptionMiddleware
-{
+impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult> for MergeSubscriptionMiddleware {
     async fn build(
         method: &RpcSubscription,
         extensions: &TypeRegistryRef,

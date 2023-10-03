@@ -29,24 +29,17 @@ pub struct SubstrateApiConfig {
 impl Extension for SubstrateApi {
     type Config = SubstrateApiConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         let client = registry.get::<Client>().await.expect("Client not found");
 
-        Ok(Self::new(
-            client,
-            Duration::from_secs(config.stale_timeout_seconds),
-        ))
+        Ok(Self::new(client, Duration::from_secs(config.stale_timeout_seconds)))
     }
 }
 
 impl SubstrateApi {
     pub fn new(client: Arc<Client>, stale_timeout: Duration) -> Self {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
-        let (finalized_head_tx, finalized_head_rx) =
-            watch::channel::<Option<(JsonValue, u64)>>(None);
+        let (finalized_head_tx, finalized_head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
 
         let this = Self {
             client,
@@ -85,11 +78,7 @@ impl SubstrateApi {
                     interval.reset();
 
                     let mut sub = client
-                        .subscribe(
-                            "chain_subscribeNewHeads",
-                            [].into(),
-                            "chain_unsubscribeNewHeads",
-                        )
+                        .subscribe("chain_subscribeNewHeads", [].into(), "chain_unsubscribeNewHeads")
                         .await?;
 
                     loop {
@@ -145,17 +134,11 @@ impl SubstrateApi {
                     while let Some(Ok(val)) = sub.next().await {
                         let number = super::get_number(&val)?;
 
-                        let hash = client
-                            .request("chain_getBlockHash", vec![number.into()])
-                            .await?;
+                        let hash = client.request("chain_getBlockHash", vec![number.into()]).await?;
 
-                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash)
-                        {
+                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash) {
                             tracing::error!("Error in background task: {e}");
-                            client
-                                .rotate_endpoint()
-                                .await
-                                .expect("Failed to rotate endpoint");
+                            client.rotate_endpoint().await.expect("Failed to rotate endpoint");
                             break;
                         }
 

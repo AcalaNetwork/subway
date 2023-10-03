@@ -23,10 +23,10 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for ResponseMiddlewar
         method: &RpcMethod,
         _extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        method.response.as_ref().map(|resp| {
-            Box::new(ResponseMiddleware::new(resp.clone()))
-                as Box<dyn Middleware<CallRequest, CallResult>>
-        })
+        method
+            .response
+            .as_ref()
+            .map(|resp| Box::new(ResponseMiddleware::new(resp.clone())) as Box<dyn Middleware<CallRequest, CallResult>>)
     }
 }
 

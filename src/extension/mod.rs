@@ -11,20 +11,13 @@ use crate::utils::TypeRegistryRef;
 pub trait Extension: Sized {
     type Config: serde::Deserialize<'static>;
 
-    async fn from_config(
-        config: &Self::Config,
-        registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error>;
+    async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error>;
 }
 
 #[async_trait]
 pub trait ExtensionBuilder {
     fn has(&self, type_id: TypeId) -> bool;
-    async fn build(
-        &self,
-        type_id: TypeId,
-        registry: &ExtensionRegistry,
-    ) -> anyhow::Result<Arc<dyn Any + Send + Sync>>;
+    async fn build(&self, type_id: TypeId, registry: &ExtensionRegistry) -> anyhow::Result<Arc<dyn Any + Send + Sync>>;
 }
 
 pub struct ExtensionRegistry {
@@ -33,10 +26,7 @@ pub struct ExtensionRegistry {
 }
 
 impl ExtensionRegistry {
-    pub fn new(
-        registry: TypeRegistryRef,
-        builder: Arc<dyn ExtensionBuilder + Send + Sync>,
-    ) -> Self {
+    pub fn new(registry: TypeRegistryRef, builder: Arc<dyn ExtensionBuilder + Send + Sync>) -> Self {
         Self { registry, builder }
     }
 

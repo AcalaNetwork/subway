@@ -23,9 +23,7 @@ pub struct InjectParamsMiddleware {
 }
 
 fn inject_type(params: &[MethodParam]) -> Option<InjectType> {
-    let maybe_block_num = params
-        .iter()
-        .position(|p| p.inject && p.ty == "BlockNumber");
+    let maybe_block_num = params.iter().position(|p| p.inject && p.ty == "BlockNumber");
     if let Some(block_num) = maybe_block_num {
         return Some(InjectType::BlockNumberAt(block_num));
     }
@@ -164,11 +162,8 @@ mod tests {
     async fn create_client() -> (ExecutionContext, SubstrateApi) {
         let mut builder = TestServerBuilder::new();
 
-        let head_rx = builder.register_subscription(
-            "chain_subscribeNewHeads",
-            "chain_newHead",
-            "chain_unsubscribeNewHeads",
-        );
+        let head_rx =
+            builder.register_subscription("chain_subscribeNewHeads", "chain_newHead", "chain_unsubscribeNewHeads");
 
         let _finalized_head_rx = builder.register_subscription(
             "chain_subscribeFinalizedHeads",
@@ -214,10 +209,7 @@ mod tests {
 
         context.head_sink = Some(head_sink);
 
-        (
-            InjectParamsMiddleware::new(Arc::new(api), inject_type, params),
-            context,
-        )
+        (InjectParamsMiddleware::new(Arc::new(api), inject_type, params), context)
     }
 
     #[tokio::test]
@@ -327,10 +319,7 @@ mod tests {
                 Default::default(),
                 Box::new(move |req: CallRequest, _| {
                     async move {
-                        assert_eq!(
-                            req.params,
-                            vec![json!("0x1234"), JsonValue::Null, json!("0xabcd")]
-                        );
+                        assert_eq!(req.params, vec![json!("0x1234"), JsonValue::Null, json!("0xabcd")]);
                         Ok(json!("0x1111"))
                     }
                     .boxed()
@@ -373,10 +362,7 @@ mod tests {
                 Default::default(),
                 Box::new(move |req: CallRequest, _| {
                     async move {
-                        assert_eq!(
-                            req.params,
-                            vec![json!("0x1234"), JsonValue::Null, json!("0xabcd")]
-                        );
+                        assert_eq!(req.params, vec![json!("0x1234"), JsonValue::Null, json!("0xabcd")]);
                         Ok(json!("0x1111"))
                     }
                     .boxed()

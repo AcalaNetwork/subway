@@ -66,9 +66,7 @@ pub async fn create_subscription_middleware(
 
     match name {
         "upstream" => upstream::UpstreamMiddleware::build(method, extensions).await,
-        "merge_subscription" => {
-            merge_subscription::MergeSubscriptionMiddleware::build(method, extensions).await
-        }
+        "merge_subscription" => merge_subscription::MergeSubscriptionMiddleware::build(method, extensions).await,
         _ => panic!("Unknown subscription middleware: {}", name),
     }
 }

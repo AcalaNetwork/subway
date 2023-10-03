@@ -13,9 +13,7 @@ use crate::{
     config::Config,
     extensions::server::Server,
     middleware::Middlewares,
-    middlewares::{
-        create_method_middleware, create_subscription_middleware, CallRequest, SubscriptionRequest,
-    },
+    middlewares::{create_method_middleware, create_subscription_middleware, CallRequest, SubscriptionRequest},
     utils::{errors, telemetry},
 };
 
@@ -52,9 +50,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                 let mut method_middlewares: Vec<Arc<_>> = vec![];
 
                 for middleware_name in &middlewares.methods {
-                    if let Some(middleware) =
-                        create_method_middleware(middleware_name, &method, &extensions).await
-                    {
+                    if let Some(middleware) = create_method_middleware(middleware_name, &method, &extensions).await {
                         method_middlewares.push(middleware.into());
                     }
                 }
@@ -76,10 +72,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                         let params = if parsed == JsonValue::Null {
                             vec![]
                         } else {
-                            parsed
-                                .as_array()
-                                .ok_or_else(|| errors::invalid_params(""))?
-                                .to_owned()
+                            parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
                         };
                         method_middlewares
                             .call(CallRequest::new(method_name, params))
@@ -98,8 +91,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
 
                 for middleware_name in &middlewares.subscriptions {
                     if let Some(middleware) =
-                        create_subscription_middleware(middleware_name, &subscription, &extensions)
-                            .await
+                        create_subscription_middleware(middleware_name, &subscription, &extensions).await
                     {
                         subscription_middlewares.push(middleware.into());
                     }
@@ -110,37 +102,29 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                     Arc::new(|_, _| async { Err("Bad configuration".into()) }.boxed()),
                 );
 
-                module.register_subscription(
-                    subscribe_name,
-                    name,
-                    unsubscribe_name,
-                    move |params, sink, _| {
-                        let subscription_middlewares = subscription_middlewares.clone();
+                module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
+                    let subscription_middlewares = subscription_middlewares.clone();
 
-                        async move {
-                            let cx = tracer.context(name);
+                    async move {
+                        let cx = tracer.context(name);
 
-                            let parsed = params.parse::<JsonValue>()?;
-                            let params = if parsed == JsonValue::Null {
-                                vec![]
-                            } else {
-                                parsed
-                                    .as_array()
-                                    .ok_or_else(|| errors::invalid_params(""))?
-                                    .to_owned()
-                            };
-                            subscription_middlewares
-                                .call(SubscriptionRequest {
-                                    subscribe: subscribe_name.into(),
-                                    params,
-                                    unsubscribe: unsubscribe_name.into(),
-                                    sink,
-                                })
-                                .with_context(cx)
-                                .await
-                        }
-                    },
-                )?;
+                        let parsed = params.parse::<JsonValue>()?;
+                        let params = if parsed == JsonValue::Null {
+                            vec![]
+                        } else {
+                            parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
+                        };
+                        subscription_middlewares
+                            .call(SubscriptionRequest {
+                                subscribe: subscribe_name.into(),
+                                params,
+                                unsubscribe: unsubscribe_name.into(),
+                                sink,
+                            })
+                            .with_context(cx)
+                            .await
+                    }
+                })?;
             }
 
             for (alias_old, alias_new) in rpcs.aliases {
@@ -149,10 +133,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                 module.register_alias(alias_new, alias_old)?;
             }
 
-            let mut rpc_methods = module
-                .method_names()
-                .map(|x| x.to_owned())
-                .collect::<Vec<_>>();
+            let mut rpc_methods = module.method_names().map(|x| x.to_owned()).collect::<Vec<_>>();
 
             rpc_methods.sort();
 
@@ -236,9 +217,7 @@ mod tests {
 
         let mut module = RpcModule::new(());
         module
-            .register_method(PHO, |_, _| {
-                Ok::<std::string::String, ErrorObjectOwned>(BAR.to_string())
-            })
+            .register_method(PHO, |_, _| Ok::<std::string::String, ErrorObjectOwned>(BAR.to_string()))
             .unwrap();
         let addr = format!("ws://{}", server.local_addr().unwrap());
         let handle = server.start(module);
@@ -259,12 +238,6 @@ mod tests {
         let (_url1, _server1) = ws_server(WS_SERVER_ENDPOINT).await;
         let (url, _server) = server().await;
         let client = ws_client(&url).await;
-        assert_eq!(
-            BAR,
-            client
-                .request::<String, _>(PHO, rpc_params!())
-                .await
-                .unwrap()
-        );
+        assert_eq!(BAR, client.request::<String, _>(PHO, rpc_params!()).await.unwrap());
     }
 }

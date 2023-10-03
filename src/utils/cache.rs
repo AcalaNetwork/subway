@@ -94,26 +94,18 @@ impl<D: Digest + 'static> Cache<D> {
         self.cache.insert(key, CacheValue::Value(value)).await;
     }
 
-    pub async fn get_or_insert_with<F>(
-        &self,
-        key: CacheKey<D>,
-        f: F,
-    ) -> Result<JsonValue, ErrorObjectOwned>
+    pub async fn get_or_insert_with<F>(&self, key: CacheKey<D>, f: F) -> Result<JsonValue, ErrorObjectOwned>
     where
         F: FnOnce() -> BoxFuture<'static, Result<JsonValue, ErrorObjectOwned>>,
     {
         let fetch = || async {
             let (tx, rx) = watch::channel(None);
-            self.cache
-                .insert(key.clone(), CacheValue::Pending(rx))
-                .await;
+            self.cache.insert(key.clone(), CacheValue::Pending(rx)).await;
             let value = f().await;
             let _ = tx.send(Some(value.clone()));
             match &value {
                 Ok(value) => {
-                    self.cache
-                        .insert(key.clone(), CacheValue::Value(value.clone()))
-                        .await;
+                    self.cache.insert(key.clone(), CacheValue::Value(value.clone())).await;
                 }
                 Err(_) => {
                     self.cache.remove(&key).await;
@@ -286,9 +278,7 @@ mod tests {
         let key = CacheKey::<blake2::Blake2b512>::new(&"key".to_string(), &[]);
 
         let value = cache
-            .get_or_insert_with(key.clone(), || {
-                async move { Err(reject_too_big_request(100)) }.boxed()
-            })
+            .get_or_insert_with(key.clone(), || async move { Err(reject_too_big_request(100)) }.boxed())
             .await;
         assert_eq!(value, Err(reject_too_big_request(100)));
 

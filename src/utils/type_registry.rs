@@ -39,9 +39,7 @@ pub struct TypeRegistry {
 
 impl TypeRegistry {
     pub fn new() -> TypeRegistry {
-        TypeRegistry {
-            map: AnyMap::default(),
-        }
+        TypeRegistry { map: AnyMap::default() }
     }
 
     pub fn has<T: 'static>(&self) -> bool {

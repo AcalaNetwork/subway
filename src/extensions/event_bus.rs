@@ -12,10 +12,7 @@ pub struct EventBusConfig;
 impl Extension for EventBus {
     type Config = EventBusConfig;
 
-    async fn from_config(
-        _config: &Self::Config,
-        _registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(_config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         Ok(EventBus)
     }
 }

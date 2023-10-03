@@ -69,10 +69,7 @@ enum Message {
 impl Extension for Client {
     type Config = ClientConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        _registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();
             endpoints.shuffle(&mut thread_rng());
@@ -84,13 +81,8 @@ impl Extension for Client {
 }
 
 impl Client {
-    pub fn new(
-        endpoints: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> Result<Self, anyhow::Error> {
-        let endpoints: Vec<_> = endpoints
-            .into_iter()
-            .map(|e| e.as_ref().to_string())
-            .collect();
+    pub fn new(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
+        let endpoints: Vec<_> = endpoints.into_iter().map(|e| e.as_ref().to_string()).collect();
 
         if endpoints.is_empty() {
             return Err(anyhow!("No endpoints provided"));
@@ -115,8 +107,7 @@ impl Client {
             let connect_backoff_counter2 = connect_backoff_counter.clone();
             let build_ws = || async {
                 let build = || {
-                    let current_endpoint =
-                        current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let current_endpoint = current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let url = &endpoints[current_endpoint % endpoints.len()];
 
                     tracing::info!("Connecting to endpoint: {}", url);
@@ -176,8 +167,7 @@ impl Client {
                             let result = ws.request(&method, params.clone()).await;
                             match result {
                                 result @ Ok(_) => {
-                                    request_backoff_counter
-                                        .store(0, std::sync::atomic::Ordering::Relaxed);
+                                    request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
 
                                     if let Err(e) = response.send(result) {
                                         tracing::warn!("Failed to send response: {:?}", e);
@@ -188,10 +178,7 @@ impl Client {
                                     match err {
                                         Error::RequestTimeout => {
                                             if let Err(e) = tx.send(Message::RotateEndpoint).await {
-                                                tracing::warn!(
-                                                    "Failed to send rotate message: {:?}",
-                                                    e
-                                                );
+                                                tracing::warn!("Failed to send rotate message: {:?}", e);
                                             }
                                             if let Err(e) = tx
                                                 .send(Message::Request {
@@ -201,19 +188,11 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                tracing::warn!(
-                                                    "Failed to send request message: {:?}",
-                                                    e
-                                                );
+                                                tracing::warn!("Failed to send request message: {:?}", e);
                                             }
                                         }
-                                        Error::Transport(_)
-                                        | Error::RestartNeeded(_)
-                                        | Error::MaxSlotsExceeded => {
-                                            tokio::time::sleep(get_backoff_time(
-                                                &request_backoff_counter,
-                                            ))
-                                            .await;
+                                        Error::Transport(_) | Error::RestartNeeded(_) | Error::MaxSlotsExceeded => {
+                                            tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                             if let Err(e) = tx
                                                 .send(Message::Request {
@@ -223,10 +202,7 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                tracing::warn!(
-                                                    "Failed to send request message: {:?}",
-                                                    e
-                                                );
+                                                tracing::warn!("Failed to send request message: {:?}", e);
                                             }
                                         }
                                         err => {
@@ -245,12 +221,10 @@ impl Client {
                             unsubscribe,
                             response,
                         } => {
-                            let result =
-                                ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
+                            let result = ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
                             match result {
                                 result @ Ok(_) => {
-                                    request_backoff_counter
-                                        .store(0, std::sync::atomic::Ordering::Relaxed);
+                                    request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
 
                                     if let Err(e) = response.send(result) {
                                         tracing::warn!("Failed to send response: {:?}", e);
@@ -261,10 +235,7 @@ impl Client {
                                     match err {
                                         Error::RequestTimeout => {
                                             if let Err(e) = tx.send(Message::RotateEndpoint).await {
-                                                tracing::warn!(
-                                                    "Failed to send rotate message: {:?}",
-                                                    e
-                                                );
+                                                tracing::warn!("Failed to send rotate message: {:?}", e);
                                             }
                                             if let Err(e) = tx
                                                 .send(Message::Subscribe {
@@ -275,19 +246,11 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                tracing::warn!(
-                                                    "Failed to send subscribe message: {:?}",
-                                                    e
-                                                );
+                                                tracing::warn!("Failed to send subscribe message: {:?}", e);
                                             }
                                         }
-                                        Error::Transport(_)
-                                        | Error::RestartNeeded(_)
-                                        | Error::MaxSlotsExceeded => {
-                                            tokio::time::sleep(get_backoff_time(
-                                                &request_backoff_counter,
-                                            ))
-                                            .await;
+                                        Error::Transport(_) | Error::RestartNeeded(_) | Error::MaxSlotsExceeded => {
+                                            tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                             if let Err(e) = tx
                                                 .send(Message::Subscribe {
@@ -298,10 +261,7 @@ impl Client {
                                                 })
                                                 .await
                                             {
-                                                tracing::warn!(
-                                                    "Failed to send subscribe message: {:?}",
-                                                    e
-                                                );
+                                                tracing::warn!("Failed to send subscribe message: {:?}", e);
                                             }
                                         }
                                         err => {
@@ -349,11 +309,7 @@ impl Client {
         Ok(Self { sender: tx })
     }
 
-    pub async fn request(
-        &self,
-        method: &str,
-        params: Vec<JsonValue>,
-    ) -> Result<JsonValue, ErrorObjectOwned> {
+    pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, ErrorObjectOwned> {
         let cx = TRACER.context(method.to_string());
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.sender
@@ -394,10 +350,7 @@ impl Client {
     }
 
     pub async fn rotate_endpoint(&self) -> Result<(), ()> {
-        self.sender
-            .send(Message::RotateEndpoint)
-            .await
-            .map_err(|_| ())
+        self.sender.send(Message::RotateEndpoint).await.map_err(|_| ())
     }
 }
 

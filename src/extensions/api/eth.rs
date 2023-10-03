@@ -28,24 +28,17 @@ pub struct EthApiConfig {
 impl Extension for EthApi {
     type Config = EthApiConfig;
 
-    async fn from_config(
-        config: &Self::Config,
-        registry: &ExtensionRegistry,
-    ) -> Result<Self, anyhow::Error> {
+    async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         let client = registry.get::<Client>().await.expect("Client not found");
 
-        Ok(Self::new(
-            client,
-            Duration::from_secs(config.stale_timeout_seconds),
-        ))
+        Ok(Self::new(client, Duration::from_secs(config.stale_timeout_seconds)))
     }
 }
 
 impl EthApi {
     pub fn new(client: Arc<Client>, stale_timeout: Duration) -> Self {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
-        let (finalized_head_tx, finalized_head_rx) =
-            watch::channel::<Option<(JsonValue, u64)>>(None);
+        let (finalized_head_tx, finalized_head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
 
         let this = Self {
             inner: BaseApi::new(head_rx, finalized_head_rx),
@@ -101,11 +94,7 @@ impl EthApi {
                     head_tx.send_replace(Some((hash, number)));
 
                     let mut sub = client
-                        .subscribe(
-                            "eth_subscribe",
-                            ["newHeads".into()].into(),
-                            "eth_unsubscribe",
-                        )
+                        .subscribe("eth_subscribe", ["newHeads".into()].into(), "eth_unsubscribe")
                         .await?;
 
                     loop {
@@ -148,24 +137,16 @@ impl EthApi {
             loop {
                 let run = async {
                     let mut sub = client
-                        .subscribe(
-                            "eth_subscribe",
-                            ["newFinalizedHeads".into()].into(),
-                            "eth_unsubscribe",
-                        )
+                        .subscribe("eth_subscribe", ["newFinalizedHeads".into()].into(), "eth_unsubscribe")
                         .await?;
 
                     while let Some(Ok(val)) = sub.next().await {
                         let number = super::get_number(&val)?;
                         let hash = super::get_hash(&val)?;
 
-                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash)
-                        {
+                        if let Err(e) = super::validate_new_head(&finalized_head_tx, number, &hash) {
                             tracing::error!("Error in background task: {e}");
-                            client
-                                .rotate_endpoint()
-                                .await
-                                .expect("Failed to rotate endpoint");
+                            client.rotate_endpoint().await.expect("Failed to rotate endpoint");
                             break;
                         }
 
