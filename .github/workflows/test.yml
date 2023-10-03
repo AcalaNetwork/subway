@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Install toolchain
-      uses: dtolnay/rust-toolchain
+      uses: dtolnay/rust-toolchain@stable
       with:
         profile: minimal
     - uses: actions/checkout@v3
