@@ -159,7 +159,7 @@ mod tests {
         head_sink: Option<SubscriptionSink>,
     }
 
-    async fn create_client() -> (ExecutionContext, SubstrateApi) {
+    async fn create_client() -> (ExecutionContext, Arc<SubstrateApi>) {
         let mut builder = TestServerBuilder::new();
 
         let head_rx =
@@ -186,14 +186,14 @@ mod tests {
                 block_hash_rx,
                 head_sink: None,
             },
-            api,
+            Arc::new(api),
         )
     }
 
     async fn create_inject_middleware(
         inject_type: InjectType,
         params: Vec<MethodParam>,
-    ) -> (InjectParamsMiddleware, ExecutionContext) {
+    ) -> (InjectParamsMiddleware, ExecutionContext, Arc<SubstrateApi>) {
         let (mut context, api) = create_client().await;
 
         let (_, head_sink) = context.head_rx.recv().await.unwrap();
@@ -209,13 +209,17 @@ mod tests {
 
         context.head_sink = Some(head_sink);
 
-        (InjectParamsMiddleware::new(Arc::new(api), inject_type, params), context)
+        (
+            InjectParamsMiddleware::new(api.clone(), inject_type, params),
+            context,
+            api,
+        )
     }
 
     #[tokio::test]
     async fn skip_inject_if_full_params() {
         let params = vec![json!("0x1234"), json!("0x5678")];
-        let (middleware, _) = create_inject_middleware(
+        let (middleware, _, _api) = create_inject_middleware(
             InjectType::BlockHashAt(1),
             vec![
                 MethodParam {
@@ -252,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn inject_if_without_current_block_hash() {
-        let (middleware, _) = create_inject_middleware(
+        let (middleware, _, _api) = create_inject_middleware(
             InjectType::BlockHashAt(1),
             vec![
                 MethodParam {
@@ -289,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn inject_null_if_expected_optional_param() {
-        let (middleware, _) = create_inject_middleware(
+        let (middleware, _, _api) = create_inject_middleware(
             InjectType::BlockHashAt(2),
             vec![
                 MethodParam {
@@ -332,7 +336,7 @@ mod tests {
 
     #[tokio::test]
     async fn err_if_missing_param() {
-        let (middleware, _) = create_inject_middleware(
+        let (middleware, _, _api) = create_inject_middleware(
             InjectType::BlockHashAt(2),
             vec![
                 MethodParam {
@@ -379,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn inject_if_without_current_block_num() {
-        let (middleware, mut context) = create_inject_middleware(
+        let (middleware, mut context, _api) = create_inject_middleware(
             InjectType::BlockNumberAt(1),
             vec![
                 MethodParam {

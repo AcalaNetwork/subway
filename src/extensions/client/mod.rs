@@ -38,6 +38,13 @@ const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client")
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
     rotation_notify: Arc<Notify>,
+    background_task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.background_task.abort();
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -101,7 +108,7 @@ impl Client {
         let rotation_notify = Arc::new(Notify::new());
         let rotating = rotation_notify.clone();
 
-        tokio::spawn(async move {
+        let background_task = tokio::spawn(async move {
             let tx = tx2;
 
             let connect_backoff_counter = Arc::new(AtomicU32::new(0));
@@ -315,6 +322,7 @@ impl Client {
         Ok(Self {
             sender: tx,
             rotation_notify,
+            background_task,
         })
     }
 
