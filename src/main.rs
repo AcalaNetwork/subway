@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("{:#?}", config);
 
-    let (addr, server) = server::start_server(config).await?;
+    let ((addr, server), _extensions) = server::start_server(config).await?;
 
     tracing::info!("Server running at {addr}");
 

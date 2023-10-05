@@ -9,6 +9,7 @@ use jsonrpsee::{
 use opentelemetry::trace::FutureExt as _;
 use serde_json::json;
 
+use crate::utils::TypeRegistryRef;
 use crate::{
     config::Config,
     extensions::server::Server,
@@ -22,7 +23,7 @@ fn string_to_static_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerHandle)> {
+pub async fn start_server(config: Config) -> anyhow::Result<((SocketAddr, ServerHandle), TypeRegistryRef)> {
     let Config {
         extensions,
         middlewares,
@@ -40,6 +41,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
         .get::<Server>()
         .expect("Server extension not found");
 
+    let extensions_clone = extensions.clone();
     let res = server
         .create_server(move || async move {
             let mut module = RpcModule::new(());
@@ -50,7 +52,9 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                 let mut method_middlewares: Vec<Arc<_>> = vec![];
 
                 for middleware_name in &middlewares.methods {
-                    if let Some(middleware) = create_method_middleware(middleware_name, &method, &extensions).await {
+                    if let Some(middleware) =
+                        create_method_middleware(middleware_name, &method, &extensions_clone).await
+                    {
                         method_middlewares.push(middleware.into());
                     }
                 }
@@ -91,7 +95,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
 
                 for middleware_name in &middlewares.subscriptions {
                     if let Some(middleware) =
-                        create_subscription_middleware(middleware_name, &subscription, &extensions).await
+                        create_subscription_middleware(middleware_name, &subscription, &extensions_clone).await
                     {
                         subscription_middlewares.push(middleware.into());
                     }
@@ -148,7 +152,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
         })
         .await?;
 
-    Ok(res)
+    Ok((res, extensions))
 }
 
 #[cfg(test)]
@@ -202,7 +206,7 @@ mod tests {
                 aliases: vec![],
             },
         };
-        let (addr, server) = start_server(config).await.unwrap();
+        let ((addr, server), _) = start_server(config).await.unwrap();
         (format!("ws://{}", addr), server)
     }
 

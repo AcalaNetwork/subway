@@ -293,7 +293,7 @@ fn config() -> Config {
 
 async fn server() -> (String, jsonrpsee::server::ServerHandle) {
     let config = config();
-    let (addr, handle) = start_server(config).await.unwrap();
+    let ((addr, handle), _) = start_server(config).await.unwrap();
     (format!("ws://{}", addr), handle)
 }
 
