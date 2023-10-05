@@ -18,8 +18,8 @@ extensions:
 middlewares:
   methods:
     - response
-    - cache
     - block_tag
+    - cache
     - upstream
   subscriptions:
     - upstream
