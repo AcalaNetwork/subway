@@ -26,8 +26,8 @@ extensions:
 middlewares:
   methods:
     - response
-    - cache
     - inject_params
+    - cache
     - upstream
   subscriptions:
     - merge_subscription
