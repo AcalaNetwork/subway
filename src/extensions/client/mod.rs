@@ -57,12 +57,14 @@ enum Message {
         method: String,
         params: Vec<JsonValue>,
         response: tokio::sync::oneshot::Sender<Result<JsonValue, Error>>,
+        retries: u32,
     },
     Subscribe {
         subscribe: String,
         params: Vec<JsonValue>,
         unsubscribe: String,
         response: tokio::sync::oneshot::Sender<Result<Subscription<JsonValue>, Error>>,
+        retries: u32,
     },
     RotateEndpoint,
 }
@@ -96,8 +98,6 @@ impl Client {
 
         let tx2 = tx.clone();
 
-        let (disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel::<()>(10);
-
         let rotation_notify = Arc::new(Notify::new());
         let rotating = rotation_notify.clone();
 
@@ -128,24 +128,12 @@ impl Client {
                         .map_err(|e| (e, url.to_string()))
                 };
 
-                let disconnect_tx = disconnect_tx.clone();
-
                 loop {
                     match build().await {
                         Ok(ws) => {
                             let ws = Arc::new(ws);
-                            let ws2 = ws.clone();
-
                             tracing::info!("Endpoint connected");
                             connect_backoff_counter2.store(0, std::sync::atomic::Ordering::Relaxed);
-
-                            tokio::spawn(async move {
-                                ws2.on_disconnect().await;
-                                tracing::info!("Endpoint disconnected");
-                                if let Err(e) = disconnect_tx.send(()).await {
-                                    tracing::warn!("Unable to send disconnect: {}", e);
-                                }
-                            });
                             break ws;
                         }
                         Err((e, url)) => {
@@ -168,53 +156,65 @@ impl Client {
                             method,
                             params,
                             response,
+                            retries,
                         } => {
+                            // make sure it's still connected
+                            if response.is_closed() {
+                                return;
+                            }
+
                             let result = ws.request(&method, params.clone()).await;
                             match result {
                                 result @ Ok(_) => {
                                     request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
-
-                                    if let Err(e) = response.send(result) {
-                                        tracing::warn!("Failed to send response: {:?}", e);
+                                    // make sure it's still connected
+                                    if response.is_closed() {
+                                        return;
                                     }
+                                    let _ = response.send(result);
                                 }
                                 Err(err) => {
                                     tracing::debug!("Request failed: {:?}", err);
                                     match err {
-                                        Error::RequestTimeout => {
-                                            if let Err(e) = tx.send(Message::RotateEndpoint).await {
-                                                tracing::warn!("Failed to send rotate message: {:?}", e);
-                                            }
-                                            if let Err(e) = tx
-                                                .send(Message::Request {
-                                                    method,
-                                                    params,
-                                                    response,
-                                                })
-                                                .await
-                                            {
-                                                tracing::warn!("Failed to send request message: {:?}", e);
-                                            }
-                                        }
-                                        Error::Transport(_) | Error::RestartNeeded(_) | Error::MaxSlotsExceeded => {
+                                        Error::RequestTimeout
+                                        | Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::MaxSlotsExceeded => {
                                             tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
-                                            if let Err(e) = tx
-                                                .send(Message::Request {
-                                                    method,
-                                                    params,
-                                                    response,
-                                                })
-                                                .await
-                                            {
-                                                tracing::warn!("Failed to send request message: {:?}", e);
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
                                             }
+
+                                            // make sure we still have retries left
+                                            if retries == 0 {
+                                                let _ = response.send(Err(Error::RequestTimeout));
+                                                return;
+                                            }
+
+                                            if matches!(err, Error::RequestTimeout) {
+                                                tx.send(Message::RotateEndpoint)
+                                                    .await
+                                                    .expect("Failed to send rotate message");
+                                            }
+
+                                            tx.send(Message::Request {
+                                                method,
+                                                params,
+                                                response,
+                                                retries: retries - 1,
+                                            })
+                                            .await
+                                            .expect("Failed to send request message");
                                         }
                                         err => {
-                                            // not something we can handle, send it back to the caller
-                                            if let Err(e) = response.send(Err(err)) {
-                                                tracing::warn!("Failed to send response: {:?}", e);
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
                                             }
+                                            // not something we can handle, send it back to the caller
+                                            let _ = response.send(Err(err));
                                         }
                                     }
                                 }
@@ -225,55 +225,61 @@ impl Client {
                             params,
                             unsubscribe,
                             response,
+                            retries,
                         } => {
                             let result = ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
                             match result {
                                 result @ Ok(_) => {
                                     request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
-
-                                    if let Err(e) = response.send(result) {
-                                        tracing::warn!("Failed to send response: {:?}", e);
+                                    // make sure it's still connected
+                                    if response.is_closed() {
+                                        return;
                                     }
+                                    let _ = response.send(result);
                                 }
                                 Err(err) => {
                                     tracing::debug!("Subscribe failed: {:?}", err);
                                     match err {
-                                        Error::RequestTimeout => {
-                                            if let Err(e) = tx.send(Message::RotateEndpoint).await {
-                                                tracing::warn!("Failed to send rotate message: {:?}", e);
-                                            }
-                                            if let Err(e) = tx
-                                                .send(Message::Subscribe {
-                                                    subscribe,
-                                                    params,
-                                                    unsubscribe,
-                                                    response,
-                                                })
-                                                .await
-                                            {
-                                                tracing::warn!("Failed to send subscribe message: {:?}", e);
-                                            }
-                                        }
-                                        Error::Transport(_) | Error::RestartNeeded(_) | Error::MaxSlotsExceeded => {
+                                        Error::RequestTimeout
+                                        | Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::MaxSlotsExceeded => {
                                             tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
-                                            if let Err(e) = tx
-                                                .send(Message::Subscribe {
-                                                    subscribe,
-                                                    params,
-                                                    unsubscribe,
-                                                    response,
-                                                })
-                                                .await
-                                            {
-                                                tracing::warn!("Failed to send subscribe message: {:?}", e);
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
                                             }
+
+                                            // make sure we still have retries left
+                                            if retries == 0 {
+                                                let _ = response.send(Err(Error::RequestTimeout));
+                                                return;
+                                            }
+
+                                            if matches!(err, Error::RequestTimeout) {
+                                                tx.send(Message::RotateEndpoint)
+                                                    .await
+                                                    .expect("Failed to send rotate message");
+                                            }
+
+                                            tx.send(Message::Subscribe {
+                                                subscribe,
+                                                params,
+                                                unsubscribe,
+                                                response,
+                                                retries: retries - 1,
+                                            })
+                                            .await
+                                            .expect("Failed to send subscribe message")
                                         }
                                         err => {
-                                            // not something we can handle, send it back to the caller
-                                            if let Err(e) = response.send(Err(err)) {
-                                                tracing::warn!("Failed to send response: {:?}", e);
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
                                             }
+                                            // not something we can handle, send it back to the caller
+                                            let _ = response.send(Err(err));
                                         }
                                     }
                                 }
@@ -288,8 +294,8 @@ impl Client {
 
             loop {
                 tokio::select! {
-                    _ = disconnect_rx.recv() => {
-                        tracing::info!("Disconnected from endpoint");
+                    _ = ws.on_disconnect() => {
+                        tracing::info!("Endpoint disconnected");
                         tokio::time::sleep(get_backoff_time(&connect_backoff_counter)).await;
                         ws = build_ws().await;
                     }
@@ -326,6 +332,7 @@ impl Client {
                 method: method.into(),
                 params,
                 response: tx,
+                retries: 3,
             })
             .await
             .map_err(errors::internal_error)?;
@@ -351,6 +358,7 @@ impl Client {
                 params,
                 unsubscribe: unsubscribe.into(),
                 response: tx,
+                retries: 3,
             })
             .await
             .map_err(errors::failed)?;
