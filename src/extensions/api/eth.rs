@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::sync::watch;
 
 use crate::{
     extension::Extension,
@@ -17,13 +17,6 @@ use crate::{
 pub struct EthApi {
     inner: BaseApi,
     stale_timeout: Duration,
-    background_tasks: Vec<JoinHandle<()>>,
-}
-
-impl Drop for EthApi {
-    fn drop(&mut self) {
-        self.background_tasks.drain(..).for_each(|handle| handle.abort());
-    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -47,10 +40,9 @@ impl EthApi {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
         let (finalized_head_tx, finalized_head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
 
-        let mut this = Self {
+        let this = Self {
             inner: BaseApi::new(head_rx, finalized_head_rx),
             stale_timeout,
-            background_tasks: Vec::new(),
         };
 
         this.start_background_task(client, head_tx, finalized_head_tx);
@@ -75,7 +67,7 @@ impl EthApi {
     }
 
     fn start_background_task(
-        &mut self,
+        &self,
         client: Arc<Client>,
         head_tx: watch::Sender<Option<(JsonValue, u64)>>,
         finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
@@ -83,7 +75,7 @@ impl EthApi {
         let stale_timeout = self.stale_timeout;
 
         let client2 = client.clone();
-        self.background_tasks.push(tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut interval = tokio::time::interval(stale_timeout);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -143,10 +135,10 @@ impl EthApi {
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
-        }));
+        });
 
         let client = client.clone();
-        self.background_tasks.push(tokio::spawn(async move {
+        tokio::spawn(async move {
             let client = client.clone();
 
             loop {
@@ -196,6 +188,6 @@ impl EthApi {
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
-        }));
+        });
     }
 }
