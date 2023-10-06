@@ -25,6 +25,7 @@ extensions:
 
 middlewares:
   methods:
+    - delay
     - response
     - inject_params
     - cache
