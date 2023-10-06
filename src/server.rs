@@ -23,7 +23,7 @@ fn string_to_static_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-pub async fn start_server(config: Config) -> anyhow::Result<((SocketAddr, ServerHandle), TypeRegistryRef)> {
+pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerHandle, TypeRegistryRef)> {
     let Config {
         extensions,
         middlewares,
@@ -42,7 +42,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<((SocketAddr, Server
         .expect("Server extension not found");
 
     let extensions_clone = extensions.clone();
-    let res = server
+    let (addr, server) = server
         .create_server(move || async move {
             let mut module = RpcModule::new(());
 
@@ -152,7 +152,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<((SocketAddr, Server
         })
         .await?;
 
-    Ok((res, extensions))
+    Ok((addr, server, extensions))
 }
 
 #[cfg(test)]
@@ -206,7 +206,7 @@ mod tests {
                 aliases: vec![],
             },
         };
-        let ((addr, server), _) = start_server(config).await.unwrap();
+        let (addr, server, _) = start_server(config).await.unwrap();
         (format!("ws://{}", addr), server)
     }
 
