@@ -390,7 +390,7 @@ async fn substrate_background_tasks_abort_on_drop() {
     drop(api);
 
     // wait a bit to abort tasks
-    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // background tasks aborted, subscription closed
     assert!(head_sink.is_closed());
@@ -414,7 +414,7 @@ async fn eth_background_tasks_abort_on_drop() {
     drop(api);
 
     // wait a bit to abort tasks
-    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // background tasks aborted, subscription closed
     assert!(head_sink.is_closed());
