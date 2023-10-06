@@ -91,7 +91,7 @@ async fn merge_subscription_works() {
         },
     };
 
-    let (addr, server) = start_server(config).await.unwrap();
+    let (addr, server, _extensions) = start_server(config).await.unwrap();
 
     let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
     let mut first_sub = client

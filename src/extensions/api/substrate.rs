@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
-use tokio::sync::watch;
+use tokio::{sync::watch, task::JoinHandle};
 
 use crate::{
     extension::Extension,
@@ -18,6 +18,13 @@ pub struct SubstrateApi {
     client: Arc<Client>,
     inner: BaseApi,
     stale_timeout: Duration,
+    background_tasks: Vec<JoinHandle<()>>,
+}
+
+impl Drop for SubstrateApi {
+    fn drop(&mut self) {
+        self.background_tasks.drain(..).for_each(|handle| handle.abort());
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -41,10 +48,11 @@ impl SubstrateApi {
         let (head_tx, head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
         let (finalized_head_tx, finalized_head_rx) = watch::channel::<Option<(JsonValue, u64)>>(None);
 
-        let this = Self {
+        let mut this = Self {
             client,
             inner: BaseApi::new(head_rx, finalized_head_rx),
             stale_timeout,
+            background_tasks: Vec::new(),
         };
 
         this.start_background_task(head_tx, finalized_head_tx);
@@ -61,14 +69,14 @@ impl SubstrateApi {
     }
 
     fn start_background_task(
-        &self,
+        &mut self,
         head_tx: watch::Sender<Option<(JsonValue, u64)>>,
         finalized_head_tx: watch::Sender<Option<(JsonValue, u64)>>,
     ) {
         let client = self.client.clone();
         let stale_timeout = self.stale_timeout;
 
-        tokio::spawn(async move {
+        self.background_tasks.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(stale_timeout);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -121,11 +129,11 @@ impl SubstrateApi {
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
-        });
+        }));
 
         let client = self.client.clone();
 
-        tokio::spawn(async move {
+        self.background_tasks.push(tokio::spawn(async move {
             loop {
                 let run = async {
                     let mut sub = client
@@ -174,6 +182,6 @@ impl SubstrateApi {
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
-        });
+        }));
     }
 }

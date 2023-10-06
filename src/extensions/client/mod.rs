@@ -39,6 +39,13 @@ pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
     rotation_notify: Arc<Notify>,
     retries: u32,
+    background_task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.background_task.abort();
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -107,7 +114,7 @@ impl Client {
         let rotation_notify = Arc::new(Notify::new());
         let rotation_notify_bg = rotation_notify.clone();
 
-        tokio::spawn(async move {
+        let background_task = tokio::spawn(async move {
             let connect_backoff_counter = Arc::new(AtomicU32::new(0));
             let request_backoff_counter = Arc::new(AtomicU32::new(0));
 
@@ -334,6 +341,7 @@ impl Client {
             sender: message_tx,
             rotation_notify,
             retries: retries.unwrap_or(3),
+            background_task,
         })
     }
 

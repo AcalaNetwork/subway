@@ -34,6 +34,23 @@ async fn create_server() -> (
     (addr, server, head_rx, finalized_head_rx, block_hash_rx)
 }
 
+async fn create_eth_server() -> (
+    SocketAddr,
+    ServerHandle,
+    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+) {
+    let mut builder = TestServerBuilder::new();
+
+    let subscription_rx = builder.register_subscription("eth_subscribe", "eth_subscription", "eth_unsubscribe");
+
+    let block_rx = builder.register_method("eth_getBlockByNumber");
+
+    let (addr, server) = builder.build().await;
+
+    (addr, server, subscription_rx, block_rx)
+}
+
 async fn create_client() -> (
     Client,
     ServerHandle,
@@ -272,7 +289,7 @@ async fn rotate_endpoint_on_head_mismatch() {
     }
 
     // wait a bit to process tasks
-    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     assert!(head_sub.sink.is_closed());
     assert!(finalized_head_sub.sink.is_closed());
@@ -309,4 +326,48 @@ async fn rotate_endpoint_on_head_mismatch() {
 
     server1.stop().unwrap();
     server2.stop().unwrap();
+}
+
+#[tokio::test]
+async fn substrate_background_tasks_abort_on_drop() {
+    let (addr, _server, mut head_rx, mut finalized_head_rx, _) = create_server().await;
+    let client = Arc::new(Client::new([format!("ws://{addr}")]).unwrap());
+    let api = SubstrateApi::new(client, std::time::Duration::from_millis(100));
+
+    // background tasks started
+    let (_, head_sink) = head_rx.recv().await.unwrap();
+    let (_, finalized_head_sink) = finalized_head_rx.recv().await.unwrap();
+
+    drop(api);
+
+    // wait a bit to abort tasks
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+    // background tasks aborted, subscription closed
+    assert!(head_sink.is_closed());
+    assert!(finalized_head_sink.is_closed());
+}
+
+#[tokio::test]
+async fn eth_background_tasks_abort_on_drop() {
+    let (addr, _server, mut subscription_rx, mut block_rx) = create_eth_server().await;
+    let client = Arc::new(Client::new([format!("ws://{addr}")]).unwrap());
+
+    let api = EthApi::new(client, std::time::Duration::from_millis(100));
+
+    // background tasks started
+    let (_, block_sink) = block_rx.recv().await.unwrap();
+    block_sink.send(json!({ "number": "0x01", "hash": "0xaa"})).unwrap();
+
+    let (_, head_sink) = subscription_rx.recv().await.unwrap();
+    let (_, finalized_sink) = subscription_rx.recv().await.unwrap();
+
+    drop(api);
+
+    // wait a bit to abort tasks
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+    // background tasks aborted, subscription closed
+    assert!(head_sink.is_closed());
+    assert!(finalized_sink.is_closed());
 }
