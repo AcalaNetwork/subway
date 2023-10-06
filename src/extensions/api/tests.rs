@@ -3,6 +3,7 @@ use serde_json::json;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc;
 
+use super::eth::EthApi;
 use super::substrate::SubstrateApi;
 use crate::extensions::client::{
     mock::{MockRequest, MockSubscription, TestServerBuilder},
@@ -37,8 +38,8 @@ async fn create_server() -> (
 async fn create_eth_server() -> (
     SocketAddr,
     ServerHandle,
-    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+    mpsc::Receiver<MockSubscription>,
+    mpsc::Receiver<MockRequest>,
 ) {
     let mut builder = TestServerBuilder::new();
 
@@ -331,12 +332,12 @@ async fn rotate_endpoint_on_head_mismatch() {
 #[tokio::test]
 async fn substrate_background_tasks_abort_on_drop() {
     let (addr, _server, mut head_rx, mut finalized_head_rx, _) = create_server().await;
-    let client = Arc::new(Client::new([format!("ws://{addr}")]).unwrap());
+    let client = Arc::new(Client::with_endpoints([format!("ws://{addr}")]).unwrap());
     let api = SubstrateApi::new(client, std::time::Duration::from_millis(100));
 
     // background tasks started
-    let (_, head_sink) = head_rx.recv().await.unwrap();
-    let (_, finalized_head_sink) = finalized_head_rx.recv().await.unwrap();
+    let head_sub = head_rx.recv().await.unwrap();
+    let finalized_head_sub = finalized_head_rx.recv().await.unwrap();
 
     drop(api);
 
@@ -344,23 +345,23 @@ async fn substrate_background_tasks_abort_on_drop() {
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // background tasks aborted, subscription closed
-    assert!(head_sink.is_closed());
-    assert!(finalized_head_sink.is_closed());
+    assert!(head_sub.sink.is_closed());
+    assert!(finalized_head_sub.sink.is_closed());
 }
 
 #[tokio::test]
 async fn eth_background_tasks_abort_on_drop() {
     let (addr, _server, mut subscription_rx, mut block_rx) = create_eth_server().await;
-    let client = Arc::new(Client::new([format!("ws://{addr}")]).unwrap());
+    let client = Arc::new(Client::with_endpoints([format!("ws://{addr}")]).unwrap());
 
     let api = EthApi::new(client, std::time::Duration::from_millis(100));
 
     // background tasks started
-    let (_, block_sink) = block_rx.recv().await.unwrap();
-    block_sink.send(json!({ "number": "0x01", "hash": "0xaa"})).unwrap();
+    let block_req = block_rx.recv().await.unwrap();
+    block_req.respond(json!({ "number": "0x01", "hash": "0xaa"}));
 
-    let (_, head_sink) = subscription_rx.recv().await.unwrap();
-    let (_, finalized_sink) = subscription_rx.recv().await.unwrap();
+    let head_sub = subscription_rx.recv().await.unwrap();
+    let finalized_sub = subscription_rx.recv().await.unwrap();
 
     drop(api);
 
@@ -368,6 +369,6 @@ async fn eth_background_tasks_abort_on_drop() {
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // background tasks aborted, subscription closed
-    assert!(head_sink.is_closed());
-    assert!(finalized_sink.is_closed());
+    assert!(head_sub.sink.is_closed());
+    assert!(finalized_sub.sink.is_closed());
 }
