@@ -201,6 +201,7 @@ mod tests {
                     params: vec![],
                     cache: None,
                     response: None,
+                    delay_ms: None,
                 }],
                 subscriptions: vec![],
                 aliases: vec![],
