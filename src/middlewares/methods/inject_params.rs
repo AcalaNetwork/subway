@@ -144,18 +144,19 @@ mod tests {
     use super::*;
 
     use crate::extensions::api::SubstrateApi;
+    use crate::extensions::client::mock::{MockRequest, MockSubscription};
     use crate::extensions::client::{mock::TestServerBuilder, Client};
     use futures::FutureExt;
     use jsonrpsee::{server::ServerHandle, SubscriptionMessage, SubscriptionSink};
     use serde_json::json;
     use std::time::Duration;
-    use tokio::sync::{mpsc, oneshot};
+    use tokio::sync::mpsc;
 
     struct ExecutionContext {
         _server: ServerHandle,
-        head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-        _finalized_head_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-        block_hash_rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+        head_rx: mpsc::Receiver<MockSubscription>,
+        _finalized_head_rx: mpsc::Receiver<MockSubscription>,
+        block_hash_rx: mpsc::Receiver<MockRequest>,
         head_sink: Option<SubscriptionSink>,
     }
 
@@ -175,7 +176,7 @@ mod tests {
 
         let (addr, _server) = builder.build().await;
 
-        let client = Client::new([format!("ws://{addr}")]).unwrap();
+        let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
         let api = SubstrateApi::new(Arc::new(client), Duration::from_secs(100));
 
         (
@@ -196,18 +197,15 @@ mod tests {
     ) -> (InjectParamsMiddleware, ExecutionContext) {
         let (mut context, api) = create_client().await;
 
-        let (_, head_sink) = context.head_rx.recv().await.unwrap();
-        head_sink
-            .send(SubscriptionMessage::from_json(&json!({ "number": "0x4321" })).unwrap())
-            .await
-            .unwrap();
+        let head_sub = context.head_rx.recv().await.unwrap();
+        head_sub.send(json!({ "number": "0x4321" })).await;
 
         {
-            let (_, tx) = context.block_hash_rx.recv().await.unwrap();
-            tx.send(json!("0xabcd")).unwrap();
+            let req = context.block_hash_rx.recv().await.unwrap();
+            req.respond(json!("0xabcd"));
         }
 
-        context.head_sink = Some(head_sink);
+        context.head_sink = Some(head_sub.sink);
 
         (InjectParamsMiddleware::new(Arc::new(api), inject_type, params), context)
     }
@@ -421,8 +419,8 @@ mod tests {
             .await
             .unwrap();
         {
-            let (_, tx) = context.block_hash_rx.recv().await.unwrap();
-            tx.send(json!("0xbcde")).unwrap();
+            let req = context.block_hash_rx.recv().await.unwrap();
+            req.respond(json!("0xbcde"));
         }
         tokio::time::sleep(std::time::Duration::from_millis(1)).await;
 

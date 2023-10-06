@@ -38,6 +38,7 @@ const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client")
 pub struct Client {
     sender: tokio::sync::mpsc::Sender<Message>,
     rotation_notify: Arc<Notify>,
+    retries: u32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -77,15 +78,20 @@ impl Extension for Client {
         if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();
             endpoints.shuffle(&mut thread_rng());
-            Ok(Self::new(endpoints)?)
+            Ok(Self::new(endpoints, None, None, None)?)
         } else {
-            Ok(Self::new(config.endpoints.clone())?)
+            Ok(Self::new(config.endpoints.clone(), None, None, None)?)
         }
     }
 }
 
 impl Client {
-    pub fn new(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
+    pub fn new(
+        endpoints: impl IntoIterator<Item = impl AsRef<str>>,
+        request_timeout: Option<Duration>,
+        connection_timeout: Option<Duration>,
+        retries: Option<u32>,
+    ) -> Result<Self, anyhow::Error> {
         let endpoints: Vec<_> = endpoints.into_iter().map(|e| e.as_ref().to_string()).collect();
 
         if endpoints.is_empty() {
@@ -94,16 +100,14 @@ impl Client {
 
         tracing::debug!("New client with endpoints: {:?}", endpoints);
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(100);
+        let (message_tx, mut message_rx) = tokio::sync::mpsc::channel::<Message>(100);
 
-        let tx2 = tx.clone();
+        let message_tx_bg = message_tx.clone();
 
         let rotation_notify = Arc::new(Notify::new());
-        let rotating = rotation_notify.clone();
+        let rotation_notify_bg = rotation_notify.clone();
 
         tokio::spawn(async move {
-            let tx = tx2;
-
             let connect_backoff_counter = Arc::new(AtomicU32::new(0));
             let request_backoff_counter = Arc::new(AtomicU32::new(0));
 
@@ -119,8 +123,8 @@ impl Client {
 
                     // TODO: make those configurable
                     WsClientBuilder::default()
-                        .request_timeout(std::time::Duration::from_secs(30))
-                        .connection_timeout(std::time::Duration::from_secs(30))
+                        .request_timeout(request_timeout.unwrap_or(Duration::from_secs(30)))
+                        .connection_timeout(connection_timeout.unwrap_or(Duration::from_secs(30)))
                         .max_buffer_capacity_per_subscription(2048)
                         .max_concurrent_requests(2048)
                         .max_response_size(20 * 1024 * 1024)
@@ -147,7 +151,7 @@ impl Client {
             let mut ws = build_ws().await;
 
             let handle_message = |message: Message, ws: Arc<WsClient>| {
-                let tx = tx.clone();
+                let tx = message_tx_bg.clone();
                 let request_backoff_counter = request_backoff_counter.clone();
 
                 tokio::spawn(async move {
@@ -156,8 +160,10 @@ impl Client {
                             method,
                             params,
                             response,
-                            retries,
+                            mut retries,
                         } => {
+                            retries = retries.saturating_sub(1);
+
                             // make sure it's still connected
                             if response.is_closed() {
                                 return;
@@ -203,7 +209,7 @@ impl Client {
                                                 method,
                                                 params,
                                                 response,
-                                                retries: retries - 1,
+                                                retries,
                                             })
                                             .await
                                             .expect("Failed to send request message");
@@ -225,8 +231,10 @@ impl Client {
                             params,
                             unsubscribe,
                             response,
-                            retries,
+                            mut retries,
                         } => {
+                            retries = retries.saturating_sub(1);
+
                             let result = ws.subscribe(&subscribe, params.clone(), &unsubscribe).await;
                             match result {
                                 result @ Ok(_) => {
@@ -268,7 +276,7 @@ impl Client {
                                                 params,
                                                 unsubscribe,
                                                 response,
-                                                retries: retries - 1,
+                                                retries,
                                             })
                                             .await
                                             .expect("Failed to send subscribe message")
@@ -299,11 +307,11 @@ impl Client {
                         tokio::time::sleep(get_backoff_time(&connect_backoff_counter)).await;
                         ws = build_ws().await;
                     }
-                    message = rx.recv() => {
+                    message = message_rx.recv() => {
                         tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
-                                rotating.notify_waiters();
+                                rotation_notify_bg.notify_waiters();
                                 tracing::info!("Rotate endpoint");
                                 ws = build_ws().await;
                             }
@@ -318,10 +326,19 @@ impl Client {
             }
         });
 
+        if let Some(0) = retries {
+            return Err(anyhow!("Retries need to be at least 1"));
+        }
+
         Ok(Self {
-            sender: tx,
+            sender: message_tx,
             rotation_notify,
+            retries: retries.unwrap_or(3),
         })
+    }
+
+    pub fn with_endpoints(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
+        Self::new(endpoints, None, None, None)
     }
 
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, ErrorObjectOwned> {
@@ -332,7 +349,7 @@ impl Client {
                 method: method.into(),
                 params,
                 response: tx,
-                retries: 3,
+                retries: self.retries,
             })
             .await
             .map_err(errors::internal_error)?;
@@ -358,7 +375,7 @@ impl Client {
                 params,
                 unsubscribe: unsubscribe.into(),
                 response: tx,
-                retries: 3,
+                retries: self.retries,
             })
             .await
             .map_err(errors::failed)?;

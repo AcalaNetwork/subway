@@ -4,19 +4,19 @@ use super::mock::*;
 use super::*;
 
 use futures::StreamExt;
-use jsonrpsee::SubscriptionMessage;
-use tokio::sync::{mpsc, oneshot};
+use serde_json::json;
+use tokio::sync::mpsc;
 
 #[tokio::test]
 async fn basic_request() {
     let (addr, handle, mut rx, _) = dummy_server().await;
 
-    let client = Client::new([format!("ws://{addr}")]).unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
 
     let task = tokio::spawn(async move {
-        let (params, resp_tx) = rx.recv().await.unwrap();
-        assert_eq!(params.to_string(), "[1]");
-        resp_tx.send(JsonValue::from_str("[1]").unwrap()).unwrap();
+        let req = rx.recv().await.unwrap();
+        assert_eq!(req.params.to_string(), "[1]");
+        req.respond(JsonValue::from_str("[1]").unwrap());
     });
 
     let result = client.request("mock_rpc", vec![1.into()]).await.unwrap();
@@ -31,14 +31,14 @@ async fn basic_request() {
 async fn basic_subscription() {
     let (addr, handle, _, mut rx) = dummy_server().await;
 
-    let client = Client::new([format!("ws://{addr}")]).unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
 
     let task = tokio::spawn(async move {
-        let (params, sink) = rx.recv().await.unwrap();
-        assert_eq!(params.to_string(), "[123]");
-        sink.send(SubscriptionMessage::from_json(&10).unwrap()).await.unwrap();
-        sink.send(SubscriptionMessage::from_json(&11).unwrap()).await.unwrap();
-        sink.send(SubscriptionMessage::from_json(&12).unwrap()).await.unwrap();
+        let sub = rx.recv().await.unwrap();
+        assert_eq!(sub.params, json!([123]));
+        sub.send(json!(10)).await;
+        sub.send(json!(11)).await;
+        sub.send(json!(12)).await;
     });
 
     let result = client
@@ -61,17 +61,17 @@ async fn multiple_endpoints() {
     let (addr2, handle2, rx2, _) = dummy_server().await;
     let (addr3, handle3, rx3, _) = dummy_server().await;
 
-    let client = Client::new([
+    let client = Client::with_endpoints([
         format!("ws://{addr1}"),
         format!("ws://{addr2}"),
         format!("ws://{addr3}"),
     ])
     .unwrap();
 
-    let handle_requests = |mut rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>, n: u32| {
+    let handle_requests = |mut rx: mpsc::Receiver<MockRequest>, n: u32| {
         tokio::spawn(async move {
-            while let Some((_, resp_tx)) = rx.recv().await {
-                resp_tx.send(JsonValue::Number(n.into())).unwrap();
+            while let Some(req) = rx.recv().await {
+                req.respond(JsonValue::Number(n.into()));
             }
         })
     };
@@ -116,16 +116,16 @@ async fn multiple_endpoints() {
 async fn concurrent_requests() {
     let (addr, handle, mut rx, _) = dummy_server().await;
 
-    let client = Client::new([format!("ws://{addr}")]).unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
 
     let task = tokio::spawn(async move {
-        let (_, tx1) = rx.recv().await.unwrap();
-        let (_, tx2) = rx.recv().await.unwrap();
-        let (_, tx3) = rx.recv().await.unwrap();
+        let req1 = rx.recv().await.unwrap();
+        let req2 = rx.recv().await.unwrap();
+        let req3 = rx.recv().await.unwrap();
 
-        tx1.send(JsonValue::from_str("1").unwrap()).unwrap();
-        tx2.send(JsonValue::from_str("2").unwrap()).unwrap();
-        tx3.send(JsonValue::from_str("3").unwrap()).unwrap();
+        req1.respond(JsonValue::from_str("1").unwrap());
+        req2.respond(JsonValue::from_str("2").unwrap());
+        req3.respond(JsonValue::from_str("3").unwrap());
     });
 
     let res1 = client.request("mock_rpc", vec![]);
@@ -143,25 +143,27 @@ async fn concurrent_requests() {
 }
 
 #[tokio::test]
-#[ignore = "blocked by https://github.com/paritytech/jsonrpsee/pull/1116"]
-async fn retry_requests() {
+async fn retry_requests_successful() {
     let (addr1, handle1, mut rx1, _) = dummy_server().await;
     let (addr2, handle2, mut rx2, _) = dummy_server().await;
 
-    let client = Client::new([format!("ws://{addr1}"), format!("ws://{addr2}")]).unwrap();
+    let client = Client::new(
+        [format!("ws://{addr1}"), format!("ws://{addr2}")],
+        Some(Duration::from_millis(100)),
+        None,
+        Some(2),
+    )
+    .unwrap();
 
     let h1 = tokio::spawn(async move {
-        let (_, tx) = rx1.recv().await.unwrap();
-        // stop server after received request
-        handle1.stop().unwrap();
-        // handle1.stopped().await; never terminates
-        // still send a valid response to avoid this become a call error
-        tx.send(JsonValue::from_str("2").unwrap()).unwrap();
+        let _req = rx1.recv().await.unwrap();
+        // no response, let it timeout
+        tokio::time::sleep(Duration::from_millis(200)).await;
     });
 
     let h2 = tokio::spawn(async move {
-        let (_, tx) = rx2.recv().await.unwrap();
-        tx.send(JsonValue::from_str("1").unwrap()).unwrap();
+        let req = rx2.recv().await.unwrap();
+        req.respond(json!(1));
     });
 
     let h3 = tokio::spawn(async move {
@@ -173,5 +175,44 @@ async fn retry_requests() {
     h2.await.unwrap();
     h1.await.unwrap();
 
+    handle1.stop().unwrap();
+    handle2.stop().unwrap();
+}
+
+#[tokio::test]
+async fn retry_requests_out_of_retries() {
+    let (addr1, handle1, mut rx1, _) = dummy_server().await;
+    let (addr2, handle2, mut rx2, _) = dummy_server().await;
+
+    let client = Client::new(
+        [format!("ws://{addr1}"), format!("ws://{addr2}")],
+        Some(Duration::from_millis(100)),
+        None,
+        Some(2),
+    )
+    .unwrap();
+
+    let h1 = tokio::spawn(async move {
+        let _req = rx1.recv().await.unwrap();
+        // no response, let it timeout
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    });
+
+    let h2 = tokio::spawn(async move {
+        let _req = rx2.recv().await.unwrap();
+        // no response, let it timeout
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    });
+
+    let h3 = tokio::spawn(async move {
+        let res = client.request("mock_rpc", vec![]).await;
+        assert_eq!(res.unwrap_err().data().unwrap().to_string(), "\"Request timeout\"");
+    });
+
+    h3.await.unwrap();
+    h1.await.unwrap();
+    h2.await.unwrap();
+
+    handle1.stop().unwrap();
     handle2.stop().unwrap();
 }

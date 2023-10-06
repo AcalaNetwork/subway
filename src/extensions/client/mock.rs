@@ -30,14 +30,15 @@ impl TestServerBuilder {
         }
     }
 
-    pub fn register_method(&mut self, name: &'static str) -> mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)> {
-        let (tx, rx) = mpsc::channel::<(JsonValue, oneshot::Sender<JsonValue>)>(100);
+    pub fn register_method(&mut self, name: &'static str) -> mpsc::Receiver<MockRequest> {
+        let (tx, rx) = mpsc::channel::<MockRequest>(100);
         self.module
             .register_async_method(name, move |params, _| {
                 let tx = tx.clone();
+                let params = params.parse::<JsonValue>().unwrap();
                 async move {
                     let (resp_tx, resp_rx) = oneshot::channel();
-                    tx.send((params.parse::<JsonValue>().unwrap(), resp_tx)).await.unwrap();
+                    tx.send(MockRequest { params, resp_tx }).await.unwrap();
                     let res = resp_rx.await;
                     res.map_err(errors::failed)
                 }
@@ -51,15 +52,15 @@ impl TestServerBuilder {
         sub_name: &'static str,
         method_name: &'static str,
         unsub_name: &'static str,
-    ) -> mpsc::Receiver<(JsonValue, SubscriptionSink)> {
-        let (tx, rx) = mpsc::channel::<(JsonValue, SubscriptionSink)>(100);
+    ) -> mpsc::Receiver<MockSubscription> {
+        let (tx, rx) = mpsc::channel::<MockSubscription>(100);
         self.module
             .register_subscription(sub_name, method_name, unsub_name, move |params, sink, _| {
                 let tx = tx.clone();
                 let params = params.parse::<JsonValue>().unwrap();
                 tokio::spawn(async move {
                     let sink = sink.accept().await.unwrap();
-                    let _ = tx.send((params, sink)).await;
+                    let _ = tx.send(MockSubscription { params, sink }).await;
                 })
                 .map_err(|_| "error".into())
             })
@@ -83,11 +84,42 @@ impl TestServerBuilder {
     }
 }
 
+pub struct MockRequest {
+    pub params: JsonValue,
+    pub resp_tx: oneshot::Sender<JsonValue>,
+}
+
+impl MockRequest {
+    pub fn respond(self, resp: JsonValue) {
+        self.resp_tx.send(resp).unwrap();
+    }
+}
+
+pub struct MockSubscription {
+    pub params: JsonValue,
+    pub sink: SubscriptionSink,
+}
+
+impl MockSubscription {
+    pub async fn send(&self, msg: JsonValue) {
+        self.sink
+            .send(SubscriptionMessage::from_json(&msg).unwrap())
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_sink_tasks(&self, tasks: Vec<SinkTask>) {
+        for task in tasks {
+            task.run(&self.sink).await
+        }
+    }
+}
+
 pub async fn dummy_server() -> (
     SocketAddr,
     ServerHandle,
-    mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
-    mpsc::Receiver<(JsonValue, SubscriptionSink)>,
+    mpsc::Receiver<MockRequest>,
+    mpsc::Receiver<MockSubscription>,
 ) {
     enable_logger();
 
@@ -111,13 +143,9 @@ impl SinkTask {
     async fn run(&self, sink: &SubscriptionSink) {
         match self {
             SinkTask::Sleep(ms) => {
-                println!("sleep {} ms", ms);
-                tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
+                tokio::time::sleep(Duration::from_millis(*ms)).await;
             }
-            SinkTask::Send(msg) => {
-                println!("send msg to sink: {}", msg);
-                sink.send(SubscriptionMessage::from_json(msg).unwrap()).await.unwrap()
-            }
+            SinkTask::Send(msg) => sink.send(SubscriptionMessage::from_json(msg).unwrap()).await.unwrap(),
             SinkTask::SinkClosed(duration) => {
                 let begin = std::time::Instant::now();
                 sink.closed().await;
@@ -126,11 +154,5 @@ impl SinkTask {
                 }
             }
         }
-    }
-}
-
-pub async fn run_sink_tasks(sink: &SubscriptionSink, tasks: Vec<SinkTask>) {
-    for task in tasks {
-        task.run(sink).await
     }
 }
