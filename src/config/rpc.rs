@@ -32,6 +32,9 @@ pub struct RpcMethod {
 
     #[serde(default)]
     pub response: Option<JsonValue>,
+
+    #[serde(default)]
+    pub delay_ms: Option<u64>,
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]

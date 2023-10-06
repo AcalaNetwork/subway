@@ -350,6 +350,7 @@ mod tests {
                 }),
                 params: vec![],
                 response: None,
+                delay_ms: None,
             },
             &ext,
         )
@@ -366,6 +367,7 @@ mod tests {
                 }),
                 params: vec![],
                 response: None,
+                delay_ms: None,
             },
             &ext,
         )
@@ -382,6 +384,7 @@ mod tests {
                 }),
                 params: vec![],
                 response: None,
+                delay_ms: None,
             },
             &ext,
         )
@@ -395,6 +398,7 @@ mod tests {
                 cache: None,
                 params: vec![],
                 response: None,
+                delay_ms: None,
             },
             &ext,
         )
