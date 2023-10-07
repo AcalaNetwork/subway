@@ -4,7 +4,7 @@ use crate::{
     config::{Config, MergeStrategy, MiddlewaresConfig, RpcDefinitions, RpcSubscription},
     extensions::{
         client::{
-            mock::{run_sink_tasks, SinkTask, TestServerBuilder},
+            mock::{SinkTask, TestServerBuilder},
             Client, ClientConfig,
         },
         merge_subscription::MergeSubscriptionConfig,
@@ -37,11 +37,11 @@ async fn merge_subscription_works() {
     let (addr, _upstream_handle) = builder.build().await;
 
     tokio::spawn(async move {
-        let (_, head_sub_rx) = head_sub.recv().await.unwrap();
-        let (_, finalized_sub_rx) = finalized_sub.recv().await.unwrap();
+        let head_sub = head_sub.recv().await.unwrap();
+        let finalized_sub = finalized_sub.recv().await.unwrap();
 
-        run_sink_tasks(&head_sub_rx, vec![SinkTask::Send(json!(1))]).await;
-        run_sink_tasks(&finalized_sub_rx, vec![SinkTask::Send(json!(1))]).await;
+        head_sub.run_sink_tasks(vec![SinkTask::Send(json!(1))]).await;
+        finalized_sub.run_sink_tasks(vec![SinkTask::Send(json!(1))]).await;
     });
 
     let config = Config {
@@ -93,52 +93,49 @@ async fn merge_subscription_works() {
 
     let (addr, server, _extensions) = start_server(config).await.unwrap();
 
-    let client = Client::new([format!("ws://{addr}")]).unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
     let mut first_sub = client
         .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await
         .unwrap();
 
     let send_msg = tokio::spawn(async move {
-        let (_, mock_sub_sink) = mock_sub_rx.recv().await.unwrap();
+        let sub = mock_sub_rx.recv().await.unwrap();
 
-        run_sink_tasks(
-            &mock_sub_sink,
-            vec![
-                SinkTask::Send(json!({
-                    "block": "0x01",
-                    "changes": [
-                        ["0x01", "hello"],
-                        ["0x02", null]
-                    ]
-                })),
-                SinkTask::Sleep(100),
-                SinkTask::Send(json!({
-                    "block": "0x02",
-                    "changes": [
-                        ["0x02", "world"]
-                    ]
-                })),
-                SinkTask::Sleep(100),
-                SinkTask::Send(json!({
-                    "block": "0x03",
-                    "changes": [
-                        ["0x01", null],
-                        ["0x02", "bye"]
-                    ]
-                })),
-                SinkTask::Sleep(100),
-                SinkTask::Send(json!({
-                    "block": "0x04",
-                    "changes": [
-                        ["0x01", "hello"],
-                        ["0x02", "again"]
-                    ]
-                })),
-                // after 1s upstream subscription is dropped
-                SinkTask::SinkClosed(Some(1)),
-            ],
-        )
+        sub.run_sink_tasks(vec![
+            SinkTask::Send(json!({
+                "block": "0x01",
+                "changes": [
+                    ["0x01", "hello"],
+                    ["0x02", null]
+                ]
+            })),
+            SinkTask::Sleep(100),
+            SinkTask::Send(json!({
+                "block": "0x02",
+                "changes": [
+                    ["0x02", "world"]
+                ]
+            })),
+            SinkTask::Sleep(100),
+            SinkTask::Send(json!({
+                "block": "0x03",
+                "changes": [
+                    ["0x01", null],
+                    ["0x02", "bye"]
+                ]
+            })),
+            SinkTask::Sleep(100),
+            SinkTask::Send(json!({
+                "block": "0x04",
+                "changes": [
+                    ["0x01", "hello"],
+                    ["0x02", "again"]
+                ]
+            })),
+            // after 1s upstream subscription is dropped
+            SinkTask::SinkClosed(Some(1)),
+        ])
         .await;
     });
 

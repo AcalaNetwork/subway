@@ -109,26 +109,27 @@ mod tests {
 
     use crate::config::MethodParam;
     use crate::extensions::api::EthApi;
+    use crate::extensions::client::mock::{MockRequest, MockSubscription};
     use crate::extensions::client::{
-        mock::{run_sink_tasks, SinkTask, TestServerBuilder},
+        mock::{SinkTask, TestServerBuilder},
         Client,
     };
     use futures::FutureExt;
-    use jsonrpsee::{server::ServerHandle, SubscriptionSink};
+    use jsonrpsee::server::ServerHandle;
     use serde_json::json;
     use std::time::Duration;
-    use tokio::sync::{mpsc, oneshot};
+    use tokio::sync::mpsc;
 
     struct ExecutionContext {
         _server: ServerHandle,
-        subscribe_rx: mpsc::Receiver<(JsonValue, SubscriptionSink)>,
-        get_block_rx: mpsc::Receiver<(JsonValue, oneshot::Sender<JsonValue>)>,
+        subscribe_rx: mpsc::Receiver<MockSubscription>,
+        get_block_rx: mpsc::Receiver<MockRequest>,
     }
 
     impl ExecutionContext {
         async fn send_current_block(&mut self, msg: JsonValue) {
-            let (_, tx) = self.get_block_rx.recv().await.unwrap();
-            tx.send(msg).unwrap();
+            let req = self.get_block_rx.recv().await.unwrap();
+            req.respond(msg);
         }
     }
 
@@ -141,7 +142,7 @@ mod tests {
 
         let (addr, _server) = builder.build().await;
 
-        let client = Client::new([format!("ws://{addr}")]).unwrap();
+        let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
         let api = EthApi::new(Arc::new(client), Duration::from_secs(100));
 
         (
@@ -230,22 +231,16 @@ mod tests {
                 .await;
 
             tokio::time::sleep(Duration::from_millis(10)).await;
-            let (value, subscribe_sink) = context.subscribe_rx.recv().await.unwrap();
-            if value.as_array().unwrap().contains(&json!("newFinalizedHeads")) {
-                run_sink_tasks(
-                    &subscribe_sink,
-                    vec![SinkTask::Send(json!({ "number": "0x5430", "hash": "0x00" }))],
-                )
-                .await
+            let sub = context.subscribe_rx.recv().await.unwrap();
+            if sub.params.as_array().unwrap().contains(&json!("newFinalizedHeads")) {
+                sub.run_sink_tasks(vec![SinkTask::Send(json!({ "number": "0x5430", "hash": "0x00" }))])
+                    .await
             }
 
-            let (value, subscribe_sink) = context.subscribe_rx.recv().await.unwrap();
-            if value.as_array().unwrap().contains(&json!("newHeads")) {
-                run_sink_tasks(
-                    &subscribe_sink,
-                    vec![SinkTask::Send(json!({ "number": "0x5432", "hash": "0x02" }))],
-                )
-                .await
+            let sub = context.subscribe_rx.recv().await.unwrap();
+            if sub.params.as_array().unwrap().contains(&json!("newHeads")) {
+                sub.run_sink_tasks(vec![SinkTask::Send(json!({ "number": "0x5432", "hash": "0x02" }))])
+                    .await
             }
         });
 
