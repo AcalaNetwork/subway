@@ -4,6 +4,7 @@ use futures_util::FutureExt;
 use jsonrpsee::core::params::BatchRequestBuilder;
 use pprof::criterion::{Output, PProfProfiler};
 use std::{sync::Arc, time::Duration};
+use subway::extensions::api::SubstrateApiConfig;
 use tokio::runtime::Runtime as TokioRuntime;
 
 use helpers::{
@@ -215,6 +216,9 @@ fn config() -> Config {
                 port: SUBWAY_SERVER_PORT,
                 max_connections: 1024 * 1024,
                 http_methods: Vec::new(),
+            }),
+            substrate_api: Some(SubstrateApiConfig {
+                stale_timeout_seconds: u64::MAX,
             }),
             ..Default::default()
         },

@@ -8,8 +8,8 @@ mod eth;
 mod substrate;
 mod value_handle;
 
-pub use eth::EthApi;
-pub use substrate::SubstrateApi;
+pub use eth::{EthApi, EthApiConfig};
+pub use substrate::{SubstrateApi, SubstrateApiConfig};
 pub use value_handle::ValueHandle;
 
 pub(crate) struct BaseApi {

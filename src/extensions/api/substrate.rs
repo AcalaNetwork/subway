@@ -29,7 +29,7 @@ impl Drop for SubstrateApi {
 
 #[derive(Deserialize, Debug)]
 pub struct SubstrateApiConfig {
-    stale_timeout_seconds: u64,
+    pub stale_timeout_seconds: u64,
 }
 
 #[async_trait]

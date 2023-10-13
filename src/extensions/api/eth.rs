@@ -28,7 +28,7 @@ impl Drop for EthApi {
 
 #[derive(Deserialize, Debug)]
 pub struct EthApiConfig {
-    stale_timeout_seconds: u64,
+    pub stale_timeout_seconds: u64,
 }
 
 #[async_trait]
