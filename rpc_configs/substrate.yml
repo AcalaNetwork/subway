@@ -104,7 +104,6 @@ methods:
         ty: StorageKey
       - name: prefix
         ty: StorageKey
-        optional: true
       - name: count
         ty: u32
       - name: startKey
