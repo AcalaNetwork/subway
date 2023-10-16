@@ -98,6 +98,34 @@ methods:
         optional: true
         inject: true
 
+  - method: childstate_getKeysPaged
+    params:
+      - name: childStorageKey
+        ty: StorageKey
+      - name: prefix
+        ty: StorageKey
+        optional: true
+      - name: count
+        ty: u32
+      - name: startKey
+        ty: StorageKey
+        optional: true
+      - name: at
+        ty: BlockHash
+        optional: true
+        inject: true
+
+  - method: childstate_getStorage
+    params:
+      - name: childStorageKey
+        ty: StorageKey
+      - name: key
+        ty: StorageKey
+      - name: at
+        ty: BlockHash
+        optional: true
+        inject: true
+
   - method: system_chain
     cache:
       size: 1
@@ -187,3 +215,4 @@ aliases:
   - [ chain_getBlockHash, chain_getHead ]
   - [ state_getKeysPaged, state_getKeysPagedAt ]
   - [ state_getStorage, state_getStorageAt ]
+  - [ childstate_getKeysPaged, childstate_getKeysPagedAt ]
