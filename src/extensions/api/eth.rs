@@ -188,11 +188,13 @@ impl EthApi {
                 if let Err(e) = run.await {
                     // cannot figure out finalized head
                     finalized_head_tx.send_replace(None);
-                    tracing::error!("Error in background task: {e}");
-                    if e.to_string().contains("invalid") {
+                    let msg = e.to_string().to_lowercase();
+                    if msg.contains("methodnotfound") || msg.contains("invalid") {
+                        tracing::warn!("finalized head subscription is not supported: {e}");
                         // finalized head subscription is not supported
                         break;
                     }
+                    tracing::error!("Error in background task: {e}");
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
