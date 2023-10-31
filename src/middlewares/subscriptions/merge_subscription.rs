@@ -31,7 +31,7 @@ fn merge_storage_changes(current_value: JsonValue, new_value: JsonValue) -> Resu
     let mut current = serde_json::from_value::<StorageChanges>(current_value)?;
     let StorageChanges { block, changes } = serde_json::from_value::<StorageChanges>(new_value)?;
 
-    let changed_keys = changes.clone().into_iter().map(|(key, _)| key).collect::<BTreeSet<_>>();
+    let changed_keys = changes.iter().map(|(key, _)| key).collect::<BTreeSet<_>>();
 
     // replace block hash
     current.block = block;
@@ -230,34 +230,31 @@ impl Middleware<SubscriptionRequest, Result<(), StringError>> for MergeSubscript
             .await?;
 
         // broadcast new values
-        tokio::spawn(async move {
-            // create receiver inside task to avoid msg been broadcast before stream.recv() is hit
-            let mut stream = subscribe();
+        let mut stream = subscribe();
 
-            loop {
-                tokio::select! {
-                    resp = stream.recv() => {
-                        match resp {
-                            Ok(new_value) => {
-                                if let Err(e) = sink.send(new_value).await {
-                                    tracing::trace!("subscription sink closed {e:?}");
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                // this should never happen
-                                tracing::error!("subscription stream error {e:?}");
-                                unreachable!("subscription stream error {e:?}");
+        loop {
+            tokio::select! {
+                resp = stream.recv() => {
+                    match resp {
+                        Ok(new_value) => {
+                            if let Err(e) = sink.send(new_value).await {
+                                tracing::trace!("subscription sink closed {e:?}");
+                                break;
                             }
                         }
-                    }
-                    _ = sink.closed() => {
-                        tracing::trace!("subscription sink closed");
-                        break;
+                        Err(e) => {
+                            // this should never happen
+                            tracing::error!("subscription stream error {e:?}");
+                            unreachable!("subscription stream error {e:?}");
+                        }
                     }
                 }
+                _ = sink.closed() => {
+                    tracing::trace!("subscription sink closed");
+                    break;
+                }
             }
-        });
+        }
 
         Ok(())
     }

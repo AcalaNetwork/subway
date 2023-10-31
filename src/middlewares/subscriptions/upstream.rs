@@ -52,26 +52,42 @@ impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware 
 
         let sink = sink.accept().await?;
 
-        while let Some(resp) = sub.next().await {
-            let resp = match resp {
-                Ok(resp) => resp,
-                Err(e) => {
-                    tracing::error!("Subscription error: {}", e);
-                    continue;
+        loop {
+            tokio::select! {
+                msg = sub.next() => {
+                    match msg {
+                        Some(resp) => {
+                            let resp = match resp {
+                                Ok(resp) => resp,
+                                Err(e) => {
+                                    tracing::error!("Subscription error: {}", e);
+                                    continue;
+                                }
+                            };
+                            let resp = match SubscriptionMessage::from_json(&resp) {
+                                Ok(resp) => resp,
+                                Err(e) => {
+                                    tracing::error!("Failed to serialize subscription response: {}", e);
+                                    continue;
+                                }
+                            };
+                            if let Err(e) = sink.send(resp).await {
+                                tracing::error!("Failed to send subscription response: {}", e);
+                                break;
+                            }
+                        }
+                        None => break,
+                    }
                 }
-            };
-            let resp = match SubscriptionMessage::from_json(&resp) {
-                Ok(resp) => resp,
-                Err(e) => {
-                    tracing::error!("Failed to serialize subscription response: {}", e);
-                    continue;
-                }
-            };
-            if let Err(e) = sink.send(resp).await {
-                tracing::info!("Failed to send subscription response: {}", e);
-                break;
+                _ = sink.closed() => {
+                    if let Err(err) = sub.unsubscribe().await {
+                        tracing::error!("Failed to unsubscribe: {}", err);
+                    }
+                    break
+                },
             }
         }
+
         Ok(())
     }
 }
