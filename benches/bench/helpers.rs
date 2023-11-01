@@ -61,6 +61,19 @@ pub async fn ws_server(handle: tokio::runtime::Handle, url: &str) -> (String, js
             },
         )
         .unwrap();
+    module
+        .register_subscription(
+            "chain_subscribeFinalizedHeads",
+            "chain_finalizedHead",
+            "chain_unsubscribeFinalizedHeads",
+            |_params, pending, _ctx| async move {
+                let sink = pending.accept().await?;
+                let msg = SubscriptionMessage::from_json(&serde_json::json!({ "number": "0x4321" }))?;
+                sink.send(msg).await?;
+                Ok(())
+            },
+        )
+        .unwrap();
 
     let addr = format!("ws://{}", server.local_addr().unwrap());
     let handle = server.start(module);
