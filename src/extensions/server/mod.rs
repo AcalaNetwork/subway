@@ -12,7 +12,7 @@ use self::proxy_get_request::ProxyGetRequestMethod;
 mod proxy_get_request;
 
 pub struct Server {
-    config: ServerConfig,
+    pub config: ServerConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -28,6 +28,12 @@ pub struct ServerConfig {
     pub max_connections: u32,
     #[serde(default)]
     pub http_methods: Vec<HttpMethodsConfig>,
+    #[serde(default = "default_request_timeout_seconds")]
+    pub request_timeout_seconds: u64,
+}
+
+fn default_request_timeout_seconds() -> u64 {
+    120
 }
 
 #[async_trait]

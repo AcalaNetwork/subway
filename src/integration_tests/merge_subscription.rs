@@ -54,6 +54,7 @@ async fn merge_subscription_works() {
                 listen_address: "0.0.0.0".to_string(),
                 port: 0,
                 max_connections: 10,
+                request_timeout_seconds: 120,
                 http_methods: Vec::new(),
             }),
             merge_subscription: Some(MergeSubscriptionConfig {

@@ -41,6 +41,8 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
         .get::<Server>()
         .expect("Server extension not found");
 
+    let request_timeout_seconds = server.config.request_timeout_seconds;
+
     let extensions_clone = extensions.clone();
     let (addr, server) = server
         .create_server(move || async move {
@@ -78,10 +80,20 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                         } else {
                             parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
                         };
-                        method_middlewares
+
+                        let request = method_middlewares
                             .call(CallRequest::new(method_name, params))
-                            .with_context(cx)
-                            .await
+                            .with_context(cx);
+
+                        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs(request_timeout_seconds));
+
+                        tokio::select! {
+                            result = request => result,
+                            _ = sleep => {
+                                tracing::debug!("CallRequest timeout");
+                                Ok::<_, ErrorObjectOwned>(Err(errors::map_error(jsonrpsee::core::Error::RequestTimeout))?)
+                            }
+                        }
                     }
                 })?;
             }
@@ -118,15 +130,25 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                         } else {
                             parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
                         };
-                        subscription_middlewares
+
+                        let subscribe = subscription_middlewares
                             .call(SubscriptionRequest {
                                 subscribe: subscribe_name.into(),
                                 params,
                                 unsubscribe: unsubscribe_name.into(),
                                 sink,
                             })
-                            .with_context(cx)
-                            .await
+                            .with_context(cx);
+
+                        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs(request_timeout_seconds));
+
+                        tokio::select! {
+                            result = subscribe => result,
+                            _ = sleep => {
+                                tracing::debug!("SubscriptionRequest timeout");
+                                Ok(Err(errors::map_error(jsonrpsee::core::Error::RequestTimeout))?)
+                            }
+                        }
                     }
                 })?;
             }
@@ -172,21 +194,26 @@ mod tests {
         extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
     };
 
-    const PHO: &str = "pho";
+    const TIMEOUT: &str = "call_timeout";
+    const PHO: &str = "call_pho";
     const BAR: &str = "bar";
-    const WS_SERVER_ENDPOINT: &str = "127.0.0.1:9955";
 
-    async fn server() -> (String, ServerHandle) {
+    async fn subway_server(
+        endpoint: String,
+        port: u16,
+        request_timeout_seconds: Option<u64>,
+    ) -> (String, ServerHandle) {
         let config = Config {
             extensions: ExtensionsConfig {
                 client: Some(ClientConfig {
-                    endpoints: vec![format!("ws://{}", WS_SERVER_ENDPOINT)],
+                    endpoints: vec![endpoint],
                     shuffle_endpoints: false,
                 }),
                 server: Some(ServerConfig {
                     listen_address: "127.0.0.1".to_string(),
-                    port: 9944,
+                    port,
                     max_connections: 1024,
+                    request_timeout_seconds: request_timeout_seconds.unwrap_or(10),
                     http_methods: Vec::new(),
                 }),
                 ..Default::default()
@@ -196,13 +223,22 @@ mod tests {
                 subscriptions: vec![],
             },
             rpcs: RpcDefinitions {
-                methods: vec![RpcMethod {
-                    method: PHO.to_string(),
-                    params: vec![],
-                    cache: None,
-                    response: None,
-                    delay_ms: None,
-                }],
+                methods: vec![
+                    RpcMethod {
+                        method: PHO.to_string(),
+                        params: vec![],
+                        cache: None,
+                        response: None,
+                        delay_ms: None,
+                    },
+                    RpcMethod {
+                        method: TIMEOUT.to_string(),
+                        params: vec![],
+                        cache: None,
+                        response: None,
+                        delay_ms: None,
+                    },
+                ],
                 subscriptions: vec![],
                 aliases: vec![],
             },
@@ -211,7 +247,7 @@ mod tests {
         (format!("ws://{}", addr), server)
     }
 
-    async fn ws_server(url: &str) -> (String, ServerHandle) {
+    async fn upstream_dummy_server(url: &str) -> (String, ServerHandle) {
         let server = ServerBuilder::default()
             .max_request_body_size(u32::MAX)
             .max_response_body_size(u32::MAX)
@@ -222,7 +258,14 @@ mod tests {
 
         let mut module = RpcModule::new(());
         module
-            .register_method(PHO, |_, _| Ok::<std::string::String, ErrorObjectOwned>(BAR.to_string()))
+            .register_method(PHO, |_, _| Ok::<String, ErrorObjectOwned>(BAR.to_string()))
+            .unwrap();
+        module
+            .register_async_method(TIMEOUT, |_, _| async {
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            })
             .unwrap();
         let addr = format!("ws://{}", server.local_addr().unwrap());
         let handle = server.start(module);
@@ -231,6 +274,7 @@ mod tests {
 
     async fn ws_client(url: &str) -> WsClient {
         WsClientBuilder::default()
+            .request_timeout(std::time::Duration::from_secs(60))
             .max_request_size(u32::MAX)
             .max_concurrent_requests(1024 * 1024)
             .build(url)
@@ -240,9 +284,27 @@ mod tests {
 
     #[tokio::test]
     async fn null_param_works() {
-        let (_url1, _server1) = ws_server(WS_SERVER_ENDPOINT).await;
-        let (url, _server) = server().await;
+        let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9955").await;
+        let (url, subway_server_handle) = subway_server(endpoint, 9944, None).await;
         let client = ws_client(&url).await;
         assert_eq!(BAR, client.request::<String, _>(PHO, rpc_params!()).await.unwrap());
+        subway_server_handle.stop().unwrap();
+        upstream_dummy_server_handle.stop().unwrap();
+    }
+
+    #[tokio::test]
+    async fn request_timout() {
+        let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9956").await;
+        // server with 1 second timeout
+        let (url, subway_server_handle) = subway_server(endpoint, 9945, Some(1)).await;
+        // client with default 60 second timeout
+        let client = ws_client(&url).await;
+        let now = std::time::Instant::now();
+        let err = client.request::<String, _>(TIMEOUT, rpc_params!()).await.unwrap_err();
+        // should timeout in 1 second
+        assert_eq!(now.elapsed().as_secs(), 1);
+        assert!(err.to_string().contains("Request timeout"));
+        subway_server_handle.stop().unwrap();
+        upstream_dummy_server_handle.stop().unwrap();
     }
 }
