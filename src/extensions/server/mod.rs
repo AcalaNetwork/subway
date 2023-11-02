@@ -48,9 +48,14 @@ impl Extension for Server {
 
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("subway-server".to_string())
+            .enable_all()
+            .build()
+            .unwrap();
         Self {
             config,
-            tokio_rt: Arc::new(tokio::runtime::Runtime::new().unwrap()), // multi-thread runtime
+            tokio_rt: Arc::new(rt),
         }
     }
 
