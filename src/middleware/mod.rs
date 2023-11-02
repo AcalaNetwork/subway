@@ -45,7 +45,6 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
     pub async fn call(
         &self,
         request: Request,
-        rt: Arc<tokio::runtime::Runtime>,
         result_tx: tokio::sync::oneshot::Sender<Result>,
         timeout: tokio::time::Duration,
     ) {
@@ -63,7 +62,7 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
 
         let req = format!("{:?}", request);
 
-        let mut task_handle = rt.spawn(async move {
+        let mut task_handle = tokio::spawn(async move {
             let result = next(request, TypeRegistry::new()).await;
             _ = result_tx.send(result);
         });

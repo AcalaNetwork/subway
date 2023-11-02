@@ -49,8 +49,6 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
 
     let request_timeout_seconds = server.config.request_timeout_seconds;
 
-    let server_runtime = server.tokio_rt.clone();
-
     let extensions_clone = extensions.clone();
     let (addr, handle) = server
         .create_server(move || async move {
@@ -75,10 +73,8 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                 );
 
                 let method_name = string_to_static_str(method.method.clone());
-                let server_rt = server_runtime.clone();
 
                 module.register_async_method(method_name, move |params, _| {
-                    let rt = server_rt.clone();
                     let method_middlewares = method_middlewares.clone();
 
                     async move {
@@ -95,7 +91,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                         let timeout = tokio::time::Duration::from_secs(request_timeout_seconds);
 
                         method_middlewares
-                            .call(CallRequest::new(method_name, params), rt, result_tx, timeout)
+                            .call(CallRequest::new(method_name, params), result_tx, timeout)
                             .with_context(cx)
                             .await;
 
@@ -126,9 +122,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                     Arc::new(|_, _| async { Err("Bad configuration".into()) }.boxed()),
                 );
 
-                let server_rt = server_runtime.clone();
                 module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
-                    let rt = server_rt.clone();
                     let subscription_middlewares = subscription_middlewares.clone();
 
                     async move {
@@ -152,7 +146,6 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                                     unsubscribe: unsubscribe_name.into(),
                                     sink,
                                 },
-                                rt,
                                 result_tx,
                                 timeout,
                             )

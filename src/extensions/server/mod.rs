@@ -1,4 +1,4 @@
-use std::{future::Future, net::SocketAddr, sync::Arc};
+use std::{future::Future, net::SocketAddr};
 
 use async_trait::async_trait;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
@@ -13,7 +13,6 @@ mod proxy_get_request;
 
 pub struct Server {
     pub config: ServerConfig,
-    pub tokio_rt: Arc<tokio::runtime::Runtime>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -48,15 +47,7 @@ impl Extension for Server {
 
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .thread_name("subway-server".to_string())
-            .enable_all()
-            .build()
-            .unwrap();
-        Self {
-            config,
-            tokio_rt: Arc::new(rt),
-        }
+        Self { config }
     }
 
     pub async fn create_server<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
@@ -81,7 +72,6 @@ impl Server {
             .set_middleware(service_builder)
             .max_connections(self.config.max_connections)
             .set_id_provider(RandomStringIdProvider::new(16))
-            .custom_tokio_runtime(self.tokio_rt.handle().clone())
             .build((self.config.listen_address.as_str(), self.config.port))
             .await?;
 
