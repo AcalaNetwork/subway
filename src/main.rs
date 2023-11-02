@@ -15,11 +15,11 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("{:#?}", config);
 
-    let (addr, server, _extensions) = server::start_server(config).await?;
-
+    let subway_server = server::start_server(config).await?;
+    let addr = subway_server.addr;
     tracing::info!("Server running at {addr}");
 
-    server.stopped().await;
+    subway_server.handle.stopped().await;
 
     shutdown_tracer_provider();
 

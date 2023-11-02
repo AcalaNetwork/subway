@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 pub use crate::{
     config::{RpcMethod, RpcSubscription},
@@ -34,7 +34,7 @@ impl<Request, Result> Clone for Middlewares<Request, Result> {
     }
 }
 
-impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
+impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Request, Result> {
     pub fn new(
         middlewares: Vec<Arc<dyn Middleware<Request, Result>>>,
         fallback: Arc<dyn Fn(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync>,
@@ -42,7 +42,12 @@ impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
         Self { middlewares, fallback }
     }
 
-    pub async fn call(&self, request: Request) -> Result {
+    pub async fn call(
+        &self,
+        request: Request,
+        result_tx: tokio::sync::oneshot::Sender<Result>,
+        timeout: tokio::time::Duration,
+    ) {
         let iter = self.middlewares.iter().rev();
         let fallback = self.fallback.clone();
         let mut next: Box<dyn FnOnce(Request, TypeRegistry) -> BoxFuture<'static, Result> + Send + Sync> =
@@ -55,6 +60,23 @@ impl<Request: Send + 'static, Result: 'static> Middlewares<Request, Result> {
                 Box::new(move |request, context| async move { middleware.call(request, context, next2).await }.boxed());
         }
 
-        (next)(request, TypeRegistry::new()).await
+        let req = format!("{:?}", request);
+
+        let mut task_handle = tokio::spawn(async move {
+            let result = next(request, TypeRegistry::new()).await;
+            _ = result_tx.send(result);
+        });
+
+        let sleep = tokio::time::sleep(timeout);
+
+        tokio::select! {
+            _ = sleep => {
+                tracing::error!("middlewares timeout: {req}");
+                task_handle.abort();
+            }
+            _ = &mut task_handle => {
+                tracing::trace!("middlewares finished: {req}");
+            }
+        }
     }
 }

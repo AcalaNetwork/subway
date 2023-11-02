@@ -15,8 +15,7 @@ use helpers::{
 use subway::{
     config::{Config, MergeStrategy, MethodParam, MiddlewaresConfig, RpcDefinitions, RpcMethod, RpcSubscription},
     extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
-    server::start_server,
-    utils::TypeRegistryRef,
+    server::{start_server, SubwayServerHandle},
 };
 
 mod helpers;
@@ -120,7 +119,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server, _registry) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
         ws_concurrent_conn_calls(
             &rt,
@@ -139,7 +139,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server, _registry) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         ws_concurrent_conn_calls(
             &rt,
             crit,
@@ -162,7 +163,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server, _registry) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         ws_concurrent_conn_calls(
             &rt,
             crit,
@@ -177,7 +179,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server, _registry) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         let client = Arc::new(rt.block_on(ws_client(&url)));
         sub_round_trip(&rt, crit, client, "subscriptions");
     }
@@ -186,7 +189,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server, _registry) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         let client = Arc::new(rt.block_on(ws_client(&url)));
         ws_inject_calls(&rt, crit, client, "ws_inject_calls", Self::REQUEST_TYPE);
     }
@@ -216,6 +220,7 @@ fn config() -> Config {
                 listen_address: SUBWAY_SERVER_ADDR.to_string(),
                 port: SUBWAY_SERVER_PORT,
                 max_connections: 1024 * 1024,
+                request_timeout_seconds: 120,
                 http_methods: Vec::new(),
             }),
             substrate_api: Some(SubstrateApiConfig {
@@ -303,10 +308,9 @@ fn config() -> Config {
     }
 }
 
-async fn server() -> (String, jsonrpsee::server::ServerHandle, TypeRegistryRef) {
+async fn server() -> SubwayServerHandle {
     let config = config();
-    let (addr, handle, registry) = start_server(config).await.unwrap();
-    (format!("ws://{}", addr), handle, registry)
+    start_server(config).await.unwrap()
 }
 
 fn ws_concurrent_conn_calls(
@@ -326,18 +330,10 @@ fn ws_concurrent_conn_calls(
         group.bench_function(format!("{}", conns), |b| {
             b.to_async(rt).iter_with_setup(
                 || {
-                    let mut clients = Vec::new();
+                    let clients = (0..*conns).map(|_| ws_client(url)).collect::<Vec<_>>();
                     // We have to use `block_in_place` here since `b.to_async(rt)` automatically enters the
                     // runtime context and simply calling `block_on` here will cause the code to panic.
-                    tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(async {
-                            for _ in 0..*conns {
-                                clients.push(ws_client(url).await);
-                            }
-                        })
-                    });
-
-                    clients
+                    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(join_all(clients)))
                 },
                 |clients| async {
                     let tasks = clients.into_iter().map(|client| {
@@ -373,18 +369,10 @@ fn ws_concurrent_conn_subs(
         group.bench_function(format!("{}", conns), |b| {
             b.to_async(rt).iter_with_setup(
                 || {
-                    let mut clients = Vec::new();
+                    let clients = (0..*conns).map(|_| ws_client(url)).collect::<Vec<_>>();
                     // We have to use `block_in_place` here since `b.to_async(rt)` automatically enters the
                     // runtime context and simply calling `block_on` here will cause the code to panic.
-                    tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(async {
-                            for _ in 0..*conns {
-                                clients.push(ws_client(url).await);
-                            }
-                        })
-                    });
-
-                    clients
+                    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(join_all(clients)))
                 },
                 |clients| async {
                     let tasks = clients.into_iter().map(|client| {
