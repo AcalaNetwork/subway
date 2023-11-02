@@ -290,7 +290,7 @@ async fn rotate_endpoint_on_head_mismatch() {
     }
 
     // wait a bit to process tasks
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     assert!(head_sub.sink.is_closed());
     assert!(finalized_head_sub.sink.is_closed());

@@ -81,19 +81,17 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                             parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
                         };
 
-                        let request = method_middlewares
-                            .call(CallRequest::new(method_name, params))
-                            .with_context(cx);
+                        let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+                        let timeout = tokio::time::Duration::from_secs(request_timeout_seconds);
 
-                        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs(request_timeout_seconds));
+                        method_middlewares
+                            .call(CallRequest::new(method_name, params), result_tx, timeout)
+                            .with_context(cx)
+                            .await;
 
-                        tokio::select! {
-                            result = request => result,
-                            _ = sleep => {
-                                tracing::debug!("CallRequest timeout");
-                                Ok::<_, ErrorObjectOwned>(Err(errors::map_error(jsonrpsee::core::Error::RequestTimeout))?)
-                            }
-                        }
+                        result_rx
+                            .await
+                            .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?
                     }
                 })?;
             }
@@ -131,24 +129,26 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                             parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
                         };
 
-                        let subscribe = subscription_middlewares
-                            .call(SubscriptionRequest {
-                                subscribe: subscribe_name.into(),
-                                params,
-                                unsubscribe: unsubscribe_name.into(),
-                                sink,
-                            })
-                            .with_context(cx);
+                        let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+                        let timeout = tokio::time::Duration::from_secs(request_timeout_seconds);
 
-                        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs(request_timeout_seconds));
+                        subscription_middlewares
+                            .call(
+                                SubscriptionRequest {
+                                    subscribe: subscribe_name.into(),
+                                    params,
+                                    unsubscribe: unsubscribe_name.into(),
+                                    sink,
+                                },
+                                result_tx,
+                                timeout,
+                            )
+                            .with_context(cx)
+                            .await;
 
-                        tokio::select! {
-                            result = subscribe => result,
-                            _ = sleep => {
-                                tracing::debug!("SubscriptionRequest timeout");
-                                Ok(Err(errors::map_error(jsonrpsee::core::Error::RequestTimeout))?)
-                            }
-                        }
+                        result_rx
+                            .await
+                            .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?
                     }
                 })?;
             }
