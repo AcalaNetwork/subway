@@ -330,7 +330,7 @@ fn ws_concurrent_conn_calls(
         group.bench_function(format!("{}", conns), |b| {
             b.to_async(rt).iter_with_setup(
                 || {
-                    let clients = (0..*conns).into_iter().map(|_| ws_client(url)).collect::<Vec<_>>();
+                    let clients = (0..*conns).map(|_| ws_client(url)).collect::<Vec<_>>();
                     // We have to use `block_in_place` here since `b.to_async(rt)` automatically enters the
                     // runtime context and simply calling `block_on` here will cause the code to panic.
                     tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(join_all(clients)))
@@ -369,7 +369,7 @@ fn ws_concurrent_conn_subs(
         group.bench_function(format!("{}", conns), |b| {
             b.to_async(rt).iter_with_setup(
                 || {
-                    let clients = (0..*conns).into_iter().map(|_| ws_client(url)).collect::<Vec<_>>();
+                    let clients = (0..*conns).map(|_| ws_client(url)).collect::<Vec<_>>();
                     // We have to use `block_in_place` here since `b.to_async(rt)` automatically enters the
                     // runtime context and simply calling `block_on` here will cause the code to panic.
                     tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(join_all(clients)))
