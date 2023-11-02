@@ -43,6 +43,8 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
 
     let request_timeout_seconds = server.config.request_timeout_seconds;
 
+    let request_runtime = server.request_rt.clone();
+
     let extensions_clone = extensions.clone();
     let (addr, server) = server
         .create_server(move || async move {
@@ -67,8 +69,10 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                 );
 
                 let method_name = string_to_static_str(method.method.clone());
+                let request_rt = request_runtime.clone();
 
                 module.register_async_method(method_name, move |params, _| {
+                    let rt = request_rt.clone();
                     let method_middlewares = method_middlewares.clone();
 
                     async move {
@@ -85,7 +89,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                         let timeout = tokio::time::Duration::from_secs(request_timeout_seconds);
 
                         method_middlewares
-                            .call(CallRequest::new(method_name, params), result_tx, timeout)
+                            .call(CallRequest::new(method_name, params), rt, result_tx, timeout)
                             .with_context(cx)
                             .await;
 
@@ -116,7 +120,9 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                     Arc::new(|_, _| async { Err("Bad configuration".into()) }.boxed()),
                 );
 
+                let request_rt = request_runtime.clone();
                 module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
+                    let rt = request_rt.clone();
                     let subscription_middlewares = subscription_middlewares.clone();
 
                     async move {
@@ -140,6 +146,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
                                     unsubscribe: unsubscribe_name.into(),
                                     sink,
                                 },
+                                rt,
                                 result_tx,
                                 timeout,
                             )
@@ -195,6 +202,7 @@ mod tests {
     };
 
     const TIMEOUT: &str = "call_timeout";
+    const CRAZY: &str = "go_crazy";
     const PHO: &str = "call_pho";
     const BAR: &str = "bar";
 
@@ -219,7 +227,7 @@ mod tests {
                 ..Default::default()
             },
             middlewares: MiddlewaresConfig {
-                methods: vec!["upstream".to_string()],
+                methods: vec!["crazy".to_string(), "upstream".to_string()],
                 subscriptions: vec![],
             },
             rpcs: RpcDefinitions {
@@ -233,6 +241,13 @@ mod tests {
                     },
                     RpcMethod {
                         method: TIMEOUT.to_string(),
+                        params: vec![],
+                        cache: None,
+                        response: None,
+                        delay_ms: None,
+                    },
+                    RpcMethod {
+                        method: CRAZY.to_string(),
                         params: vec![],
                         cache: None,
                         response: None,
@@ -293,17 +308,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_timout() {
+    async fn request_timeout() {
         let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9956").await;
         // server with 1 second timeout
         let (url, subway_server_handle) = subway_server(endpoint, 9945, Some(1)).await;
         // client with default 60 second timeout
         let client = ws_client(&url).await;
-        let now = std::time::Instant::now();
-        let err = client.request::<String, _>(TIMEOUT, rpc_params!()).await.unwrap_err();
-        // should timeout in 1 second
-        assert_eq!(now.elapsed().as_secs(), 1);
-        assert!(err.to_string().contains("Request timeout"));
+
+        // timeout when middleware goes crazy
+        {
+            let now = std::time::Instant::now();
+            let err = client.request::<String, _>(CRAZY, rpc_params!()).await.unwrap_err();
+            // should timeout in 1 second
+            assert_eq!(now.elapsed().as_secs(), 1);
+            assert!(err.to_string().contains("Request timeout"));
+        }
+
+        // timeout when request takes too long
+        {
+            let now = std::time::Instant::now();
+            let err = client.request::<String, _>(TIMEOUT, rpc_params!()).await.unwrap_err();
+            // should timeout in 1 second
+            assert_eq!(now.elapsed().as_secs(), 1);
+            assert!(err.to_string().contains("Request timeout"));
+        }
+
         subway_server_handle.stop().unwrap();
         upstream_dummy_server_handle.stop().unwrap();
     }
