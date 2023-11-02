@@ -13,7 +13,7 @@ mod proxy_get_request;
 
 pub struct Server {
     pub config: ServerConfig,
-    pub request_rt: Arc<tokio::runtime::Runtime>,
+    pub tokio_rt: Arc<tokio::runtime::Runtime>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -50,7 +50,7 @@ impl Server {
     pub fn new(config: ServerConfig) -> Self {
         Self {
             config,
-            request_rt: Arc::new(tokio::runtime::Runtime::new().unwrap()), // multi-thread runtime
+            tokio_rt: Arc::new(tokio::runtime::Runtime::new().unwrap()), // multi-thread runtime
         }
     }
 
@@ -72,13 +72,11 @@ impl Server {
             .expect("Invalid health config"),
         );
 
-        let stop = self.request_rt.handle().clone();
-
         let server = ServerBuilder::default()
             .set_middleware(service_builder)
             .max_connections(self.config.max_connections)
             .set_id_provider(RandomStringIdProvider::new(16))
-            .custom_tokio_runtime(stop)
+            .custom_tokio_runtime(self.tokio_rt.handle().clone())
             .build((self.config.listen_address.as_str(), self.config.port))
             .await?;
 

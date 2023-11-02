@@ -49,7 +49,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
 
     let request_timeout_seconds = server.config.request_timeout_seconds;
 
-    let request_runtime = server.request_rt.clone();
+    let server_runtime = server.tokio_rt.clone();
 
     let extensions_clone = extensions.clone();
     let (addr, handle) = server
@@ -75,10 +75,10 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                 );
 
                 let method_name = string_to_static_str(method.method.clone());
-                let request_rt = request_runtime.clone();
+                let server_rt = server_runtime.clone();
 
                 module.register_async_method(method_name, move |params, _| {
-                    let rt = request_rt.clone();
+                    let rt = server_rt.clone();
                     let method_middlewares = method_middlewares.clone();
 
                     async move {
@@ -126,9 +126,9 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                     Arc::new(|_, _| async { Err("Bad configuration".into()) }.boxed()),
                 );
 
-                let request_rt = request_runtime.clone();
+                let server_rt = server_runtime.clone();
                 module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
-                    let rt = request_rt.clone();
+                    let rt = server_rt.clone();
                     let subscription_middlewares = subscription_middlewares.clone();
 
                     async move {
