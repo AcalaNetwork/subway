@@ -224,7 +224,7 @@ fn config() -> Config {
                 http_methods: Vec::new(),
             }),
             substrate_api: Some(SubstrateApiConfig {
-                stale_timeout_seconds: u64::MAX,
+                stale_timeout_seconds: 5_000,
             }),
             ..Default::default()
         },
