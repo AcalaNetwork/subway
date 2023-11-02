@@ -72,10 +72,13 @@ impl Server {
             .expect("Invalid health config"),
         );
 
+        let stop = self.request_rt.handle().clone();
+
         let server = ServerBuilder::default()
             .set_middleware(service_builder)
             .max_connections(self.config.max_connections)
             .set_id_provider(RandomStringIdProvider::new(16))
+            .custom_tokio_runtime(stop)
             .build((self.config.listen_address.as_str(), self.config.port))
             .await?;
 

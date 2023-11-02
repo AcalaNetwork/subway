@@ -92,7 +92,8 @@ async fn merge_subscription_works() {
         },
     };
 
-    let (addr, server, _extensions) = start_server(config).await.unwrap();
+    let subway_server = start_server(config).await.unwrap();
+    let addr = subway_server.addr;
 
     let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
     let mut first_sub = client
@@ -231,5 +232,5 @@ async fn merge_subscription_works() {
     test_two.await.unwrap();
 
     // stop server
-    server.stop().unwrap();
+    subway_server.handle.stop().unwrap();
 }

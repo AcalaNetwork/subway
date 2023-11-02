@@ -23,7 +23,13 @@ fn string_to_static_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerHandle, TypeRegistryRef)> {
+pub struct SubwayServerHandle {
+    pub handle: ServerHandle,
+    pub addr: SocketAddr,
+    pub extensions: TypeRegistryRef,
+}
+
+pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> {
     let Config {
         extensions,
         middlewares,
@@ -46,7 +52,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
     let request_runtime = server.request_rt.clone();
 
     let extensions_clone = extensions.clone();
-    let (addr, server) = server
+    let (addr, handle) = server
         .create_server(move || async move {
             let mut module = RpcModule::new(());
 
@@ -181,7 +187,11 @@ pub async fn start_server(config: Config) -> anyhow::Result<(SocketAddr, ServerH
         })
         .await?;
 
-    Ok((addr, server, extensions))
+    Ok(SubwayServerHandle {
+        addr,
+        handle,
+        extensions,
+    })
 }
 
 #[cfg(test)]
@@ -206,11 +216,7 @@ mod tests {
     const PHO: &str = "call_pho";
     const BAR: &str = "bar";
 
-    async fn subway_server(
-        endpoint: String,
-        port: u16,
-        request_timeout_seconds: Option<u64>,
-    ) -> (String, ServerHandle) {
+    async fn subway_server(endpoint: String, port: u16, request_timeout_seconds: Option<u64>) -> SubwayServerHandle {
         let config = Config {
             extensions: ExtensionsConfig {
                 client: Some(ClientConfig {
@@ -258,8 +264,7 @@ mod tests {
                 aliases: vec![],
             },
         };
-        let (addr, server, _) = start_server(config).await.unwrap();
-        (format!("ws://{}", addr), server)
+        start_server(config).await.unwrap()
     }
 
     async fn upstream_dummy_server(url: &str) -> (String, ServerHandle) {
@@ -300,10 +305,11 @@ mod tests {
     #[tokio::test]
     async fn null_param_works() {
         let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9955").await;
-        let (url, subway_server_handle) = subway_server(endpoint, 9944, None).await;
+        let subway_server = subway_server(endpoint, 9944, None).await;
+        let url = format!("ws://{}", subway_server.addr);
         let client = ws_client(&url).await;
         assert_eq!(BAR, client.request::<String, _>(PHO, rpc_params!()).await.unwrap());
-        subway_server_handle.stop().unwrap();
+        subway_server.handle.stop().unwrap();
         upstream_dummy_server_handle.stop().unwrap();
     }
 
@@ -311,7 +317,8 @@ mod tests {
     async fn request_timeout() {
         let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9956").await;
         // server with 1 second timeout
-        let (url, subway_server_handle) = subway_server(endpoint, 9945, Some(1)).await;
+        let subway_server = subway_server(endpoint, 9945, Some(1)).await;
+        let url = format!("ws://{}", subway_server.addr);
         // client with default 60 second timeout
         let client = ws_client(&url).await;
 
@@ -333,7 +340,7 @@ mod tests {
             assert!(err.to_string().contains("Request timeout"));
         }
 
-        subway_server_handle.stop().unwrap();
+        subway_server.handle.stop().unwrap();
         upstream_dummy_server_handle.stop().unwrap();
     }
 }

@@ -15,7 +15,7 @@ use helpers::{
 use subway::{
     config::{Config, MergeStrategy, MethodParam, MiddlewaresConfig, RpcDefinitions, RpcMethod, RpcSubscription},
     extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
-    server::start_server,
+    server::{start_server, SubwayServerHandle},
 };
 
 mod helpers;
@@ -119,7 +119,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
         ws_concurrent_conn_calls(
             &rt,
@@ -138,7 +139,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         ws_concurrent_conn_calls(
             &rt,
             crit,
@@ -161,7 +163,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         ws_concurrent_conn_calls(
             &rt,
             crit,
@@ -176,7 +179,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         let client = Arc::new(rt.block_on(ws_client(&url)));
         sub_round_trip(&rt, crit, client, "subscriptions");
     }
@@ -185,7 +189,8 @@ trait RequestBencher {
         let rt = TokioRuntime::new().unwrap();
         let (_url1, _server1) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_ONE_ENDPOINT));
         let (_url2, _server2) = rt.block_on(helpers::ws_server(rt.handle().clone(), SERVER_TWO_ENDPOINT));
-        let (url, _server) = rt.block_on(server());
+        let subway_server = rt.block_on(server());
+        let url = format!("ws://{}", subway_server.addr);
         let client = Arc::new(rt.block_on(ws_client(&url)));
         ws_inject_calls(&rt, crit, client, "ws_inject_calls", Self::REQUEST_TYPE);
     }
@@ -303,10 +308,9 @@ fn config() -> Config {
     }
 }
 
-async fn server() -> (String, jsonrpsee::server::ServerHandle) {
+async fn server() -> SubwayServerHandle {
     let config = config();
-    let (addr, handle, _) = start_server(config).await.unwrap();
-    (format!("ws://{}", addr), handle)
+    start_server(config).await.unwrap()
 }
 
 fn ws_concurrent_conn_calls(
