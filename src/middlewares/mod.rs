@@ -3,6 +3,7 @@ use jsonrpsee::{
     types::ErrorObjectOwned,
     PendingSubscriptionSink,
 };
+use std::fmt::{Debug, Formatter};
 
 use crate::{
     config::{RpcMethod, RpcSubscription},
@@ -50,12 +51,22 @@ pub async fn create_method_middleware(
     }
 }
 
-#[derive(Debug)]
 pub struct SubscriptionRequest {
     pub subscribe: String,
     pub params: Vec<JsonValue>,
     pub unsubscribe: String,
     pub sink: PendingSubscriptionSink,
+}
+
+impl Debug for SubscriptionRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SubscriptionRequest")
+            .field("subscribe", &self.subscribe)
+            .field("params", &self.params)
+            .field("unsubscribe", &self.unsubscribe)
+            .field("sink_id", &self.sink.connection_id())
+            .finish()
+    }
 }
 
 pub type SubscriptionResult = Result<(), StringError>;
