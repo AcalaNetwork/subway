@@ -144,7 +144,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                                     subscribe: subscribe_name.into(),
                                     params,
                                     unsubscribe: unsubscribe_name.into(),
-                                    sink,
+                                    pending_sink: sink,
                                 },
                                 result_tx,
                                 timeout,
