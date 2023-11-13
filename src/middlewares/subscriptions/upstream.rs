@@ -7,7 +7,7 @@ use crate::{
     extensions::client::Client,
     middleware::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription},
     middlewares::{SubscriptionRequest, SubscriptionResult},
-    utils::{TypeRegistry, TypeRegistryRef},
+    utils::{errors, TypeRegistry, TypeRegistryRef},
 };
 
 pub struct UpstreamMiddleware {
@@ -45,16 +45,34 @@ impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware 
     ) -> SubscriptionResult {
         let sink = request.sink;
 
-        let mut sub = self
+        let result = self
             .client
             .subscribe(&request.subscribe, request.params, &request.unsubscribe)
-            .await?;
+            .await;
 
-        let sink = sink.accept().await?;
+        let (mut subscription, sink) = match result {
+            // subscription was successful, accept the sink
+            Ok(sub) => match sink.accept().await {
+                Ok(sink) => (sub, sink),
+                Err(e) => {
+                    tracing::trace!("Failed to accept pending subscription {:?}", e);
+                    // sink was closed before we could accept it, unsubscribe remote upstream
+                    if let Err(err) = sub.unsubscribe().await {
+                        tracing::error!("Failed to unsubscribe: {}", err);
+                    }
+                    return Ok(());
+                }
+            },
+            // subscription failed, reject the sink
+            Err(e) => {
+                sink.reject(errors::map_error(e)).await;
+                return Ok(());
+            }
+        };
 
         loop {
             tokio::select! {
-                msg = sub.next() => {
+                msg = subscription.next() => {
                     match msg {
                         Some(resp) => {
                             let resp = match resp {
@@ -80,7 +98,7 @@ impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware 
                     }
                 }
                 _ = sink.closed() => {
-                    if let Err(err) = sub.unsubscribe().await {
+                    if let Err(err) = subscription.unsubscribe().await {
                         tracing::error!("Failed to unsubscribe: {}", err);
                     }
                     break
