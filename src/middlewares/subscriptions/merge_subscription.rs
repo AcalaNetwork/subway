@@ -18,7 +18,7 @@ use crate::{
     extensions::{client::Client, merge_subscription::MergeSubscription},
     middleware::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription},
     middlewares::{SubscriptionRequest, SubscriptionResult},
-    utils::{CacheKey, TypeRegistry, TypeRegistryRef},
+    utils::{errors, CacheKey, TypeRegistry, TypeRegistryRef},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -87,8 +87,10 @@ impl MergeSubscriptionMiddleware {
         subscribe: String,
         params: Vec<JsonValue>,
         unsubscribe: String,
-    ) -> Result<Box<dyn FnOnce() -> broadcast::Receiver<SubscriptionMessage> + Sync + Send + 'static>, StringError>
-    {
+    ) -> Result<
+        Box<dyn FnOnce() -> broadcast::Receiver<SubscriptionMessage> + Sync + Send + 'static>,
+        jsonrpsee::core::Error,
+    > {
         if let Some(tx) = self.upstream_subs.read().await.get(&key).cloned() {
             tracing::trace!("Found existing upstream subscription for {}", &subscribe);
             return Ok(Box::new(move || tx.subscribe()));
@@ -204,35 +206,53 @@ impl Middleware<SubscriptionRequest, Result<(), StringError>> for MergeSubscript
     ) -> Result<(), StringError> {
         let key = CacheKey::new(&request.subscribe, &request.params);
 
-        let sink = request.sink.accept().await?;
+        let SubscriptionRequest {
+            subscribe,
+            params,
+            unsubscribe,
+            pending_sink,
+        } = request;
 
-        if let Some(current_value) = self
-            .current_values
-            .read()
+        let subscribe = match self
+            .get_upstream_subscription(key.clone(), subscribe, params.to_owned(), unsubscribe)
             .await
-            .get(&key)
-            .map(|x| SubscriptionMessage::from_json(&x).ok())
-            .unwrap_or(None)
         {
-            if let Err(e) = sink.send(current_value).await {
-                tracing::trace!("subscription sink closed {e:?}");
+            Ok(subscribe) => subscribe,
+            Err(err) => {
+                pending_sink.reject(errors::map_error(err)).await;
                 return Ok(());
             }
-        }
+        };
 
-        let subscribe = self
-            .get_upstream_subscription(
-                key,
-                request.subscribe.to_owned(),
-                request.params.to_owned(),
-                request.unsubscribe,
-            )
-            .await?;
+        // accept pending subscription
+        let sink = match pending_sink.accept().await {
+            Ok(sink) => sink,
+            Err(e) => {
+                tracing::trace!("Failed to accept pending subscription {e:?}");
+                return Ok(());
+            }
+        };
 
-        // broadcast new values
+        let current_values = self.current_values.clone();
+
+        // send any current value and broadcast new values
         tokio::spawn(async move {
-            // create receiver inside task to avoid msg been broadcast before stream.recv() is hit
+            // read lock before subscribing to make sure we don't miss any value
+            let read_lock = current_values.read().await;
             let mut stream = subscribe();
+
+            // send current value if any
+            if let Some(current_value) = read_lock
+                .get(&key)
+                .map(|x| SubscriptionMessage::from_json(&x).ok())
+                .unwrap_or(None)
+            {
+                if let Err(e) = sink.send(current_value).await {
+                    tracing::trace!("subscription sink closed {e:?}");
+                    return;
+                }
+            }
+            drop(read_lock);
 
             loop {
                 tokio::select! {

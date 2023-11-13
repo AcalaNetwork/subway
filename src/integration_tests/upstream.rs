@@ -1,7 +1,8 @@
 use crate::{
-    config::{Config, MiddlewaresConfig, RpcDefinitions, RpcSubscription},
+    config::{Config, MergeStrategy, MiddlewaresConfig, RpcDefinitions, RpcSubscription},
     extensions::{
         client::{mock::TestServerBuilder, Client, ClientConfig},
+        merge_subscription::MergeSubscriptionConfig,
         server::ServerConfig,
         ExtensionsConfig,
     },
@@ -14,9 +15,14 @@ async fn upstream_error_propagate() {
     let unsubscribe_mock = "mock_unsub";
     let update_mock = "mock";
 
+    let subscribe_merge_mock = "mock_merge_sub";
+    let unsubscribe_merge_mock = "mock_merge_unsub";
+    let update_merge_mock = "mock_merge";
+
     let mut builder = TestServerBuilder::new();
 
     builder.register_error_subscription(subscribe_mock, update_mock, unsubscribe_mock);
+    builder.register_error_subscription(subscribe_merge_mock, unsubscribe_merge_mock, update_merge_mock);
 
     let (addr, _upstream_handle) = builder.build().await;
 
@@ -33,20 +39,31 @@ async fn upstream_error_propagate() {
                 request_timeout_seconds: 120,
                 http_methods: Vec::new(),
             }),
+            merge_subscription: Some(MergeSubscriptionConfig {
+                keep_alive_seconds: Some(1),
+            }),
             ..Default::default()
         },
         middlewares: MiddlewaresConfig {
             methods: vec![],
-            subscriptions: vec!["upstream".to_string()],
+            subscriptions: vec!["merge_subscription".to_string(), "upstream".to_string()],
         },
         rpcs: RpcDefinitions {
             methods: vec![],
-            subscriptions: vec![RpcSubscription {
-                subscribe: subscribe_mock.to_string(),
-                unsubscribe: unsubscribe_mock.to_string(),
-                name: update_mock.to_string(),
-                merge_strategy: None,
-            }],
+            subscriptions: vec![
+                RpcSubscription {
+                    subscribe: subscribe_mock.to_string(),
+                    unsubscribe: unsubscribe_mock.to_string(),
+                    name: update_mock.to_string(),
+                    merge_strategy: None,
+                },
+                RpcSubscription {
+                    subscribe: subscribe_merge_mock.to_string(),
+                    unsubscribe: unsubscribe_merge_mock.to_string(),
+                    name: update_merge_mock.to_string(),
+                    merge_strategy: Some(MergeStrategy::Replace),
+                },
+            ],
             aliases: vec![],
         },
     };
@@ -56,6 +73,16 @@ async fn upstream_error_propagate() {
 
     let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
     let result = client.subscribe(subscribe_mock, vec![], unsubscribe_mock).await;
+
+    assert!(result
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("Inability to pay some fees (e.g. account balance too low)"));
+
+    let result = client
+        .subscribe(subscribe_merge_mock, vec![], unsubscribe_merge_mock)
+        .await;
 
     assert!(result
         .err()

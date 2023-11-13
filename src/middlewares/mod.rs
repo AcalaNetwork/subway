@@ -55,7 +55,7 @@ pub struct SubscriptionRequest {
     pub subscribe: String,
     pub params: Vec<JsonValue>,
     pub unsubscribe: String,
-    pub sink: PendingSubscriptionSink,
+    pub pending_sink: PendingSubscriptionSink,
 }
 
 impl Debug for SubscriptionRequest {
@@ -64,7 +64,7 @@ impl Debug for SubscriptionRequest {
             .field("subscribe", &self.subscribe)
             .field("params", &self.params)
             .field("unsubscribe", &self.unsubscribe)
-            .field("sink_id", &self.sink.connection_id())
+            .field("sink_id", &self.pending_sink.connection_id())
             .finish()
     }
 }
