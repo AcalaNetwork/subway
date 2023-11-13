@@ -43,16 +43,18 @@ impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware 
         _context: TypeRegistry,
         _next: NextFn<SubscriptionRequest, SubscriptionResult>,
     ) -> SubscriptionResult {
-        let sink = request.sink;
+        let SubscriptionRequest {
+            subscribe,
+            params,
+            unsubscribe,
+            pending_sink,
+        } = request;
 
-        let result = self
-            .client
-            .subscribe(&request.subscribe, request.params, &request.unsubscribe)
-            .await;
+        let result = self.client.subscribe(&subscribe, params, &unsubscribe).await;
 
         let (mut subscription, sink) = match result {
             // subscription was successful, accept the sink
-            Ok(sub) => match sink.accept().await {
+            Ok(sub) => match pending_sink.accept().await {
                 Ok(sink) => (sub, sink),
                 Err(e) => {
                     tracing::trace!("Failed to accept pending subscription {:?}", e);
@@ -65,7 +67,7 @@ impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware 
             },
             // subscription failed, reject the sink
             Err(e) => {
-                sink.reject(errors::map_error(e)).await;
+                pending_sink.reject(errors::map_error(e)).await;
                 return Ok(());
             }
         };
