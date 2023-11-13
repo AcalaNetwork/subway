@@ -7,6 +7,7 @@ use crate::logger::enable_logger;
 use super::*;
 
 use futures::TryFutureExt;
+use jsonrpsee::types::ErrorObject;
 use jsonrpsee::{
     server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle},
     SubscriptionMessage, SubscriptionSink,
@@ -66,6 +67,25 @@ impl TestServerBuilder {
             })
             .unwrap();
         rx
+    }
+
+    pub fn register_error_subscription(
+        &mut self,
+        sub_name: &'static str,
+        method_name: &'static str,
+        unsub_name: &'static str,
+    ) {
+        self.module
+            .register_subscription(sub_name, method_name, unsub_name, move |_, sink, _| async {
+                sink.reject(errors::map_error(Error::Call(ErrorObject::owned(
+                    1010,
+                    "Invalid Transaction",
+                    Some("Inability to pay some fees (e.g. account balance too low)"),
+                ))))
+                .await;
+                Ok(())
+            })
+            .unwrap();
     }
 
     pub async fn build(self) -> (SocketAddr, ServerHandle) {
