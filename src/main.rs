@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     subway::logger::enable_logger();
     tracing::trace!("{:#?}", config);
 
-    let subway_server = subway::server_builder::build(config).await?;
+    let subway_server = subway::server::build(config).await?;
     tracing::info!("Server running at {}", subway_server.addr);
 
     subway_server.handle.stopped().await;

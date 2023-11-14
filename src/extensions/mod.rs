@@ -134,6 +134,6 @@ define_all_extensions! {
     merge_subscription: merge_subscription::MergeSubscription,
     substrate_api: api::SubstrateApi,
     eth_api: api::EthApi,
-    server: server::Server,
+    server: server::SubwayServerBuilder,
     event_bus: event_bus::EventBus,
 }

@@ -306,9 +306,9 @@ fn config() -> Config {
     }
 }
 
-async fn server() -> subway::server_builder::SubwayServerHandle {
+async fn server() -> subway::server::SubwayServerHandle {
     let config = config();
-    subway::server_builder::build(config).await.unwrap()
+    subway::server::build(config).await.unwrap()
 }
 
 fn ws_concurrent_conn_calls(
