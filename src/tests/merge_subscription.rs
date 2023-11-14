@@ -11,7 +11,7 @@ use crate::{
         server::ServerConfig,
         ExtensionsConfig,
     },
-    server::start_server,
+    server_builder,
 };
 
 #[tokio::test]
@@ -92,7 +92,7 @@ async fn merge_subscription_works() {
         },
     };
 
-    let subway_server = start_server(config).await.unwrap();
+    let subway_server = server_builder::build(config).await.unwrap();
     let addr = subway_server.addr;
 
     let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();

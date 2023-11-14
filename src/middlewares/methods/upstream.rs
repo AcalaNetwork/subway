@@ -5,8 +5,7 @@ use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 
 use crate::{
     extensions::client::Client,
-    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
-    middlewares::{CallRequest, CallResult},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 

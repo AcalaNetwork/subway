@@ -1,16 +1,12 @@
+use async_trait::async_trait;
+use serde::Deserialize;
 use std::{
     any::{Any, TypeId},
     sync::Arc,
 };
-
-use async_trait::async_trait;
-use serde::Deserialize;
 use tokio::sync::RwLock;
 
-use crate::{
-    extension::{Extension, ExtensionBuilder, ExtensionRegistry},
-    utils::{TypeRegistry, TypeRegistryRef},
-};
+use crate::utils::{TypeRegistry, TypeRegistryRef};
 
 pub mod api;
 pub mod cache;
@@ -20,6 +16,57 @@ pub mod merge_subscription;
 pub mod server;
 pub mod telemetry;
 
+#[async_trait]
+pub trait Extension: Sized {
+    type Config: serde::Deserialize<'static>;
+
+    async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error>;
+}
+
+#[async_trait]
+pub trait ExtensionBuilder {
+    fn has(&self, type_id: TypeId) -> bool;
+    async fn build(&self, type_id: TypeId, registry: &ExtensionRegistry) -> anyhow::Result<Arc<dyn Any + Send + Sync>>;
+}
+
+/// ExtensionRegistry is a struct that holds a registry of types and an extension builder.
+/// It allows to get an instance of a type from the registry or build it using the extension builder.
+pub struct ExtensionRegistry {
+    pub registry: TypeRegistryRef,
+    builder: Arc<dyn ExtensionBuilder + Send + Sync>,
+}
+
+impl ExtensionRegistry {
+    /// Creates a new ExtensionRegistry instance with the given registry and builder.
+    pub fn new(registry: TypeRegistryRef, builder: Arc<dyn ExtensionBuilder + Send + Sync>) -> Self {
+        Self { registry, builder }
+    }
+
+    /// Gets an instance of the given type from the registry or builds it using the extension builder.
+    pub async fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
+        let reg = self.registry.read().await;
+
+        let ext = reg.get::<T>();
+
+        if ext.is_none() && self.builder.has(TypeId::of::<T>()) {
+            drop(reg);
+            let ext = self
+                .builder
+                .build(TypeId::of::<T>(), self)
+                .await
+                .expect("Failed to build extension");
+            self.registry.write().await.insert_raw(ext);
+            let reg = self.registry.read().await;
+            let ext = reg.get::<T>();
+            assert!(ext.is_some());
+            ext
+        } else {
+            ext
+        }
+    }
+}
+
+// This macro generates the ExtensionsConfig and implements ExtensionBuilder so extensions can be built from config.
 macro_rules! define_all_extensions {
     (
         $(

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use opentelemetry::{global, sdk::trace::Tracer, trace::TraceError};
 use serde::Deserialize;
 
-use crate::{extension::Extension, middleware::ExtensionRegistry};
+use super::{Extension, ExtensionRegistry};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]

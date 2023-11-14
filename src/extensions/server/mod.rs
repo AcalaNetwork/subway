@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use serde::Deserialize;
 
-use crate::{extension::Extension, middleware::ExtensionRegistry};
+use super::{Extension, ExtensionRegistry};
 use proxy_get_request::ProxyGetRequestLayer;
 
 use self::proxy_get_request::ProxyGetRequestMethod;

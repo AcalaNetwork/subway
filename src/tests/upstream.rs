@@ -6,7 +6,7 @@ use crate::{
         server::ServerConfig,
         ExtensionsConfig,
     },
-    server::start_server,
+    server_builder,
 };
 
 #[tokio::test]
@@ -68,7 +68,7 @@ async fn upstream_error_propagate() {
         },
     };
 
-    let subway_server = start_server(config).await.unwrap();
+    let subway_server = server_builder::build(config).await.unwrap();
     let addr = subway_server.addr;
 
     let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();

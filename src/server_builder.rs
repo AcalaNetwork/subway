@@ -13,8 +13,7 @@ use crate::utils::TypeRegistryRef;
 use crate::{
     config::Config,
     extensions::server::Server,
-    middleware::Middlewares,
-    middlewares::{create_method_middleware, create_subscription_middleware, CallRequest, SubscriptionRequest},
+    middlewares::{factory, CallRequest, Middlewares, SubscriptionRequest},
     utils::{errors, telemetry},
 };
 
@@ -29,19 +28,16 @@ pub struct SubwayServerHandle {
     pub extensions: TypeRegistryRef,
 }
 
-pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> {
-    let Config {
-        extensions,
-        middlewares,
-        rpcs,
-    } = config;
-
-    let extensions = extensions
+pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
+    // create extensions registry from config
+    let extensions_registry = config
+        .extensions
         .create_registry()
         .await
         .expect("Failed to create extensions registry");
 
-    let server = extensions
+    // get the server extension
+    let server = extensions_registry
         .read()
         .await
         .get::<Server>()
@@ -49,19 +45,20 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
 
     let request_timeout_seconds = server.config.request_timeout_seconds;
 
-    let extensions_clone = extensions.clone();
+    let registry = extensions_registry.clone();
     let (addr, handle) = server
         .create_server(move || async move {
             let mut module = RpcModule::new(());
 
             let tracer = telemetry::Tracer::new("server");
 
-            for method in rpcs.methods {
+            // register methods from config
+            for method in config.rpcs.methods {
                 let mut method_middlewares: Vec<Arc<_>> = vec![];
 
-                for middleware_name in &middlewares.methods {
+                for middleware_name in &config.middlewares.methods {
                     if let Some(middleware) =
-                        create_method_middleware(middleware_name, &method, &extensions_clone).await
+                        factory::create_method_middleware(middleware_name, &method, &registry).await
                     {
                         method_middlewares.push(middleware.into());
                     }
@@ -102,16 +99,17 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                 })?;
             }
 
-            for subscription in rpcs.subscriptions {
+            // register subscriptions from config
+            for subscription in config.rpcs.subscriptions {
                 let subscribe_name = string_to_static_str(subscription.subscribe.clone());
                 let unsubscribe_name = string_to_static_str(subscription.unsubscribe.clone());
                 let name = string_to_static_str(subscription.name.clone());
 
                 let mut subscription_middlewares: Vec<Arc<_>> = vec![];
 
-                for middleware_name in &middlewares.subscriptions {
+                for middleware_name in &config.middlewares.subscriptions {
                     if let Some(middleware) =
-                        create_subscription_middleware(middleware_name, &subscription, &extensions_clone).await
+                        factory::create_subscription_middleware(middleware_name, &subscription, &registry).await
                     {
                         subscription_middlewares.push(middleware.into());
                     }
@@ -159,7 +157,8 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
                 })?;
             }
 
-            for (alias_old, alias_new) in rpcs.aliases {
+            // register aliases from config
+            for (alias_old, alias_new) in config.rpcs.aliases {
                 let alias_old = string_to_static_str(alias_old);
                 let alias_new = string_to_static_str(alias_new);
                 module.register_alias(alias_new, alias_old)?;
@@ -183,7 +182,7 @@ pub async fn start_server(config: Config) -> anyhow::Result<SubwayServerHandle> 
     Ok(SubwayServerHandle {
         addr,
         handle,
-        extensions,
+        extensions: extensions_registry,
     })
 }
 
@@ -257,7 +256,7 @@ mod tests {
                 aliases: vec![],
             },
         };
-        start_server(config).await.unwrap()
+        build(config).await.unwrap()
     }
 
     async fn upstream_dummy_server(url: &str) -> (String, ServerHandle) {

@@ -16,8 +16,7 @@ use tokio::sync::{broadcast, RwLock};
 use crate::{
     config::MergeStrategy,
     extensions::{client::Client, merge_subscription::MergeSubscription},
-    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription},
-    middlewares::{SubscriptionRequest, SubscriptionResult},
+    middlewares::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription, SubscriptionRequest, SubscriptionResult},
     utils::{errors, CacheKey, TypeRegistry, TypeRegistryRef},
 };
 

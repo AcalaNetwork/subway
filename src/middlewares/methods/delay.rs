@@ -3,8 +3,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 
 use crate::{
-    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
-    middlewares::{CallRequest, CallResult},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 

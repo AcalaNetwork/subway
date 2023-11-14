@@ -5,13 +5,10 @@ use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
 use tokio::{sync::watch, task::JoinHandle};
 
-use crate::{
-    extension::Extension,
-    extensions::{
-        api::{BaseApi, ValueHandle},
-        client::Client,
-    },
-    middleware::ExtensionRegistry,
+use crate::extensions::{
+    api::{BaseApi, ValueHandle},
+    client::Client,
+    Extension, ExtensionRegistry,
 };
 
 pub struct EthApi {
