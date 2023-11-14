@@ -4,7 +4,6 @@ use futures_util::FutureExt;
 use jsonrpsee::core::params::BatchRequestBuilder;
 use pprof::criterion::{Output, PProfProfiler};
 use std::{sync::Arc, time::Duration};
-use subway::extensions::api::SubstrateApiConfig;
 use tokio::runtime::Runtime as TokioRuntime;
 
 use helpers::{
@@ -14,8 +13,7 @@ use helpers::{
 
 use subway::{
     config::{Config, MergeStrategy, MethodParam, MiddlewaresConfig, RpcDefinitions, RpcMethod, RpcSubscription},
-    extensions::{client::ClientConfig, server::ServerConfig, ExtensionsConfig},
-    server::{start_server, SubwayServerHandle},
+    extensions::{api::SubstrateApiConfig, client::ClientConfig, server::ServerConfig, ExtensionsConfig},
 };
 
 mod helpers;
@@ -308,9 +306,9 @@ fn config() -> Config {
     }
 }
 
-async fn server() -> SubwayServerHandle {
+async fn server() -> subway::server::SubwayServerHandle {
     let config = config();
-    start_server(config).await.unwrap()
+    subway::server::build(config).await.unwrap()
 }
 
 fn ws_concurrent_conn_calls(

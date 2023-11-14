@@ -22,9 +22,9 @@ use rand::{seq::SliceRandom, thread_rng};
 use serde::Deserialize;
 use tokio::sync::Notify;
 
+use super::ExtensionRegistry;
 use crate::{
-    extension::Extension,
-    middleware::ExtensionRegistry,
+    extensions::Extension,
     utils::{self, errors},
 };
 

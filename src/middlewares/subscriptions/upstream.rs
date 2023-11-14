@@ -5,8 +5,7 @@ use jsonrpsee::SubscriptionMessage;
 
 use crate::{
     extensions::client::Client,
-    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription},
-    middlewares::{SubscriptionRequest, SubscriptionResult},
+    middlewares::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription, SubscriptionRequest, SubscriptionResult},
     utils::{errors, TypeRegistry, TypeRegistryRef},
 };
 

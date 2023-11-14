@@ -9,8 +9,7 @@ use opentelemetry::trace::FutureExt;
 use crate::{
     config::CacheParams,
     extensions::cache::Cache as CacheExtension,
-    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
-    middlewares::{CallRequest, CallResult},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     utils::{telemetry, Cache, CacheKey, TypeRegistry, TypeRegistryRef},
 };
 

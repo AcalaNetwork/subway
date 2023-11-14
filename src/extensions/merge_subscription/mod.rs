@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::{extension::Extension, middleware::ExtensionRegistry};
+use super::{Extension, ExtensionRegistry};
 
 pub struct MergeSubscription {
     pub config: MergeSubscriptionConfig,

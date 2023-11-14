@@ -5,8 +5,7 @@ use std::sync::Arc;
 use crate::{
     config::MethodParam,
     extensions::api::{SubstrateApi, ValueHandle},
-    middleware::{Middleware, MiddlewareBuilder, NextFn, RpcMethod},
-    middlewares::{CallRequest, CallResult},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     utils::errors,
     utils::{TypeRegistry, TypeRegistryRef},
 };

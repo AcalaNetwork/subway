@@ -4,6 +4,8 @@ Substrate JSON RPC Gateway.
 
 This is a generalized JSON RPC proxy server with features specifically designed for Substrate RPC and Ethereum RPC.
 
+![alt text](subway-diagram.png)
+
 ## Getting Started
 
 Pull vendors: `git submodule update --init --recursive`

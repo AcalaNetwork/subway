@@ -146,6 +146,7 @@ impl From<ParseConfig> for Config {
     }
 }
 
+// read config file specified in command line
 pub fn read_config() -> Result<Config, String> {
     let cmd = Command::parse();
 

@@ -4,14 +4,14 @@ use async_trait::async_trait;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use serde::Deserialize;
 
-use crate::{extension::Extension, middleware::ExtensionRegistry};
+use super::{Extension, ExtensionRegistry};
 use proxy_get_request::ProxyGetRequestLayer;
 
 use self::proxy_get_request::ProxyGetRequestMethod;
 
 mod proxy_get_request;
 
-pub struct Server {
+pub struct SubwayServerBuilder {
     pub config: ServerConfig,
 }
 
@@ -37,7 +37,7 @@ fn default_request_timeout_seconds() -> u64 {
 }
 
 #[async_trait]
-impl Extension for Server {
+impl Extension for SubwayServerBuilder {
     type Config = ServerConfig;
 
     async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
@@ -45,12 +45,12 @@ impl Extension for Server {
     }
 }
 
-impl Server {
+impl SubwayServerBuilder {
     pub fn new(config: ServerConfig) -> Self {
         Self { config }
     }
 
-    pub async fn create_server<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
+    pub async fn build<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
