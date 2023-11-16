@@ -31,7 +31,7 @@ pub enum ItemOrList<T> {
 }
 
 impl<T> ItemOrList<T> {
-    fn to_list(self) -> Vec<T> {
+    fn into_list(self) -> Vec<T> {
         match self {
             ItemOrList::Item(item) => vec![item],
             ItemOrList::List(list) => list,
@@ -66,10 +66,10 @@ impl Extension for SubwayServerBuilder {
 }
 
 fn cors_layer(cors: Option<ItemOrList<String>>) -> anyhow::Result<CorsLayer> {
-    let origins = cors.map(|c| c.to_list()).unwrap_or_default();
+    let origins = cors.map(|c| c.into_list()).unwrap_or_default();
 
     match origins.as_slice() {
-        [] => return Ok(CorsLayer::new()),
+        [] => Ok(CorsLayer::new()),
         [origin] if origin == "*" || origin == "all" => Ok(CorsLayer::permissive()),
         origins => {
             let list = origins
