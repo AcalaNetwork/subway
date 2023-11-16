@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::JsonValue;
 
 use crate::{
-    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod, TRACER},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 
@@ -37,6 +37,7 @@ impl Middleware<CallRequest, CallResult> for ResponseMiddleware {
         _context: TypeRegistry,
         _next: NextFn<CallRequest, CallResult>,
     ) -> CallResult {
+        let _span = TRACER.context("response");
         Ok(self.resp.clone())
     }
 }

@@ -1,7 +1,8 @@
 use std::env;
 
 use async_trait::async_trait;
-use opentelemetry::{global, sdk::trace::Tracer, trace::TraceError};
+use opentelemetry::{global, trace::TraceError};
+use opentelemetry_sdk::trace::Tracer;
 use serde::Deserialize;
 
 use super::{Extension, ExtensionRegistry};
@@ -64,7 +65,7 @@ pub fn setup_telemetry(options: &TelemetryConfig) -> Result<Option<Tracer>, Trac
                 tracer = tracer.with_endpoint(agent_endpoint.clone());
             }
 
-            let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
+            let tracer = tracer.install_batch(opentelemetry_sdk::runtime::Tokio)?;
 
             Some(tracer)
         }
@@ -80,7 +81,7 @@ pub fn setup_telemetry(options: &TelemetryConfig) -> Result<Option<Tracer>, Trac
                 tracer = tracer.with_agent_endpoint(agent_endpoint);
             }
 
-            let tracer = tracer.install_batch(opentelemetry::runtime::Tokio)?;
+            let tracer = tracer.install_batch(opentelemetry_sdk::runtime::Tokio)?;
 
             Some(tracer)
         }

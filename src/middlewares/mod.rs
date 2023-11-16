@@ -5,6 +5,7 @@ use jsonrpsee::{
     types::ErrorObjectOwned,
     PendingSubscriptionSink,
 };
+use opentelemetry::trace::FutureExt as _;
 use std::{
     fmt::{Debug, Formatter},
     sync::Arc,
@@ -12,18 +13,18 @@ use std::{
 
 use crate::{
     config::{RpcMethod, RpcSubscription},
-    utils::{TypeRegistry, TypeRegistryRef},
+    utils::{telemetry, TypeRegistry, TypeRegistryRef},
 };
 
 pub mod factory;
 pub mod methods;
 pub mod subscriptions;
 
-#[derive(Debug)]
 /// Represents a RPC request made to a middleware function.
 pub struct CallRequest {
     pub method: String,
     pub params: Vec<JsonValue>,
+    pub tracer: Option<opentelemetry::global::BoxedTracer>,
 }
 
 impl CallRequest {
@@ -31,7 +32,22 @@ impl CallRequest {
         Self {
             method: method.to_string(),
             params,
+            tracer: None,
         }
+    }
+
+    pub fn with_tracer(mut self, tracer: opentelemetry::global::BoxedTracer) -> Self {
+        self.tracer = Some(tracer);
+        self
+    }
+}
+
+impl Debug for CallRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CallRequest")
+            .field("method", &self.method)
+            .field("params", &self.params)
+            .finish()
     }
 }
 
@@ -92,6 +108,8 @@ impl<Request, Result> Clone for Middlewares<Request, Result> {
     }
 }
 
+const TRACER: telemetry::Tracer = telemetry::Tracer::new("middlewares");
+
 impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Request, Result> {
     /// Creates a new middleware instance with the given middlewares and fallback function.
     ///
@@ -134,10 +152,13 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
 
         let req = format!("{:?}", request);
 
-        let mut task_handle = tokio::spawn(async move {
-            let result = next(request, TypeRegistry::new()).await;
-            _ = result_tx.send(result);
-        });
+        let mut task_handle = tokio::spawn(
+            async move {
+                let result = next(request, TypeRegistry::new()).await;
+                _ = result_tx.send(result);
+            }
+            .with_context(TRACER.context("middlewares")),
+        );
 
         let sleep = tokio::time::sleep(timeout);
 

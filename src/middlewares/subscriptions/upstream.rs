@@ -2,10 +2,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use jsonrpsee::SubscriptionMessage;
+use opentelemetry::trace::FutureExt;
 
 use crate::{
     extensions::client::Client,
-    middlewares::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription, SubscriptionRequest, SubscriptionResult},
+    middlewares::{
+        Middleware, MiddlewareBuilder, NextFn, RpcSubscription, SubscriptionRequest, SubscriptionResult, TRACER,
+    },
     utils::{errors, TypeRegistry, TypeRegistryRef},
 };
 
@@ -42,71 +45,77 @@ impl Middleware<SubscriptionRequest, SubscriptionResult> for UpstreamMiddleware 
         _context: TypeRegistry,
         _next: NextFn<SubscriptionRequest, SubscriptionResult>,
     ) -> SubscriptionResult {
-        let SubscriptionRequest {
-            subscribe,
-            params,
-            unsubscribe,
-            pending_sink,
-        } = request;
+        async move {
+            let SubscriptionRequest {
+                subscribe,
+                params,
+                unsubscribe,
+                pending_sink,
+            } = request;
 
-        let result = self.client.subscribe(&subscribe, params, &unsubscribe).await;
+            let result = self.client.subscribe(&subscribe, params, &unsubscribe).await;
 
-        let (mut subscription, sink) = match result {
-            // subscription was successful, accept the sink
-            Ok(sub) => match pending_sink.accept().await {
-                Ok(sink) => (sub, sink),
-                Err(e) => {
-                    tracing::trace!("Failed to accept pending subscription {:?}", e);
-                    // sink was closed before we could accept it, unsubscribe remote upstream
-                    if let Err(err) = sub.unsubscribe().await {
-                        tracing::error!("Failed to unsubscribe: {}", err);
+            let (mut subscription, sink) = match result {
+                // subscription was successful, accept the sink
+                Ok(sub) => match pending_sink.accept().await {
+                    Ok(sink) => (sub, sink),
+                    Err(e) => {
+                        tracing::trace!("Failed to accept pending subscription {:?}", e);
+                        // sink was closed before we could accept it, unsubscribe remote upstream
+                        if let Err(err) = sub.unsubscribe().await {
+                            tracing::error!("Failed to unsubscribe: {}", err);
+                        }
+                        return Ok(());
                     }
+                },
+                // subscription failed, reject the sink
+                Err(e) => {
+                    pending_sink.reject(errors::map_error(e)).await;
                     return Ok(());
                 }
-            },
-            // subscription failed, reject the sink
-            Err(e) => {
-                pending_sink.reject(errors::map_error(e)).await;
-                return Ok(());
-            }
-        };
+            };
 
-        loop {
-            tokio::select! {
-                msg = subscription.next() => {
-                    match msg {
-                        Some(resp) => {
-                            let resp = match resp {
-                                Ok(resp) => resp,
-                                Err(e) => {
-                                    tracing::error!("Subscription error: {}", e);
-                                    continue;
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        msg = subscription.next() => {
+                            match msg {
+                                Some(resp) => {
+                                    let resp = match resp {
+                                        Ok(resp) => resp,
+                                        Err(e) => {
+                                            tracing::error!("Subscription error: {}", e);
+                                            continue;
+                                        }
+                                    };
+                                    let resp = match SubscriptionMessage::from_json(&resp) {
+                                        Ok(resp) => resp,
+                                        Err(e) => {
+                                            tracing::error!("Failed to serialize subscription response: {}", e);
+                                            continue;
+                                        }
+                                    };
+                                    if let Err(e) = sink.send(resp).await {
+                                        tracing::error!("Failed to send subscription response: {}", e);
+                                        break;
+                                    }
                                 }
-                            };
-                            let resp = match SubscriptionMessage::from_json(&resp) {
-                                Ok(resp) => resp,
-                                Err(e) => {
-                                    tracing::error!("Failed to serialize subscription response: {}", e);
-                                    continue;
-                                }
-                            };
-                            if let Err(e) = sink.send(resp).await {
-                                tracing::error!("Failed to send subscription response: {}", e);
-                                break;
+                                None => break,
                             }
                         }
-                        None => break,
+                        _ = sink.closed() => {
+                            if let Err(err) = subscription.unsubscribe().await {
+                                tracing::error!("Failed to unsubscribe: {}", err);
+                            }
+                            break
+                        },
                     }
                 }
-                _ = sink.closed() => {
-                    if let Err(err) = subscription.unsubscribe().await {
-                        tracing::error!("Failed to unsubscribe: {}", err);
-                    }
-                    break
-                },
-            }
-        }
+            });
 
-        Ok(())
+            Ok(())
+        }
+        .with_context(TRACER.context("upstream"))
+        .await
     }
 }

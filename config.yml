@@ -7,7 +7,7 @@ extensions:
   substrate_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
   telemetry:
-    provider: none
+    provider: jaeger
   cache:
     default_ttl_seconds: 60
     default_size: 500

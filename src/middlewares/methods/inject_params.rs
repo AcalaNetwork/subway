@@ -1,11 +1,12 @@
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
+use opentelemetry::trace::FutureExt;
 use std::sync::Arc;
 
 use crate::{
     config::MethodParam,
     extensions::api::{SubstrateApi, ValueHandle},
-    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod, TRACER},
     utils::errors,
     utils::{TypeRegistry, TypeRegistryRef},
 };
@@ -108,27 +109,31 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for InjectPara
                 return next(request, context).await;
             }
             len if len <= idx => {
-                // without current block
-                let to_inject = self.get_parameter().await;
-                tracing::trace!("Injected param {} to method {}", &to_inject, request.method);
-                let params_passed = request.params.len();
-                while request.params.len() < idx {
-                    let current = request.params.len();
-                    if self.params[current].optional {
-                        request.params.push(JsonValue::Null);
-                    } else {
-                        let (required, optional) = self.params_count();
-                        return Err(errors::invalid_params(format!(
-                            "Expected {:?} parameters ({:?} optional), {:?} found instead",
-                            required + optional,
-                            optional,
-                            params_passed
-                        )));
+                async move {
+                    // without current block
+                    let to_inject = self.get_parameter().await;
+                    tracing::trace!("Injected param {} to method {}", &to_inject, request.method);
+                    let params_passed = request.params.len();
+                    while request.params.len() < idx {
+                        let current = request.params.len();
+                        if self.params[current].optional {
+                            request.params.push(JsonValue::Null);
+                        } else {
+                            let (required, optional) = self.params_count();
+                            return Err(errors::invalid_params(format!(
+                                "Expected {:?} parameters ({:?} optional), {:?} found instead",
+                                required + optional,
+                                optional,
+                                params_passed
+                            )));
+                        }
                     }
-                }
-                request.params.push(to_inject);
+                    request.params.push(to_inject);
 
-                return next(request, context).await;
+                    next(request, context).await
+                }
+                .with_context(TRACER.context("inject_params"))
+                .await
             }
             _ => {
                 // unexpected number of params
