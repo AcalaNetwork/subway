@@ -20,11 +20,11 @@ pub mod factory;
 pub mod methods;
 pub mod subscriptions;
 
+#[derive(Debug)]
 /// Represents a RPC request made to a middleware function.
 pub struct CallRequest {
     pub method: String,
     pub params: Vec<JsonValue>,
-    pub tracer: Option<opentelemetry::global::BoxedTracer>,
 }
 
 impl CallRequest {
@@ -32,22 +32,7 @@ impl CallRequest {
         Self {
             method: method.to_string(),
             params,
-            tracer: None,
         }
-    }
-
-    pub fn with_tracer(mut self, tracer: opentelemetry::global::BoxedTracer) -> Self {
-        self.tracer = Some(tracer);
-        self
-    }
-}
-
-impl Debug for CallRequest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CallRequest")
-            .field("method", &self.method)
-            .field("params", &self.params)
-            .finish()
     }
 }
 
