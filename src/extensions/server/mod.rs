@@ -1,8 +1,10 @@
 use std::{future::Future, net::SocketAddr};
 
 use async_trait::async_trait;
+use http::header::HeaderValue;
 use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
 use serde::Deserialize;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::{Extension, ExtensionRegistry};
 use proxy_get_request::ProxyGetRequestLayer;
@@ -22,6 +24,22 @@ pub struct HttpMethodsConfig {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum ItemOrList<T> {
+    Item(T),
+    List(Vec<T>),
+}
+
+impl<T> ItemOrList<T> {
+    fn into_list(self) -> Vec<T> {
+        match self {
+            ItemOrList::Item(item) => vec![item],
+            ItemOrList::List(list) => list,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct ServerConfig {
     pub port: u16,
     pub listen_address: String,
@@ -30,6 +48,8 @@ pub struct ServerConfig {
     pub http_methods: Vec<HttpMethodsConfig>,
     #[serde(default = "default_request_timeout_seconds")]
     pub request_timeout_seconds: u64,
+    #[serde(default)]
+    pub cors: Option<ItemOrList<String>>,
 }
 
 fn default_request_timeout_seconds() -> u64 {
@@ -45,6 +65,22 @@ impl Extension for SubwayServerBuilder {
     }
 }
 
+fn cors_layer(cors: Option<ItemOrList<String>>) -> anyhow::Result<CorsLayer> {
+    let origins = cors.map(|c| c.into_list()).unwrap_or_default();
+
+    match origins.as_slice() {
+        [] => Ok(CorsLayer::new()),
+        [origin] if origin == "*" || origin == "all" => Ok(CorsLayer::permissive()),
+        origins => {
+            let list = origins
+                .iter()
+                .map(|o| HeaderValue::from_str(o))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(CorsLayer::new().allow_origin(AllowOrigin::list(list)))
+        }
+    }
+}
+
 impl SubwayServerBuilder {
     pub fn new(config: ServerConfig) -> Self {
         Self { config }
@@ -54,19 +90,21 @@ impl SubwayServerBuilder {
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-        let service_builder = tower::ServiceBuilder::new().layer(
-            ProxyGetRequestLayer::new(
-                self.config
-                    .http_methods
-                    .iter()
-                    .map(|m| ProxyGetRequestMethod {
-                        path: m.path.clone(),
-                        method: m.method.clone(),
-                    })
-                    .collect(),
-            )
-            .expect("Invalid health config"),
-        );
+        let service_builder = tower::ServiceBuilder::new()
+            .layer(cors_layer(self.config.cors.clone()).expect("Invalid CORS config"))
+            .layer(
+                ProxyGetRequestLayer::new(
+                    self.config
+                        .http_methods
+                        .iter()
+                        .map(|m| ProxyGetRequestMethod {
+                            path: m.path.clone(),
+                            method: m.method.clone(),
+                        })
+                        .collect(),
+                )
+                .expect("Invalid health config"),
+            );
 
         let server = ServerBuilder::default()
             .set_middleware(service_builder)

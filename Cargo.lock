@@ -3140,6 +3140,7 @@ dependencies = [
  "futures",
  "futures-util",
  "governor",
+ "http",
  "hyper",
  "jsonrpc-http-server",
  "jsonrpc-pubsub",

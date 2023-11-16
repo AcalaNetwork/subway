@@ -220,6 +220,7 @@ fn config() -> Config {
                 max_connections: 1024 * 1024,
                 request_timeout_seconds: 120,
                 http_methods: Vec::new(),
+                cors: None,
             }),
             substrate_api: Some(SubstrateApiConfig {
                 stale_timeout_seconds: 5_000,
