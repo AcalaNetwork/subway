@@ -69,7 +69,7 @@ impl<D: Digest + 'static> Cache<D> {
     }
 
     pub async fn get(&self, key: &CacheKey<D>) -> Option<JsonValue> {
-        match self.cache.get(key) {
+        match self.cache.get(key).await {
             Some(CacheValue::Value(value)) => Some(value),
             Some(CacheValue::Pending(mut rx)) => {
                 let value = rx.borrow();
@@ -114,7 +114,7 @@ impl<D: Digest + 'static> Cache<D> {
             value
         };
 
-        match self.cache.get(&key) {
+        match self.cache.get(&key).await {
             Some(CacheValue::Value(value)) => Ok(value),
             Some(CacheValue::Pending(mut rx)) => {
                 {
@@ -147,10 +147,8 @@ impl<D: Digest + 'static> Cache<D> {
         self.cache.remove(key).await;
     }
 
-    pub fn sync(&self) {
-        use moka::future::ConcurrentCacheExt;
-
-        self.cache.sync();
+    pub async fn sync(&self) {
+        self.cache.run_pending_tasks().await;
     }
 }
 
