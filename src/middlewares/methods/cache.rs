@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(res.unwrap(), json!(4));
 
         // ensure cache is fully updated
-        cache.sync();
+        cache.sync().await;
 
         // cache miss due to entry pruned
         let res = middleware
