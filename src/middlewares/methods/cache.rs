@@ -9,8 +9,8 @@ use opentelemetry::trace::FutureExt;
 use crate::{
     config::CacheParams,
     extensions::cache::Cache as CacheExtension,
-    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
-    utils::{telemetry, Cache, CacheKey, TypeRegistry, TypeRegistryRef},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod, TRACER},
+    utils::{Cache, CacheKey, TypeRegistry, TypeRegistryRef},
 };
 
 pub struct BypassCache(pub bool);
@@ -62,8 +62,6 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
     }
 }
 
-const TRACER: telemetry::Tracer = telemetry::Tracer::new("cache-middleware");
-
 #[async_trait]
 impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddleware {
     async fn call(
@@ -95,7 +93,7 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddl
 
             result
         }
-        .with_context(TRACER.context("call"))
+        .with_context(TRACER.context("cache"))
         .await
     }
 }

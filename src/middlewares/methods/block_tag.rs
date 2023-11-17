@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
+use opentelemetry::trace::FutureExt;
 
 use crate::{
     extensions::api::EthApi,
-    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod, TRACER},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 
@@ -97,8 +98,12 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for BlockTagMi
         context: TypeRegistry,
         next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
     ) -> Result<JsonValue, ErrorObjectOwned> {
-        let (request, context) = self.replace(request, context).await;
-        next(request, context).await
+        async move {
+            let (request, context) = self.replace(request, context).await;
+            next(request, context).await
+        }
+        .with_context(TRACER.context("block_tag"))
+        .await
     }
 }
 

@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use opentelemetry::trace::FutureExt;
 
 use crate::{
-    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
+    middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod, TRACER},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 
@@ -39,7 +40,11 @@ impl Middleware<CallRequest, CallResult> for DelayMiddleware {
         context: TypeRegistry,
         next: NextFn<CallRequest, CallResult>,
     ) -> CallResult {
-        tokio::time::sleep(self.delay).await;
-        next(request, context).await
+        async move {
+            tokio::time::sleep(self.delay).await;
+            next(request, context).await
+        }
+        .with_context(TRACER.context("delay"))
+        .await
     }
 }

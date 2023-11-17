@@ -120,41 +120,46 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                     Arc::new(|_, _| async { Err("Bad configuration".into()) }.boxed()),
                 );
 
-                module.register_subscription(subscribe_name, name, unsubscribe_name, move |params, sink, _| {
-                    let subscription_middlewares = subscription_middlewares.clone();
+                module.register_subscription(
+                    subscribe_name,
+                    name,
+                    unsubscribe_name,
+                    move |params, pending_sink, _| {
+                        let subscription_middlewares = subscription_middlewares.clone();
 
-                    async move {
-                        let cx = tracer.context(name);
+                        async move {
+                            let cx = tracer.context(name);
 
-                        let parsed = params.parse::<JsonValue>()?;
-                        let params = if parsed == JsonValue::Null {
-                            vec![]
-                        } else {
-                            parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
-                        };
+                            let parsed = params.parse::<JsonValue>()?;
+                            let params = if parsed == JsonValue::Null {
+                                vec![]
+                            } else {
+                                parsed.as_array().ok_or_else(|| errors::invalid_params(""))?.to_owned()
+                            };
 
-                        let (result_tx, result_rx) = tokio::sync::oneshot::channel();
-                        let timeout = tokio::time::Duration::from_secs(request_timeout_seconds);
+                            let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+                            let timeout = tokio::time::Duration::from_secs(request_timeout_seconds);
 
-                        subscription_middlewares
-                            .call(
-                                SubscriptionRequest {
-                                    subscribe: subscribe_name.into(),
-                                    params,
-                                    unsubscribe: unsubscribe_name.into(),
-                                    pending_sink: sink,
-                                },
-                                result_tx,
-                                timeout,
-                            )
-                            .with_context(cx)
-                            .await;
+                            subscription_middlewares
+                                .call(
+                                    SubscriptionRequest {
+                                        subscribe: subscribe_name.into(),
+                                        params,
+                                        unsubscribe: unsubscribe_name.into(),
+                                        pending_sink,
+                                    },
+                                    result_tx,
+                                    timeout,
+                                )
+                                .with_context(cx)
+                                .await;
 
-                        result_rx
-                            .await
-                            .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?
-                    }
-                })?;
+                            result_rx
+                                .await
+                                .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?
+                        }
+                    },
+                )?;
             }
 
             // register aliases from config

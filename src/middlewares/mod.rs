@@ -5,6 +5,7 @@ use jsonrpsee::{
     types::ErrorObjectOwned,
     PendingSubscriptionSink,
 };
+use opentelemetry::trace::FutureExt as _;
 use std::{
     fmt::{Debug, Formatter},
     sync::Arc,
@@ -12,7 +13,7 @@ use std::{
 
 use crate::{
     config::{RpcMethod, RpcSubscription},
-    utils::{TypeRegistry, TypeRegistryRef},
+    utils::{telemetry, TypeRegistry, TypeRegistryRef},
 };
 
 pub mod factory;
@@ -92,6 +93,8 @@ impl<Request, Result> Clone for Middlewares<Request, Result> {
     }
 }
 
+const TRACER: telemetry::Tracer = telemetry::Tracer::new("middlewares");
+
 impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Request, Result> {
     /// Creates a new middleware instance with the given middlewares and fallback function.
     ///
@@ -134,10 +137,13 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
 
         let req = format!("{:?}", request);
 
-        let mut task_handle = tokio::spawn(async move {
-            let result = next(request, TypeRegistry::new()).await;
-            _ = result_tx.send(result);
-        });
+        let mut task_handle = tokio::spawn(
+            async move {
+                let result = next(request, TypeRegistry::new()).await;
+                _ = result_tx.send(result);
+            }
+            .with_context(TRACER.context("middlewares")),
+        );
 
         let sleep = tokio::time::sleep(timeout);
 

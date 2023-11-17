@@ -10,13 +10,16 @@ use jsonrpsee::{
     core::{JsonValue, StringError},
     SubscriptionMessage,
 };
+use opentelemetry::trace::FutureExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::{
     config::MergeStrategy,
     extensions::{client::Client, merge_subscription::MergeSubscription},
-    middlewares::{Middleware, MiddlewareBuilder, NextFn, RpcSubscription, SubscriptionRequest, SubscriptionResult},
+    middlewares::{
+        Middleware, MiddlewareBuilder, NextFn, RpcSubscription, SubscriptionRequest, SubscriptionResult, TRACER,
+    },
     utils::{errors, CacheKey, TypeRegistry, TypeRegistryRef},
 };
 
@@ -203,82 +206,86 @@ impl Middleware<SubscriptionRequest, Result<(), StringError>> for MergeSubscript
         _context: TypeRegistry,
         _next: NextFn<SubscriptionRequest, Result<(), StringError>>,
     ) -> Result<(), StringError> {
-        let key = CacheKey::new(&request.subscribe, &request.params);
+        async move {
+            let key = CacheKey::new(&request.subscribe, &request.params);
 
-        let SubscriptionRequest {
-            subscribe,
-            params,
-            unsubscribe,
-            pending_sink,
-        } = request;
+            let SubscriptionRequest {
+                subscribe,
+                params,
+                unsubscribe,
+                pending_sink,
+            } = request;
 
-        let subscribe = match self
-            .get_upstream_subscription(key.clone(), subscribe, params.to_owned(), unsubscribe)
-            .await
-        {
-            Ok(subscribe) => subscribe,
-            Err(err) => {
-                pending_sink.reject(errors::map_error(err)).await;
-                return Ok(());
-            }
-        };
-
-        // accept pending subscription
-        let sink = match pending_sink.accept().await {
-            Ok(sink) => sink,
-            Err(e) => {
-                tracing::trace!("Failed to accept pending subscription {e:?}");
-                return Ok(());
-            }
-        };
-
-        let current_values = self.current_values.clone();
-
-        // send any current value and broadcast new values
-        tokio::spawn(async move {
-            // read lock before subscribing to make sure we don't miss any value
-            let read_lock = current_values.read().await;
-            let mut stream = subscribe();
-
-            // send current value if any
-            if let Some(current_value) = read_lock
-                .get(&key)
-                .map(|x| SubscriptionMessage::from_json(&x).ok())
-                .unwrap_or(None)
+            let subscribe = match self
+                .get_upstream_subscription(key.clone(), subscribe, params.to_owned(), unsubscribe)
+                .await
             {
-                if let Err(e) = sink.send(current_value).await {
-                    tracing::trace!("subscription sink closed {e:?}");
-                    return;
+                Ok(subscribe) => subscribe,
+                Err(err) => {
+                    pending_sink.reject(errors::map_error(err)).await;
+                    return Ok(());
                 }
-            }
-            drop(read_lock);
+            };
 
-            loop {
-                tokio::select! {
-                    resp = stream.recv() => {
-                        match resp {
-                            Ok(new_value) => {
-                                if let Err(e) = sink.send(new_value).await {
-                                    tracing::trace!("subscription sink closed {e:?}");
-                                    break;
+            // accept pending subscription
+            let sink = match pending_sink.accept().await {
+                Ok(sink) => sink,
+                Err(e) => {
+                    tracing::trace!("Failed to accept pending subscription {e:?}");
+                    return Ok(());
+                }
+            };
+
+            let current_values = self.current_values.clone();
+
+            // send any current value and broadcast new values
+            tokio::spawn(async move {
+                // read lock before subscribing to make sure we don't miss any value
+                let read_lock = current_values.read().await;
+                let mut stream = subscribe();
+
+                // send current value if any
+                if let Some(current_value) = read_lock
+                    .get(&key)
+                    .map(|x| SubscriptionMessage::from_json(&x).ok())
+                    .unwrap_or(None)
+                {
+                    if let Err(e) = sink.send(current_value).await {
+                        tracing::trace!("subscription sink closed {e:?}");
+                        return;
+                    }
+                }
+                drop(read_lock);
+
+                loop {
+                    tokio::select! {
+                        resp = stream.recv() => {
+                            match resp {
+                                Ok(new_value) => {
+                                    if let Err(e) = sink.send(new_value).await {
+                                        tracing::trace!("subscription sink closed {e:?}");
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    // this should never happen
+                                    tracing::error!("subscription stream error {e:?}");
+                                    unreachable!("subscription stream error {e:?}");
                                 }
                             }
-                            Err(e) => {
-                                // this should never happen
-                                tracing::error!("subscription stream error {e:?}");
-                                unreachable!("subscription stream error {e:?}");
-                            }
+                        }
+                        _ = sink.closed() => {
+                            tracing::trace!("subscription sink closed");
+                            break;
                         }
                     }
-                    _ = sink.closed() => {
-                        tracing::trace!("subscription sink closed");
-                        break;
-                    }
                 }
-            }
-        });
+            });
 
-        Ok(())
+            Ok(())
+        }
+        .with_context(TRACER.context("merge_subscription"))
+        .await
     }
 }
 

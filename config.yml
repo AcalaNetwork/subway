@@ -1,4 +1,4 @@
-extensions:  
+extensions:
   client:
     endpoints:
       - wss://acala-rpc.dwellir.com
