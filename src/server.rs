@@ -73,10 +73,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
                 module.register_async_method(method_name, move |params, _| {
                     let method_middlewares = method_middlewares.clone();
-
                     async move {
-                        let cx = tracer.context(method_name);
-
                         let parsed = params.parse::<JsonValue>()?;
                         let params = if parsed == JsonValue::Null {
                             vec![]
@@ -89,13 +86,24 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
                         method_middlewares
                             .call(CallRequest::new(method_name, params), result_tx, timeout)
-                            .with_context(cx)
                             .await;
 
-                        result_rx
+                        let result = result_rx
                             .await
-                            .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?
+                            .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?;
+
+                        opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+                            Ok(_) => {
+                                span.set_status(opentelemetry::trace::Status::Ok);
+                            }
+                            Err(err) => {
+                                span.set_status(opentelemetry::trace::Status::error(err.to_string()));
+                            }
+                        });
+
+                        result
                     }
+                    .with_context(tracer.context(method_name))
                 })?;
             }
 
@@ -126,10 +134,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                     unsubscribe_name,
                     move |params, pending_sink, _| {
                         let subscription_middlewares = subscription_middlewares.clone();
-
                         async move {
-                            let cx = tracer.context(name);
-
                             let parsed = params.parse::<JsonValue>()?;
                             let params = if parsed == JsonValue::Null {
                                 vec![]
@@ -151,13 +156,24 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                                     result_tx,
                                     timeout,
                                 )
-                                .with_context(cx)
                                 .await;
 
-                            result_rx
+                            let result = result_rx
                                 .await
-                                .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?
+                                .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?;
+
+                            opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+                                Ok(_) => {
+                                    span.set_status(opentelemetry::trace::Status::Ok);
+                                }
+                                Err(err) => {
+                                    span.set_status(opentelemetry::trace::Status::error(format!("{:?}", err)));
+                                }
+                            });
+
+                            result
                         }
+                        .with_context(tracer.context(name))
                     },
                 )?;
             }

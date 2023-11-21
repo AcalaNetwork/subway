@@ -379,22 +379,33 @@ impl Client {
     }
 
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, ErrorObjectOwned> {
-        let cx = TRACER.context(method.to_string());
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(Message::Request {
-                method: method.into(),
-                params,
-                response: tx,
-                retries: self.retries,
-            })
-            .await
-            .map_err(errors::internal_error)?;
+        async move {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.sender
+                .send(Message::Request {
+                    method: method.into(),
+                    params,
+                    response: tx,
+                    retries: self.retries,
+                })
+                .await
+                .map_err(errors::internal_error)?;
 
-        rx.with_context(cx)
-            .await
-            .map_err(errors::internal_error)?
-            .map_err(errors::map_error)
+            let result = rx.await.map_err(errors::internal_error)?.map_err(errors::map_error);
+
+            opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+                Ok(_) => {
+                    span.set_status(opentelemetry::trace::Status::Ok);
+                }
+                Err(err) => {
+                    span.set_status(opentelemetry::trace::Status::error(err.to_string()));
+                }
+            });
+
+            result
+        }
+        .with_context(TRACER.context(method.to_string()))
+        .await
     }
 
     pub async fn subscribe(
@@ -403,21 +414,36 @@ impl Client {
         params: Vec<JsonValue>,
         unsubscribe: &str,
     ) -> Result<Subscription<JsonValue>, Error> {
-        let cx = TRACER.context(subscribe.to_string());
+        async move {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.sender
+                .send(Message::Subscribe {
+                    subscribe: subscribe.into(),
+                    params,
+                    unsubscribe: unsubscribe.into(),
+                    response: tx,
+                    retries: self.retries,
+                })
+                .await
+                .map_err(errors::failed)?;
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(Message::Subscribe {
-                subscribe: subscribe.into(),
-                params,
-                unsubscribe: unsubscribe.into(),
-                response: tx,
-                retries: self.retries,
-            })
-            .await
-            .map_err(errors::failed)?;
+            let result = rx.await.map_err(errors::failed)?;
 
-        rx.with_context(cx).await.map_err(errors::failed)?
+            opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+                Ok(_) => {
+                    span.set_status(opentelemetry::trace::Status::Ok);
+                }
+                Err(err) => {
+                    span.set_status(opentelemetry::trace::Status::Error {
+                        description: std::borrow::Cow::from(err.to_string()),
+                    });
+                }
+            });
+
+            result
+        }
+        .with_context(TRACER.context(subscribe.to_string()))
+        .await
     }
 
     pub async fn rotate_endpoint(&self) {
