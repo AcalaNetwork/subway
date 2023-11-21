@@ -141,6 +141,10 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
             async move {
                 let result = next(request, TypeRegistry::new()).await;
                 _ = result_tx.send(result);
+
+                opentelemetry::trace::get_active_span(|span| {
+                    span.set_status(opentelemetry::trace::Status::Ok);
+                });
             }
             .with_context(TRACER.context("middlewares")),
         );
@@ -157,9 +161,6 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
             }
             _ = &mut task_handle => {
                 tracing::trace!("middlewares finished: {req}");
-                opentelemetry::trace::get_active_span(|span| {
-                    span.set_status(opentelemetry::trace::Status::Ok);
-                });
             }
         }
     }
