@@ -156,6 +156,7 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
                 tracing::error!("middlewares timeout: {req}");
                 opentelemetry::trace::get_active_span(|span| {
                     span.set_status(opentelemetry::trace::Status::error("middlewares timeout"));
+                    span.record_error(&jsonrpsee::core::Error::Custom("middlewares timeout".to_string()));
                 });
                 task_handle.abort();
             }
