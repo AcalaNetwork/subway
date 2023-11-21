@@ -399,6 +399,7 @@ impl Client {
                 }
                 Err(err) => {
                     span.set_status(opentelemetry::trace::Status::error(err.to_string()));
+                    span.record_error(&err);
                 }
             });
 
@@ -434,9 +435,8 @@ impl Client {
                     span.set_status(opentelemetry::trace::Status::Ok);
                 }
                 Err(err) => {
-                    span.set_status(opentelemetry::trace::Status::Error {
-                        description: std::borrow::Cow::from(err.to_string()),
-                    });
+                    span.set_status(opentelemetry::trace::Status::error(err.to_string()));
+                    span.record_error(&err);
                 }
             });
 

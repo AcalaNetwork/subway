@@ -98,6 +98,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                             }
                             Err(err) => {
                                 span.set_status(opentelemetry::trace::Status::error(err.to_string()));
+                                span.record_error(&err);
                             }
                         });
 
@@ -168,6 +169,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                                 }
                                 Err(err) => {
                                     span.set_status(opentelemetry::trace::Status::error(format!("{:?}", err)));
+                                    span.record_error(&jsonrpsee::core::Error::Custom(format!("{:?}", err)));
                                 }
                             });
 
