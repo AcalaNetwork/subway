@@ -72,9 +72,9 @@ pub mod telemetry {
 
         pub fn span_error(&self, err: &ErrorObjectOwned) {
             get_active_span(|span| {
-                span.set_status(Status::error(format!("{}", err.message())));
+                span.set_status(Status::error(err.message().to_string()));
                 span.set_attribute(KeyValue::new("error.type", format!("{}", ErrorCode::from(err.code()))));
-                span.set_attribute(KeyValue::new("error.msg", format!("{}", err.message())));
+                span.set_attribute(KeyValue::new("error.msg", err.message().to_string()));
                 span.set_attribute(KeyValue::new("error.stack", format!("{}", err)));
             });
         }
