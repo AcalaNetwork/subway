@@ -92,15 +92,12 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                             .await
                             .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?;
 
-                        opentelemetry::trace::get_active_span(|span| match result.as_ref() {
-                            Ok(_) => {
-                                span.set_status(opentelemetry::trace::Status::Ok);
-                            }
+                        match result.as_ref() {
+                            Ok(_) => tracer.span_ok(),
                             Err(err) => {
-                                span.set_status(opentelemetry::trace::Status::error(err.to_string()));
-                                span.record_error(&err);
+                                tracer.span_error(format!("{}", err));
                             }
-                        });
+                        };
 
                         result
                     }
@@ -163,15 +160,14 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                                 .await
                                 .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?;
 
-                            opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+                            match result.as_ref() {
                                 Ok(_) => {
-                                    span.set_status(opentelemetry::trace::Status::Ok);
+                                    tracer.span_ok();
                                 }
                                 Err(err) => {
-                                    span.set_status(opentelemetry::trace::Status::error(format!("{:?}", err)));
-                                    span.record_error(&jsonrpsee::core::Error::Custom(format!("{:?}", err)));
+                                    tracer.span_error(format!("{:?}", err));
                                 }
-                            });
+                            };
 
                             result
                         }
