@@ -6,10 +6,7 @@ use std::{
 
 use async_trait::async_trait;
 use blake2::Blake2b512;
-use jsonrpsee::{
-    core::{JsonValue, StringError},
-    SubscriptionMessage,
-};
+use jsonrpsee::{core::JsonValue, SubscriptionMessage};
 use opentelemetry::trace::FutureExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
@@ -199,13 +196,13 @@ impl MiddlewareBuilder<RpcSubscription, SubscriptionRequest, SubscriptionResult>
 }
 
 #[async_trait]
-impl Middleware<SubscriptionRequest, Result<(), StringError>> for MergeSubscriptionMiddleware {
+impl Middleware<SubscriptionRequest, SubscriptionResult> for MergeSubscriptionMiddleware {
     async fn call(
         &self,
         request: SubscriptionRequest,
         _context: TypeRegistry,
-        _next: NextFn<SubscriptionRequest, Result<(), StringError>>,
-    ) -> Result<(), StringError> {
+        _next: NextFn<SubscriptionRequest, SubscriptionResult>,
+    ) -> SubscriptionResult {
         async move {
             let key = CacheKey::new(&request.subscribe, &request.params);
 

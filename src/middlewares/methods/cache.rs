@@ -3,7 +3,6 @@ use std::num::NonZeroUsize;
 use async_trait::async_trait;
 use blake2::Blake2b512;
 use futures::FutureExt as _;
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
 use crate::{
@@ -63,13 +62,13 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CacheMiddleware {
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddleware {
+impl Middleware<CallRequest, CallResult> for CacheMiddleware {
     async fn call(
         &self,
         request: CallRequest,
         context: TypeRegistry,
-        next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
-    ) -> Result<JsonValue, ErrorObjectOwned> {
+        next: NextFn<CallRequest, CallResult>,
+    ) -> CallResult {
         async move {
             let bypass_cache = context.get::<BypassCache>().map(|v| v.0).unwrap_or(false);
             if bypass_cache {
@@ -101,6 +100,7 @@ impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for CacheMiddl
 #[cfg(test)]
 mod tests {
     use futures::FutureExt;
+    use jsonrpsee::core::JsonValue;
     use serde_json::json;
     use std::num::NonZeroUsize;
     use std::time::Duration;

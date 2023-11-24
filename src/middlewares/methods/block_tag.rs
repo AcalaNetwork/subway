@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
 use crate::{
@@ -91,13 +90,13 @@ impl BlockTagMiddleware {
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for BlockTagMiddleware {
+impl Middleware<CallRequest, CallResult> for BlockTagMiddleware {
     async fn call(
         &self,
         request: CallRequest,
         context: TypeRegistry,
-        next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
-    ) -> Result<JsonValue, ErrorObjectOwned> {
+        next: NextFn<CallRequest, CallResult>,
+    ) -> CallResult {
         async move {
             let (request, context) = self.replace(request, context).await;
             next(request, context).await
@@ -119,7 +118,7 @@ mod tests {
         Client,
     };
     use futures::FutureExt;
-    use jsonrpsee::server::ServerHandle;
+    use jsonrpsee::{core::JsonValue, server::ServerHandle};
     use serde_json::json;
     use std::time::Duration;
     use tokio::sync::mpsc;

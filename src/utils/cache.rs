@@ -1,3 +1,4 @@
+use crate::middlewares::CallResult;
 use blake2::{digest::Output, Digest};
 use futures::future::BoxFuture;
 use jsonrpsee::core::JsonValue;
@@ -94,9 +95,9 @@ impl<D: Digest + 'static> Cache<D> {
         self.cache.insert(key, CacheValue::Value(value)).await;
     }
 
-    pub async fn get_or_insert_with<F>(&self, key: CacheKey<D>, f: F) -> Result<JsonValue, ErrorObjectOwned>
+    pub async fn get_or_insert_with<F>(&self, key: CacheKey<D>, f: F) -> CallResult
     where
-        F: FnOnce() -> BoxFuture<'static, Result<JsonValue, ErrorObjectOwned>>,
+        F: FnOnce() -> BoxFuture<'static, CallResult>,
     {
         let fetch = || async {
             let (tx, rx) = watch::channel(None);

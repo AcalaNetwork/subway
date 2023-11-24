@@ -14,7 +14,6 @@ use jsonrpsee::{
         client::{ClientT, Subscription, SubscriptionClientT},
         Error, JsonValue,
     },
-    types::ErrorObjectOwned,
     ws_client::{WsClient, WsClientBuilder},
 };
 use opentelemetry::trace::FutureExt;
@@ -25,6 +24,7 @@ use tokio::sync::Notify;
 use super::ExtensionRegistry;
 use crate::{
     extensions::Extension,
+    middlewares::CallResult,
     utils::{self, errors},
 };
 
@@ -378,7 +378,7 @@ impl Client {
         Self::new(endpoints, None, None, None)
     }
 
-    pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> Result<JsonValue, ErrorObjectOwned> {
+    pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> CallResult {
         async move {
             let (tx, rx) = tokio::sync::oneshot::channel();
             self.sender
@@ -391,18 +391,7 @@ impl Client {
                 .await
                 .map_err(errors::internal_error)?;
 
-            let result = rx.await.map_err(errors::internal_error)?.map_err(errors::map_error);
-
-            match result.as_ref() {
-                Ok(_) => {
-                    TRACER.span_ok();
-                }
-                Err(err) => {
-                    TRACER.span_error(format!("{}", err));
-                }
-            }
-
-            result
+            rx.await.map_err(errors::internal_error)?.map_err(errors::map_error)
         }
         .with_context(TRACER.context(method.to_string()))
         .await
@@ -425,20 +414,9 @@ impl Client {
                     retries: self.retries,
                 })
                 .await
-                .map_err(errors::failed)?;
+                .map_err(errors::internal_error)?;
 
-            let result = rx.await.map_err(errors::failed)?;
-
-            match result.as_ref() {
-                Ok(_) => {
-                    TRACER.span_ok();
-                }
-                Err(err) => {
-                    TRACER.span_error(format!("{}", err));
-                }
-            };
-
-            result
+            rx.await.map_err(errors::internal_error)?
         }
         .with_context(TRACER.context(subscribe.to_string()))
         .await
