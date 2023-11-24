@@ -268,9 +268,9 @@ impl Middleware<SubscriptionRequest, Result<(), StringError>> for MergeSubscript
                                     }
                                 }
                                 Err(e) => {
-                                    // this should never happen
-                                    tracing::error!("subscription stream error {e:?}");
-                                    unreachable!("subscription stream error {e:?}");
+                                    // remote upstream subscription failed, drop subscription
+                                    tracing::trace!("subscription stream error {e}");
+                                    break;
                                 }
                             }
                         }
