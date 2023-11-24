@@ -13,7 +13,7 @@ use std::{
 
 use crate::{
     config::{RpcMethod, RpcSubscription},
-    utils::{telemetry, TypeRegistry, TypeRegistryRef},
+    utils::{errors, telemetry, TypeRegistry, TypeRegistryRef},
 };
 
 pub mod factory;
@@ -154,7 +154,7 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
         tokio::select! {
             _ = sleep => {
                 tracing::error!("middlewares timeout: {req}");
-                TRACER.span_error("middlewares timeout");
+                TRACER.span_error(&errors::failed("middlewares timeout"));
                 task_handle.abort();
             }
             _ = &mut task_handle => {

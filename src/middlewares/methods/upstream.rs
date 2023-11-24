@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
 use opentelemetry::trace::FutureExt;
 
 use crate::{
@@ -36,13 +35,13 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for UpstreamMiddlewar
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for UpstreamMiddleware {
+impl Middleware<CallRequest, CallResult> for UpstreamMiddleware {
     async fn call(
         &self,
         request: CallRequest,
         _context: TypeRegistry,
-        _next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
-    ) -> Result<JsonValue, ErrorObjectOwned> {
+        _next: NextFn<CallRequest, CallResult>,
+    ) -> CallResult {
         self.client
             .request(&request.method, request.params)
             .with_context(TRACER.context("upstream"))

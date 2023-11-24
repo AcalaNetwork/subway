@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use jsonrpsee::{core::JsonValue, types::ErrorObjectOwned};
+use jsonrpsee::core::JsonValue;
 use opentelemetry::trace::FutureExt;
 use std::sync::Arc;
 
@@ -95,13 +95,13 @@ impl InjectParamsMiddleware {
 }
 
 #[async_trait]
-impl Middleware<CallRequest, Result<JsonValue, ErrorObjectOwned>> for InjectParamsMiddleware {
+impl Middleware<CallRequest, CallResult> for InjectParamsMiddleware {
     async fn call(
         &self,
         mut request: CallRequest,
         context: TypeRegistry,
-        next: NextFn<CallRequest, Result<JsonValue, ErrorObjectOwned>>,
-    ) -> Result<JsonValue, ErrorObjectOwned> {
+        next: NextFn<CallRequest, CallResult>,
+    ) -> CallResult {
         let idx = self.get_index();
         match request.params.len() {
             len if len == idx + 1 => {

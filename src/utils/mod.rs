@@ -39,6 +39,7 @@ pub mod errors {
 }
 
 pub mod telemetry {
+    use jsonrpsee::{types::error::ErrorCode, types::ErrorObjectOwned};
     use opentelemetry::{
         global::{self, BoxedSpan},
         trace::{get_active_span, Status, TraceContextExt, Tracer as _},
@@ -69,11 +70,12 @@ pub mod telemetry {
             });
         }
 
-        pub fn span_error(&self, err: impl Into<Cow<'static, str>>) {
+        pub fn span_error(&self, err: &ErrorObjectOwned) {
             get_active_span(|span| {
-                let err_msg = err.into();
-                span.set_status(Status::error(format!("{}", err_msg)));
-                span.set_attribute(KeyValue::new("error.message", err_msg));
+                span.set_status(Status::error(err.message().to_string()));
+                span.set_attribute(KeyValue::new("error.type", format!("{}", ErrorCode::from(err.code()))));
+                span.set_attribute(KeyValue::new("error.msg", err.message().to_string()));
+                span.set_attribute(KeyValue::new("error.stack", format!("{}", err)));
             });
         }
     }
