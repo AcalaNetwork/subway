@@ -41,8 +41,8 @@ pub mod errors {
 pub mod telemetry {
     use opentelemetry::{
         global::{self, BoxedSpan},
-        trace::{TraceContextExt, Tracer as _},
-        Context,
+        trace::{get_active_span, Status, TraceContextExt, Tracer as _},
+        Context, KeyValue,
     };
     use std::borrow::Cow;
 
@@ -61,6 +61,20 @@ pub mod telemetry {
         pub fn context(&self, span_name: impl Into<Cow<'static, str>>) -> Context {
             let span = self.span(span_name);
             Context::current_with_span(span)
+        }
+
+        pub fn span_ok(&self) {
+            get_active_span(|span| {
+                span.set_status(Status::Ok);
+            });
+        }
+
+        pub fn span_error(&self, err: impl Into<Cow<'static, str>>) {
+            get_active_span(|span| {
+                let err_msg = err.into();
+                span.set_status(Status::error(format!("{}", err_msg)));
+                span.set_attribute(KeyValue::new("error.message", err_msg));
+            });
         }
     }
 }

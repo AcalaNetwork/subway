@@ -154,10 +154,7 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
         tokio::select! {
             _ = sleep => {
                 tracing::error!("middlewares timeout: {req}");
-                opentelemetry::trace::get_active_span(|span| {
-                    span.set_status(opentelemetry::trace::Status::error("middlewares timeout"));
-                    span.record_error(&jsonrpsee::core::Error::Custom("middlewares timeout".to_string()));
-                });
+                TRACER.span_error("middlewares timeout");
                 task_handle.abort();
             }
             _ = &mut task_handle => {

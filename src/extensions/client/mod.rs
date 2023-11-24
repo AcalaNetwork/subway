@@ -393,15 +393,14 @@ impl Client {
 
             let result = rx.await.map_err(errors::internal_error)?.map_err(errors::map_error);
 
-            opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+            match result.as_ref() {
                 Ok(_) => {
-                    span.set_status(opentelemetry::trace::Status::Ok);
+                    TRACER.span_ok();
                 }
                 Err(err) => {
-                    span.set_status(opentelemetry::trace::Status::error(err.to_string()));
-                    span.record_error(&err);
+                    TRACER.span_error(format!("{}", err));
                 }
-            });
+            }
 
             result
         }
@@ -430,15 +429,14 @@ impl Client {
 
             let result = rx.await.map_err(errors::failed)?;
 
-            opentelemetry::trace::get_active_span(|span| match result.as_ref() {
+            match result.as_ref() {
                 Ok(_) => {
-                    span.set_status(opentelemetry::trace::Status::Ok);
+                    TRACER.span_ok();
                 }
                 Err(err) => {
-                    span.set_status(opentelemetry::trace::Status::error(err.to_string()));
-                    span.record_error(&err);
+                    TRACER.span_error(format!("{}", err));
                 }
-            });
+            };
 
             result
         }
