@@ -2,7 +2,9 @@ use std::{future::Future, net::SocketAddr};
 
 use async_trait::async_trait;
 use http::header::HeaderValue;
-use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
+use jsonrpsee::server::{
+    middleware::rpc::RpcServiceBuilder, RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle,
+};
 use serde::Deserialize;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -12,6 +14,7 @@ use proxy_get_request::ProxyGetRequestLayer;
 use self::proxy_get_request::ProxyGetRequestMethod;
 
 mod proxy_get_request;
+mod rate_limit;
 
 pub struct SubwayServerBuilder {
     pub config: ServerConfig,
@@ -50,10 +53,34 @@ pub struct ServerConfig {
     pub request_timeout_seconds: u64,
     #[serde(default)]
     pub cors: Option<ItemOrList<String>>,
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 fn default_request_timeout_seconds() -> u64 {
     120
+}
+
+#[derive(Deserialize, Default, Debug, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum Period {
+    #[default]
+    Second,
+    Minute,
+    Hour,
+}
+
+#[derive(Deserialize, Debug, Copy, Clone, Default)]
+pub struct RateLimitConfig {
+    // 0 means no limit
+    pub burst: u32,
+    pub period: Period,
+    #[serde(default = "default_jitter_millis")]
+    pub jitter_millis: u64,
+}
+
+fn default_jitter_millis() -> u64 {
+    1000
 }
 
 #[async_trait]
@@ -90,6 +117,12 @@ impl SubwayServerBuilder {
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
+        let rate_limit_config = self.config.rate_limit.clone();
+
+        let rpc_middleware = RpcServiceBuilder::new()
+            // rate limit per connection
+            .layer_fn(move |service| rate_limit::RateLimit::new(service, rate_limit_config));
+
         let service_builder = tower::ServiceBuilder::new()
             .layer(cors_layer(self.config.cors.clone()).expect("Invalid CORS config"))
             .layer(
@@ -107,7 +140,8 @@ impl SubwayServerBuilder {
             );
 
         let server = ServerBuilder::default()
-            .set_middleware(service_builder)
+            .set_rpc_middleware(rpc_middleware)
+            .set_http_middleware(service_builder)
             .max_connections(self.config.max_connections)
             .set_id_provider(RandomStringIdProvider::new(16))
             .build((self.config.listen_address.as_str(), self.config.port))
