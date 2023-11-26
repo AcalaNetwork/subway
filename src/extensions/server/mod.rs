@@ -117,7 +117,7 @@ impl SubwayServerBuilder {
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-        let rate_limit_config = self.config.rate_limit.clone();
+        let rate_limit_config = self.config.rate_limit;
 
         let rpc_middleware = RpcServiceBuilder::new()
             // rate limit per connection

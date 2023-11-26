@@ -83,22 +83,23 @@ mod tests {
     #[tokio::test]
     async fn rate_limit_works() {
         let rate = RateLimitConfig {
-            burst: 2,
+            burst: 20,
             period: Period::Second,
-            jitter_millis: 0,
+            jitter_millis: 100,
         };
         let service = RateLimit::new(MockService, rate);
 
+        let count = 60;
         let start = tokio::time::Instant::now();
-        let calls = (1..=10u64)
-            .into_iter()
+        let calls = (1..=count)
             .map(|id| service.call(Request::new("test".into(), None, Id::Number(id))))
             .collect::<Vec<_>>();
 
         let results = futures::future::join_all(calls).await;
-        // should take at least 4 seconds
-        assert!(start.elapsed().as_secs_f64() > 4.0);
+        let duration = start.elapsed().as_secs_f64();
+        // should take at least 2 seconds
+        assert!(duration > 2.0);
         // calls should succeed
-        assert_eq!(results.iter().filter(|r| r.is_success()).count(), 10);
+        assert_eq!(results.iter().filter(|r| r.is_success()).count(), count as usize);
     }
 }
