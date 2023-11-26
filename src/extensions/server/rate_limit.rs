@@ -39,7 +39,6 @@ pub struct ConnectionRateLimit<S> {
 
 impl<S> ConnectionRateLimit<S> {
     pub fn new(service: S, burst: NonZeroU32, period: Period, jitter: Jitter) -> Self {
-        log::warn!("rate limiting is enabled");
         let quota = match period {
             Period::Second => Quota::per_second(burst),
             Period::Minute => Quota::per_minute(burst),
