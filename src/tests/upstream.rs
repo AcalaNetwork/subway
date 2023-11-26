@@ -39,7 +39,7 @@ async fn upstream_error_propagate() {
                 request_timeout_seconds: 120,
                 http_methods: Vec::new(),
                 cors: None,
-                rate_limit: Default::default(),
+                rate_limit: None,
             }),
             merge_subscription: Some(MergeSubscriptionConfig {
                 keep_alive_seconds: Some(1),

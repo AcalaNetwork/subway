@@ -241,7 +241,7 @@ mod tests {
                     request_timeout_seconds: request_timeout_seconds.unwrap_or(10),
                     http_methods: Vec::new(),
                     cors: None,
-                    rate_limit: Default::default(),
+                    rate_limit: None,
                 }),
                 ..Default::default()
             },

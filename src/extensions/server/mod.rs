@@ -54,7 +54,7 @@ pub struct ServerConfig {
     #[serde(default)]
     pub cors: Option<ItemOrList<String>>,
     #[serde(default)]
-    pub rate_limit: RateLimitConfig,
+    pub rate_limit: Option<RateLimitConfig>,
 }
 
 fn default_request_timeout_seconds() -> u64 {
@@ -72,7 +72,6 @@ pub enum Period {
 
 #[derive(Deserialize, Debug, Copy, Clone, Default)]
 pub struct RateLimitConfig {
-    // 0 means no limit
     pub burst: u32,
     pub period: Period,
     #[serde(default = "default_jitter_millis")]
@@ -117,11 +116,9 @@ impl SubwayServerBuilder {
         &self,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-        let rate_limit_config = self.config.rate_limit;
-
-        let rpc_middleware = RpcServiceBuilder::new()
-            // rate limit per connection
-            .layer_fn(move |service| rate_limit::RateLimit::new(service, rate_limit_config));
+        // rate limiting per connection
+        let rate_limit = self.config.rate_limit.map(rate_limit::RateLimit::new);
+        let rpc_middleware = RpcServiceBuilder::new().option_layer(rate_limit);
 
         let service_builder = tower::ServiceBuilder::new()
             .layer(cors_layer(self.config.cors.clone()).expect("Invalid CORS config"))

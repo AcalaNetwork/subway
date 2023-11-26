@@ -1,10 +1,6 @@
 use crate::extensions::server::{Period, RateLimitConfig};
 use futures::{future::BoxFuture, FutureExt};
-use governor::{
-    clock::DefaultClock,
-    state::{InMemoryState, NotKeyed},
-    Jitter, Quota, RateLimiter,
-};
+use governor::{DefaultDirectRateLimiter, Jitter, Quota, RateLimiter};
 use jsonrpsee::{
     server::{middleware::rpc::RpcServiceT, types::Request},
     MethodResponse,
@@ -13,55 +9,66 @@ use std::num::NonZeroU32;
 use std::{sync::Arc, time::Duration};
 
 #[derive(Clone)]
-pub struct RateLimit<S> {
+pub struct RateLimit {
+    config: RateLimitConfig,
+}
+
+impl RateLimit {
+    pub fn new(config: RateLimitConfig) -> Self {
+        assert!(config.burst > 0, "burst must be greater than 0");
+        Self { config }
+    }
+}
+
+impl<S> tower::Layer<S> for RateLimit {
+    type Service = ConnectionRateLimit<S>;
+
+    fn layer(&self, service: S) -> Self::Service {
+        let burst = NonZeroU32::new(self.config.burst).unwrap();
+        let period = self.config.period;
+        let jitter = Jitter::up_to(Duration::from_millis(self.config.jitter_millis));
+        ConnectionRateLimit::new(service, burst, period, jitter)
+    }
+}
+
+pub struct ConnectionRateLimit<S> {
     service: S,
-    limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>>,
+    limiter: Arc<DefaultDirectRateLimiter>,
     jitter: Jitter,
 }
 
-impl<S> RateLimit<S> {
-    pub fn new(service: S, config: RateLimitConfig) -> Self {
-        if config.burst == 0 {
-            return Self {
-                service,
-                limiter: None,
-                jitter: Jitter::up_to(Duration::default()),
-            };
-        }
-        let burst = NonZeroU32::new(config.burst).unwrap();
-        let quota = Some(match config.period {
+impl<S> ConnectionRateLimit<S> {
+    pub fn new(service: S, burst: NonZeroU32, period: Period, jitter: Jitter) -> Self {
+        log::warn!("rate limiting is enabled");
+        let quota = match period {
             Period::Second => Quota::per_second(burst),
             Period::Minute => Quota::per_minute(burst),
             Period::Hour => Quota::per_hour(burst),
-        });
+        };
         Self {
             service,
-            limiter: quota.map(|q| Arc::new(RateLimiter::direct(q))),
-            jitter: Jitter::up_to(Duration::from_millis(config.jitter_millis)),
+            limiter: Arc::new(RateLimiter::direct(quota)),
+            jitter,
         }
     }
 }
 
-impl<'a, S> RpcServiceT<'a> for RateLimit<S>
+impl<'a, S> RpcServiceT<'a> for ConnectionRateLimit<S>
 where
     S: RpcServiceT<'a> + Send + Sync + Clone + 'static,
 {
     type Future = BoxFuture<'a, MethodResponse>;
 
     fn call(&self, req: Request<'a>) -> Self::Future {
-        match self.limiter {
-            Some(ref limiter) => {
-                let jitter = self.jitter;
-                let limiter = limiter.clone();
-                let service = self.service.clone();
-                async move {
-                    limiter.until_ready_with_jitter(jitter).await;
-                    service.call(req).await
-                }
-                .boxed()
-            }
-            None => self.service.call(req).boxed(),
+        let jitter = self.jitter;
+        let service = self.service.clone();
+        let limiter = self.limiter.clone();
+
+        async move {
+            limiter.until_ready_with_jitter(jitter).await;
+            service.call(req).await
         }
+        .boxed()
     }
 }
 
@@ -82,12 +89,12 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limit_works() {
-        let rate = RateLimitConfig {
-            burst: 20,
-            period: Period::Second,
-            jitter_millis: 100,
-        };
-        let service = RateLimit::new(MockService, rate);
+        let service = ConnectionRateLimit::new(
+            MockService,
+            NonZeroU32::new(20).unwrap(),
+            Period::Second,
+            Jitter::up_to(Duration::from_millis(100)),
+        );
 
         let count = 60;
         let start = tokio::time::Instant::now();
