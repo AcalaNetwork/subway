@@ -2,11 +2,13 @@ use std::{future::Future, net::SocketAddr};
 
 use async_trait::async_trait;
 use http::header::HeaderValue;
-use jsonrpsee::server::{RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle};
+use jsonrpsee::server::{
+    middleware::rpc::RpcServiceBuilder, RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle,
+};
 use serde::Deserialize;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use super::{Extension, ExtensionRegistry};
+use super::{rate_limit::RateLimit, Extension, ExtensionRegistry};
 use proxy_get_request::ProxyGetRequestLayer;
 
 use self::proxy_get_request::ProxyGetRequestMethod;
@@ -88,8 +90,11 @@ impl SubwayServerBuilder {
 
     pub async fn build<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
+        rate_limit: Option<RateLimit>,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
+        let rpc_middleware = RpcServiceBuilder::new().option_layer(rate_limit);
+
         let service_builder = tower::ServiceBuilder::new()
             .layer(cors_layer(self.config.cors.clone()).expect("Invalid CORS config"))
             .layer(
@@ -107,7 +112,8 @@ impl SubwayServerBuilder {
             );
 
         let server = ServerBuilder::default()
-            .set_middleware(service_builder)
+            .set_rpc_middleware(rpc_middleware)
+            .set_http_middleware(service_builder)
             .max_connections(self.config.max_connections)
             .set_id_provider(RandomStringIdProvider::new(16))
             .build((self.config.listen_address.as_str(), self.config.port))
