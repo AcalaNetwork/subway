@@ -1,22 +1,76 @@
-use crate::extensions::server::{Period, RateLimitConfig};
 use futures::{future::BoxFuture, FutureExt};
 use governor::{DefaultDirectRateLimiter, Jitter, Quota, RateLimiter};
 use jsonrpsee::{
     server::{middleware::rpc::RpcServiceT, types::Request},
     MethodResponse,
 };
+use serde::Deserialize;
 use std::num::NonZeroU32;
 use std::{sync::Arc, time::Duration};
 
-#[derive(Clone)]
-pub struct RateLimit {
+use super::{Extension, ExtensionRegistry};
+
+#[derive(Deserialize, Default, Debug, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum Period {
+    #[default]
+    Second,
+    Minute,
+    Hour,
+}
+
+#[derive(Deserialize, Debug, Copy, Clone, Default)]
+pub struct RateLimitConfig {
+    pub burst: u32,
+    pub period: Period,
+    #[serde(default = "default_jitter_millis")]
+    pub jitter_millis: u64,
+}
+
+fn default_jitter_millis() -> u64 {
+    1000
+}
+
+pub struct RateLimitBuilder {
     config: RateLimitConfig,
 }
 
-impl RateLimit {
+#[async_trait::async_trait]
+impl Extension for RateLimitBuilder {
+    type Config = RateLimitConfig;
+
+    async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
+        Ok(Self::new(*config))
+    }
+}
+
+impl RateLimitBuilder {
     pub fn new(config: RateLimitConfig) -> Self {
         assert!(config.burst > 0, "burst must be greater than 0");
         Self { config }
+    }
+    pub fn build(&self) -> RateLimit {
+        let burst = NonZeroU32::new(self.config.burst).unwrap();
+        let period = self.config.period;
+        let jitter = Jitter::up_to(Duration::from_millis(self.config.jitter_millis));
+        RateLimit::new(burst, period, jitter)
+    }
+}
+
+#[derive(Clone)]
+pub struct RateLimit {
+    burst: NonZeroU32,
+    period: Period,
+    jitter: Jitter,
+}
+
+impl RateLimit {
+    pub fn new(burst: NonZeroU32, period: Period, jitter: Jitter) -> Self {
+        Self { burst, period, jitter }
+    }
+
+    pub fn make_copy(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -24,10 +78,7 @@ impl<S> tower::Layer<S> for RateLimit {
     type Service = ConnectionRateLimit<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        let burst = NonZeroU32::new(self.config.burst).unwrap();
-        let period = self.config.period;
-        let jitter = Jitter::up_to(Duration::from_millis(self.config.jitter_millis));
-        ConnectionRateLimit::new(service, burst, period, jitter)
+        ConnectionRateLimit::new(service, self.burst, self.period, self.jitter)
     }
 }
 

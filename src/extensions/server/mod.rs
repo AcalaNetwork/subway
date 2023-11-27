@@ -8,13 +8,12 @@ use jsonrpsee::server::{
 use serde::Deserialize;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use super::{Extension, ExtensionRegistry};
+use super::{rate_limit::RateLimit, Extension, ExtensionRegistry};
 use proxy_get_request::ProxyGetRequestLayer;
 
 use self::proxy_get_request::ProxyGetRequestMethod;
 
 mod proxy_get_request;
-mod rate_limit;
 
 pub struct SubwayServerBuilder {
     pub config: ServerConfig,
@@ -53,33 +52,10 @@ pub struct ServerConfig {
     pub request_timeout_seconds: u64,
     #[serde(default)]
     pub cors: Option<ItemOrList<String>>,
-    #[serde(default)]
-    pub rate_limit: Option<RateLimitConfig>,
 }
 
 fn default_request_timeout_seconds() -> u64 {
     120
-}
-
-#[derive(Deserialize, Default, Debug, Copy, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum Period {
-    #[default]
-    Second,
-    Minute,
-    Hour,
-}
-
-#[derive(Deserialize, Debug, Copy, Clone, Default)]
-pub struct RateLimitConfig {
-    pub burst: u32,
-    pub period: Period,
-    #[serde(default = "default_jitter_millis")]
-    pub jitter_millis: u64,
-}
-
-fn default_jitter_millis() -> u64 {
-    1000
 }
 
 #[async_trait]
@@ -114,10 +90,9 @@ impl SubwayServerBuilder {
 
     pub async fn build<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
+        rate_limit: Option<RateLimit>,
         builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-        // rate limiting per connection
-        let rate_limit = self.config.rate_limit.map(rate_limit::RateLimit::new);
         let rpc_middleware = RpcServiceBuilder::new().option_layer(rate_limit);
 
         let service_builder = tower::ServiceBuilder::new()

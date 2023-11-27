@@ -13,6 +13,7 @@ pub mod cache;
 pub mod client;
 pub mod event_bus;
 pub mod merge_subscription;
+pub mod rate_limit;
 pub mod server;
 pub mod telemetry;
 
@@ -136,4 +137,5 @@ define_all_extensions! {
     eth_api: api::EthApi,
     server: server::SubwayServerBuilder,
     event_bus: event_bus::EventBus,
+    rate_limit: rate_limit::RateLimitBuilder,
 }

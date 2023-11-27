@@ -23,9 +23,9 @@ extensions:
       - path: /liveness
         method: chain_getBlockHash
     cors: all
-    rate_limit:
-      burst: 20
-      period: second
+  rate_limit:
+    burst: 20
+    period: second
 
 middlewares:
   methods:

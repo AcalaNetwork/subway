@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::utils::TypeRegistryRef;
 use crate::{
     config::Config,
-    extensions::server::SubwayServerBuilder,
+    extensions::{rate_limit::RateLimitBuilder, server::SubwayServerBuilder},
     middlewares::{factory, CallRequest, Middlewares, SubscriptionRequest},
     utils::{errors, telemetry},
 };
@@ -43,11 +43,17 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
         .get::<SubwayServerBuilder>()
         .expect("Server extension not found");
 
+    let rate_limit = extensions_registry
+        .read()
+        .await
+        .get::<RateLimitBuilder>()
+        .map(|b| b.build());
+
     let request_timeout_seconds = server_builder.config.request_timeout_seconds;
 
     let registry = extensions_registry.clone();
     let (addr, handle) = server_builder
-        .build(move || async move {
+        .build(rate_limit, move || async move {
             let mut module = RpcModule::new(());
 
             let tracer = telemetry::Tracer::new("server");
@@ -241,7 +247,6 @@ mod tests {
                     request_timeout_seconds: request_timeout_seconds.unwrap_or(10),
                     http_methods: Vec::new(),
                     cors: None,
-                    rate_limit: None,
                 }),
                 ..Default::default()
             },
