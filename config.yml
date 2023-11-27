@@ -23,7 +23,7 @@ extensions:
       - path: /liveness
         method: chain_getBlockHash
     cors: all
-  rate_limit: # 20 requests per second
+  rate_limit: # 20 requests per second per connection
     burst: 20
     period_secs: 1
 
