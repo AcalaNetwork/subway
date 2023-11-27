@@ -80,6 +80,7 @@ impl<S> tower::Layer<S> for RateLimit {
     }
 }
 
+#[derive(Clone)]
 pub struct ConnectionRateLimit<S> {
     service: S,
     limiter: Arc<DefaultDirectRateLimiter>,
@@ -139,22 +140,31 @@ mod tests {
     async fn rate_limit_works() {
         let service = ConnectionRateLimit::new(
             MockService,
-            NonZeroU32::new(20).unwrap(),
-            Duration::from_secs(1),
-            Jitter::up_to(Duration::from_millis(100)),
+            NonZeroU32::new(10).unwrap(),
+            Duration::from_millis(100),
+            Jitter::up_to(Duration::from_millis(10)),
         );
 
-        let count = 60;
-        let start = tokio::time::Instant::now();
-        let calls = (1..=count)
-            .map(|id| service.call(Request::new("test".into(), None, Id::Number(id))))
-            .collect::<Vec<_>>();
+        let batch = |service: ConnectionRateLimit<MockService>, count: usize, delay| async move {
+            tokio::time::sleep(Duration::from_millis(delay)).await;
+            let calls = (1..=count)
+                .map(|id| service.call(Request::new("test".into(), None, Id::Number(id as u64))))
+                .collect::<Vec<_>>();
+            let results = futures::future::join_all(calls).await;
+            assert_eq!(results.iter().filter(|r| r.is_success()).count(), count);
+        };
 
-        let results = futures::future::join_all(calls).await;
-        let duration = start.elapsed().as_secs_f64();
-        // should take at least 2 seconds
-        assert!(duration > 2.0);
-        // calls should succeed
-        assert_eq!(results.iter().filter(|r| r.is_success()).count(), count as usize);
+        let start = tokio::time::Instant::now();
+        // background task to make calls
+        let batch1 = tokio::spawn(batch(service.clone(), 30, 0));
+        let batch2 = tokio::spawn(batch(service.clone(), 40, 200));
+        let batch3 = tokio::spawn(batch(service.clone(), 20, 300));
+        batch1.await.unwrap();
+        batch2.await.unwrap();
+        batch3.await.unwrap();
+        let duration = start.elapsed().as_millis();
+        println!("duration: {} ms", duration);
+        // should take between 800..900 millis. each 100ms period handles 10 calls
+        assert!(duration > 800 && duration < 900);
     }
 }
