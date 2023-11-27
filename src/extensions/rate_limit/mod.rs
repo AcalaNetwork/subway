@@ -53,26 +53,22 @@ impl RateLimitBuilder {
     }
     pub fn build(&self) -> RateLimit {
         let burst = NonZeroU32::new(self.config.burst).unwrap();
-        let period_secs = self.config.period_secs;
+        let period = Duration::from_secs(self.config.period_secs);
         let jitter = Jitter::up_to(Duration::from_millis(self.config.jitter_up_to_millis));
-        RateLimit::new(burst, period_secs, jitter)
+        RateLimit::new(burst, period, jitter)
     }
 }
 
 #[derive(Clone)]
 pub struct RateLimit {
     burst: NonZeroU32,
-    period_secs: u64,
+    period: Duration,
     jitter: Jitter,
 }
 
 impl RateLimit {
-    pub fn new(burst: NonZeroU32, period_secs: u64, jitter: Jitter) -> Self {
-        Self {
-            burst,
-            period_secs,
-            jitter,
-        }
+    pub fn new(burst: NonZeroU32, period: Duration, jitter: Jitter) -> Self {
+        Self { burst, period, jitter }
     }
 }
 
@@ -80,7 +76,7 @@ impl<S> tower::Layer<S> for RateLimit {
     type Service = ConnectionRateLimit<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        ConnectionRateLimit::new(service, self.burst, self.period_secs, self.jitter)
+        ConnectionRateLimit::new(service, self.burst, self.period, self.jitter)
     }
 }
 
@@ -91,8 +87,9 @@ pub struct ConnectionRateLimit<S> {
 }
 
 impl<S> ConnectionRateLimit<S> {
-    pub fn new(service: S, burst: NonZeroU32, period_secs: u64, jitter: Jitter) -> Self {
-        let quota = Quota::with_period(Duration::from_secs(period_secs))
+    pub fn new(service: S, burst: NonZeroU32, period: Duration, jitter: Jitter) -> Self {
+        let replenish_interval_ns = period.as_nanos() / (burst.get() as u128);
+        let quota = Quota::with_period(Duration::from_nanos(replenish_interval_ns as u64))
             .unwrap()
             .allow_burst(burst);
         let limiter = Arc::new(RateLimiter::direct(quota));
@@ -143,7 +140,7 @@ mod tests {
         let service = ConnectionRateLimit::new(
             MockService,
             NonZeroU32::new(20).unwrap(),
-            Period::Second,
+            Duration::from_secs(1),
             Jitter::up_to(Duration::from_millis(100)),
         );
 
