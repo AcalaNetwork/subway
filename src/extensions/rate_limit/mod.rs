@@ -29,7 +29,7 @@ fn default_period_secs() -> u64 {
 }
 
 fn default_jitter_up_to_millis() -> u64 {
-    1000
+    100
 }
 
 pub struct RateLimitBuilder {
