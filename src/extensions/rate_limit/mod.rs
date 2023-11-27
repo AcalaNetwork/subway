@@ -10,24 +10,25 @@ use std::{sync::Arc, time::Duration};
 
 use super::{Extension, ExtensionRegistry};
 
-#[derive(Deserialize, Default, Debug, Copy, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum Period {
-    #[default]
-    Second,
-    Minute,
-    Hour,
-}
-
 #[derive(Deserialize, Debug, Copy, Clone, Default)]
 pub struct RateLimitConfig {
+    // burst is the maximum number of requests that can be made in a period
     pub burst: u32,
-    pub period: Period,
-    #[serde(default = "default_jitter_millis")]
-    pub jitter_millis: u64,
+    // period is the period of time in which the burst is allowed
+    #[serde(default = "default_period_secs")]
+    pub period_secs: u64,
+    // jitter_millis is the maximum amount of jitter to add to the rate limit
+    // this is to prevent a thundering herd problem https://en.wikipedia.org/wiki/Thundering_herd_problem
+    // e.g. if jitter_up_to_millis is 1000, then additional delay of random(0, 1000) milliseconds will be added
+    #[serde(default = "default_jitter_up_to_millis")]
+    pub jitter_up_to_millis: u64,
 }
 
-fn default_jitter_millis() -> u64 {
+fn default_period_secs() -> u64 {
+    1
+}
+
+fn default_jitter_up_to_millis() -> u64 {
     1000
 }
 
@@ -47,30 +48,31 @@ impl Extension for RateLimitBuilder {
 impl RateLimitBuilder {
     pub fn new(config: RateLimitConfig) -> Self {
         assert!(config.burst > 0, "burst must be greater than 0");
+        assert!(config.period_secs > 0, "period_secs must be greater than 0");
         Self { config }
     }
     pub fn build(&self) -> RateLimit {
         let burst = NonZeroU32::new(self.config.burst).unwrap();
-        let period = self.config.period;
-        let jitter = Jitter::up_to(Duration::from_millis(self.config.jitter_millis));
-        RateLimit::new(burst, period, jitter)
+        let period_secs = self.config.period_secs;
+        let jitter = Jitter::up_to(Duration::from_millis(self.config.jitter_up_to_millis));
+        RateLimit::new(burst, period_secs, jitter)
     }
 }
 
 #[derive(Clone)]
 pub struct RateLimit {
     burst: NonZeroU32,
-    period: Period,
+    period_secs: u64,
     jitter: Jitter,
 }
 
 impl RateLimit {
-    pub fn new(burst: NonZeroU32, period: Period, jitter: Jitter) -> Self {
-        Self { burst, period, jitter }
-    }
-
-    pub fn make_copy(&self) -> Self {
-        self.clone()
+    pub fn new(burst: NonZeroU32, period_secs: u64, jitter: Jitter) -> Self {
+        Self {
+            burst,
+            period_secs,
+            jitter,
+        }
     }
 }
 
@@ -78,7 +80,7 @@ impl<S> tower::Layer<S> for RateLimit {
     type Service = ConnectionRateLimit<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        ConnectionRateLimit::new(service, self.burst, self.period, self.jitter)
+        ConnectionRateLimit::new(service, self.burst, self.period_secs, self.jitter)
     }
 }
 
@@ -89,15 +91,14 @@ pub struct ConnectionRateLimit<S> {
 }
 
 impl<S> ConnectionRateLimit<S> {
-    pub fn new(service: S, burst: NonZeroU32, period: Period, jitter: Jitter) -> Self {
-        let quota = match period {
-            Period::Second => Quota::per_second(burst),
-            Period::Minute => Quota::per_minute(burst),
-            Period::Hour => Quota::per_hour(burst),
-        };
+    pub fn new(service: S, burst: NonZeroU32, period_secs: u64, jitter: Jitter) -> Self {
+        let quota = Quota::with_period(Duration::from_secs(period_secs))
+            .unwrap()
+            .allow_burst(burst);
+        let limiter = Arc::new(RateLimiter::direct(quota));
         Self {
             service,
-            limiter: Arc::new(RateLimiter::direct(quota)),
+            limiter,
             jitter,
         }
     }
