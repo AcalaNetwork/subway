@@ -23,9 +23,14 @@ extensions:
       - path: /liveness
         method: chain_getBlockHash
     cors: all
-  rate_limit: # 20 requests per second per connection
-    burst: 20
-    period_secs: 1
+  rate_limit:
+    rules:
+      - burst: 20 # 20 requests per second per connection
+        period_secs: 1
+        apply_to: connection # default is ip
+      - burst: 500 # 500 requests per 10 seconds per ip
+        period_secs: 10
+        apply_to: ip
 
 middlewares:
   methods:
