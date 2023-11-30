@@ -25,12 +25,14 @@ extensions:
     cors: all
   rate_limit:
     rules:
-      - burst: 20 # 20 requests per second per connection
+      # at least one rule is required
+      # these are for demo purpose only, please adjust to your needs
+      - burst: 20 # 20 RPC requests per second per connection
         period_secs: 1
-        apply_to: connection # default is ip
-      - burst: 500 # 500 requests per 10 seconds per ip
+        apply_to: connection
+      - burst: 500 # 500 RPC requests per 10 seconds per ip
         period_secs: 10
-        apply_to: ip
+        apply_to: ip # default
 
 middlewares:
   methods:
