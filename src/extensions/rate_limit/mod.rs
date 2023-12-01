@@ -11,17 +11,10 @@ mod ip;
 pub use connection::{ConnectionRateLimit, ConnectionRateLimitLayer};
 pub use ip::{IpRateLimit, IpRateLimitLayer};
 
-#[derive(Deserialize, Debug, Clone, Default, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum RateLimitType {
-    #[default]
-    Ip,
-    Connection,
-}
-
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct RateLimitConfig {
-    pub rules: Vec<Rule>,
+    pub ip: Option<Rule>,
+    pub connection: Option<Rule>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -36,8 +29,6 @@ pub struct Rule {
     // e.g. if jitter_up_to_millis is 1000, then additional delay of random(0, 1000) milliseconds will be added
     #[serde(default = "default_jitter_up_to_millis")]
     pub jitter_up_to_millis: u64,
-    #[serde(default)]
-    pub apply_to: RateLimitType,
 }
 
 fn default_period_secs() -> u64 {
@@ -65,36 +56,25 @@ impl Extension for RateLimitBuilder {
 
 impl RateLimitBuilder {
     pub fn new(config: RateLimitConfig) -> Self {
-        // make sure there is at least one rule
-        assert!(!config.rules.is_empty(), "must have at least one rule");
-        // make sure there is at most one ip rule
-        assert!(
-            config.rules.iter().filter(|r| r.apply_to == RateLimitType::Ip).count() <= 1,
-            "can only have one ip rule"
-        );
-        // make sure there is at most one connection rule
-        assert!(
-            config
-                .rules
-                .iter()
-                .filter(|r| r.apply_to == RateLimitType::Connection)
-                .count()
-                <= 1,
-            "can only have one connection rule"
-        );
         // make sure all rules are valid
-        for rule in config.rules.iter() {
+        if let Some(ref rule) = config.ip {
+            assert!(rule.burst > 0, "burst must be greater than 0");
+            assert!(rule.period_secs > 0, "period_secs must be greater than 0");
+        }
+        if let Some(ref rule) = config.connection {
             assert!(rule.burst > 0, "burst must be greater than 0");
             assert!(rule.period_secs > 0, "period_secs must be greater than 0");
         }
 
-        if let Some(rule) = config.rules.iter().find(|r| r.apply_to == RateLimitType::Ip) {
+        if let Some(ref rule) = config.ip {
             let burst = NonZeroU32::new(rule.burst).unwrap();
             let quota = build_quota(burst, Duration::from_secs(rule.period_secs));
+            let ip_limiter = Some(Arc::new(RateLimiter::keyed(quota)));
+            let ip_jitter = Some(Jitter::up_to(Duration::from_millis(rule.jitter_up_to_millis)));
             Self {
-                config: config.clone(),
-                ip_jitter: Some(Jitter::up_to(Duration::from_millis(rule.jitter_up_to_millis))),
-                ip_limiter: Some(Arc::new(RateLimiter::keyed(quota))),
+                config,
+                ip_jitter,
+                ip_limiter,
             }
         } else {
             Self {
@@ -105,12 +85,7 @@ impl RateLimitBuilder {
         }
     }
     pub fn connection_limit(&self) -> Option<ConnectionRateLimitLayer> {
-        if let Some(rule) = self
-            .config
-            .rules
-            .iter()
-            .find(|r| r.apply_to == RateLimitType::Connection)
-        {
+        if let Some(ref rule) = self.config.connection {
             let burst = NonZeroU32::new(rule.burst).unwrap();
             let period = Duration::from_secs(rule.period_secs);
             let jitter = Jitter::up_to(Duration::from_millis(rule.jitter_up_to_millis));
