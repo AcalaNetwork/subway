@@ -90,10 +90,7 @@ impl RateLimitBuilder {
 
         if let Some(rule) = config.rules.iter().find(|r| r.apply_to == RateLimitType::Ip) {
             let burst = NonZeroU32::new(rule.burst).unwrap();
-            let replenish_interval_ns = Duration::from_secs(rule.period_secs).as_nanos() / (burst.get() as u128);
-            let quota = Quota::with_period(Duration::from_nanos(replenish_interval_ns as u64))
-                .unwrap()
-                .allow_burst(burst);
+            let quota = build_quota(burst, Duration::from_secs(rule.period_secs));
             Self {
                 config: config.clone(),
                 ip_jitter: Some(Jitter::up_to(Duration::from_millis(rule.jitter_up_to_millis))),
@@ -127,4 +124,11 @@ impl RateLimitBuilder {
             .as_ref()
             .map(|ip_limiter| IpRateLimitLayer::new(remote_ip, ip_limiter.clone(), self.ip_jitter.unwrap_or_default()))
     }
+}
+
+pub fn build_quota(burst: NonZeroU32, period: Duration) -> Quota {
+    let replenish_interval_ns = period.as_nanos() / (burst.get() as u128);
+    Quota::with_period(Duration::from_nanos(replenish_interval_ns as u64))
+        .unwrap()
+        .allow_burst(burst)
 }

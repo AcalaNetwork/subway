@@ -1,5 +1,5 @@
 use futures::{future::BoxFuture, FutureExt};
-use governor::{DefaultDirectRateLimiter, Jitter, Quota, RateLimiter};
+use governor::{DefaultDirectRateLimiter, Jitter, RateLimiter};
 use jsonrpsee::{
     server::{middleware::rpc::RpcServiceT, types::Request},
     MethodResponse,
@@ -37,10 +37,7 @@ pub struct ConnectionRateLimit<S> {
 
 impl<S> ConnectionRateLimit<S> {
     pub fn new(service: S, burst: NonZeroU32, period: Duration, jitter: Jitter) -> Self {
-        let replenish_interval_ns = period.as_nanos() / (burst.get() as u128);
-        let quota = Quota::with_period(Duration::from_nanos(replenish_interval_ns as u64))
-            .unwrap()
-            .allow_burst(burst);
+        let quota = super::build_quota(burst, period);
         let limiter = Arc::new(RateLimiter::direct(quota));
         Self {
             service,
