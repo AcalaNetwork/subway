@@ -6,6 +6,7 @@ use hyper::service::{make_service_fn, service_fn};
 use jsonrpsee::server::{
     middleware::rpc::RpcServiceBuilder, stop_channel, RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle,
 };
+use jsonrpsee::Methods;
 use serde::ser::StdError;
 use serde::Deserialize;
 use std::str::FromStr;
@@ -96,13 +97,13 @@ impl SubwayServerBuilder {
     pub async fn build<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
         rate_limit_builder: Option<Arc<RateLimitBuilder>>,
-        builder: impl FnOnce() -> Fut,
+        rpc_module_builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
         let config = self.config.clone();
 
         let (stop_handle, server_handle) = stop_channel();
         let handle = stop_handle.clone();
-        let methods = builder().await?;
+        let rpc_module = rpc_module_builder().await?;
 
         // make_service handle each connection
         let make_service = make_service_fn(move |socket: &AddrStream| {
@@ -134,14 +135,14 @@ impl SubwayServerBuilder {
                 .set_id_provider(RandomStringIdProvider::new(16))
                 .to_service_builder();
 
-            let methods = methods.clone();
+            let rpc_module = rpc_module.clone();
             let stop_handle = stop_handle.clone();
             let service_builder = service_builder.clone();
 
             async move {
                 // service_fn handle each request
                 Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
-                    let methods = methods.clone();
+                    let methods: Methods = rpc_module.clone().into();
                     let stop_handle = stop_handle.clone();
                     let service_builder = service_builder.clone();
 

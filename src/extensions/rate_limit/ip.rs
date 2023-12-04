@@ -14,9 +14,9 @@ pub struct IpRateLimitLayer {
 }
 
 impl IpRateLimitLayer {
-    pub fn new(key: String, limiter: Arc<DefaultKeyedRateLimiter<String>>, jitter: Jitter) -> Self {
+    pub fn new(ip_addr: String, limiter: Arc<DefaultKeyedRateLimiter<String>>, jitter: Jitter) -> Self {
         Self {
-            ip_addr: key,
+            ip_addr,
             limiter,
             jitter,
         }
