@@ -30,6 +30,9 @@ extensions:
     ip: # 500 RPC requests per 10 seconds per ip
       burst: 500
       period_secs: 10
+    # use X-Forwarded-For header to get real ip, if available (e.g. behind a load balancer).
+    # WARNING: Use with caution, as this xff header can be forged.
+    use_xff: true # default is false
 
 middlewares:
   methods:
