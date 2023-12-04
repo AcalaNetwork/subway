@@ -40,6 +40,6 @@ fn test_xff() {
             .header("X-Forwarded-For", xff)
             .body(())
             .unwrap();
-        assert_eq!(req.xxf_ip().as_ref().map(|x| x.as_str()), ip);
+        assert_eq!(req.xxf_ip().as_deref(), ip);
     }
 }
