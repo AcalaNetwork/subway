@@ -7,14 +7,18 @@ use super::{Extension, ExtensionRegistry};
 
 mod connection;
 mod ip;
+mod xff;
 
 pub use connection::{ConnectionRateLimit, ConnectionRateLimitLayer};
 pub use ip::{IpRateLimit, IpRateLimitLayer};
+pub use xff::XFF;
 
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct RateLimitConfig {
     pub ip: Option<Rule>,
     pub connection: Option<Rule>,
+    #[serde(default)]
+    pub use_xff: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -98,6 +102,11 @@ impl RateLimitBuilder {
         self.ip_limiter
             .as_ref()
             .map(|ip_limiter| IpRateLimitLayer::new(remote_ip, ip_limiter.clone(), self.ip_jitter.unwrap_or_default()))
+    }
+
+    // whether to use the X-Forwarded-For header to get the remote ip
+    pub fn use_xff(&self) -> bool {
+        self.config.use_xff.unwrap_or(false)
     }
 }
 

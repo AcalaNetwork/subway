@@ -16,7 +16,7 @@ use tower::ServiceBuilder;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::{Extension, ExtensionRegistry};
-use crate::extensions::rate_limit::RateLimitBuilder;
+use crate::extensions::rate_limit::{RateLimitBuilder, XFF};
 
 mod proxy_get_request;
 use proxy_get_request::{ProxyGetRequestLayer, ProxyGetRequestMethod};
@@ -108,9 +108,6 @@ impl SubwayServerBuilder {
         // make_service handle each connection
         let make_service = make_service_fn(move |socket: &AddrStream| {
             let remote_ip = socket.remote_addr().ip().to_string();
-            let rpc_middleware = RpcServiceBuilder::new()
-                .option_layer(rate_limit_builder.as_ref().and_then(|r| r.ip_limit(remote_ip)))
-                .option_layer(rate_limit_builder.as_ref().and_then(|r| r.connection_limit()));
 
             let http_middleware: ServiceBuilder<_> = tower::ServiceBuilder::new()
                 .layer(cors_layer(config.cors.clone()).expect("Invalid CORS config"))
@@ -128,23 +125,32 @@ impl SubwayServerBuilder {
                     .expect("Invalid health config"),
                 );
 
-            let service_builder = ServerBuilder::default()
-                .set_rpc_middleware(rpc_middleware)
-                .set_http_middleware(http_middleware)
-                .max_connections(config.max_connections)
-                .set_id_provider(RandomStringIdProvider::new(16))
-                .to_service_builder();
-
             let rpc_module = rpc_module.clone();
             let stop_handle = stop_handle.clone();
-            let service_builder = service_builder.clone();
+            let rate_limit_builder = rate_limit_builder.clone();
 
             async move {
                 // service_fn handle each request
                 Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+                    let mut remote_ip = remote_ip.clone();
                     let methods: Methods = rpc_module.clone().into();
                     let stop_handle = stop_handle.clone();
-                    let service_builder = service_builder.clone();
+                    let http_middleware = http_middleware.clone();
+
+                    if let Some(true) = rate_limit_builder.as_ref().map(|r| r.use_xff()) {
+                        remote_ip = req.xxf_ip().unwrap_or(remote_ip);
+                    }
+
+                    let rpc_middleware = RpcServiceBuilder::new()
+                        .option_layer(rate_limit_builder.as_ref().and_then(|r| r.ip_limit(remote_ip)))
+                        .option_layer(rate_limit_builder.as_ref().and_then(|r| r.connection_limit()));
+
+                    let service_builder = ServerBuilder::default()
+                        .set_rpc_middleware(rpc_middleware)
+                        .set_http_middleware(http_middleware)
+                        .max_connections(config.max_connections)
+                        .set_id_provider(RandomStringIdProvider::new(16))
+                        .to_service_builder();
 
                     let mut service = service_builder.build(methods, stop_handle);
                     service.call(req)
