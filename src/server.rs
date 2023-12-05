@@ -43,17 +43,13 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
         .get::<SubwayServerBuilder>()
         .expect("Server extension not found");
 
-    let rate_limit = extensions_registry
-        .read()
-        .await
-        .get::<RateLimitBuilder>()
-        .map(|b| b.build());
+    let rate_limit_builder = extensions_registry.read().await.get::<RateLimitBuilder>();
 
     let request_timeout_seconds = server_builder.config.request_timeout_seconds;
 
     let registry = extensions_registry.clone();
     let (addr, handle) = server_builder
-        .build(rate_limit, move || async move {
+        .build(rate_limit_builder, move || async move {
             let mut module = RpcModule::new(());
 
             let tracer = telemetry::Tracer::new("server");

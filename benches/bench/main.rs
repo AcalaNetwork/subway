@@ -6,6 +6,8 @@ use pprof::criterion::{Output, PProfProfiler};
 use std::{sync::Arc, time::Duration};
 use tokio::runtime::Runtime as TokioRuntime;
 
+mod rate_limit;
+
 use helpers::{
     client::{rpc_params, ws_client, ws_handshake, ClientT, HeaderMap, SubscriptionClientT},
     ASYNC_INJECT_CALL, KIB, SUB_METHOD_NAME, UNSUB_METHOD_NAME,
@@ -70,6 +72,7 @@ criterion_group!(
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
     targets = AsyncBencher::websocket_benches_inject
 );
+
 criterion_main!(
     sync_benches,
     sync_benches_mid,
@@ -79,6 +82,7 @@ criterion_main!(
     async_benches_slow,
     subscriptions,
     async_benches_inject,
+    rate_limit::rate_limit_benches,
 );
 
 const SERVER_ONE_ENDPOINT: &str = "127.0.0.1:9955";

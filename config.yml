@@ -23,9 +23,16 @@ extensions:
       - path: /liveness
         method: chain_getBlockHash
     cors: all
-  rate_limit: # 20 requests per second per connection
-    burst: 20
-    period_secs: 1
+  rate_limit: # these are for demo purpose only, please adjust to your needs
+    connection: # 20 RPC requests per second per connection
+      burst: 20
+      period_secs: 1
+    ip: # 500 RPC requests per 10 seconds per ip
+      burst: 500
+      period_secs: 10
+    # use X-Forwarded-For header to get real ip, if available (e.g. behind a load balancer).
+    # WARNING: Use with caution, as this xff header can be forged.
+    use_xff: true # default is false
 
 middlewares:
   methods:

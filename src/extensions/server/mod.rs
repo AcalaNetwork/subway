@@ -1,19 +1,25 @@
-use std::{future::Future, net::SocketAddr};
-
 use async_trait::async_trait;
 use http::header::HeaderValue;
+use hyper::server::conn::AddrStream;
+use hyper::service::Service;
+use hyper::service::{make_service_fn, service_fn};
 use jsonrpsee::server::{
-    middleware::rpc::RpcServiceBuilder, RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle,
+    middleware::rpc::RpcServiceBuilder, stop_channel, RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle,
 };
+use jsonrpsee::Methods;
+use serde::ser::StdError;
 use serde::Deserialize;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::{future::Future, net::SocketAddr};
+use tower::ServiceBuilder;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use super::{rate_limit::RateLimit, Extension, ExtensionRegistry};
-use proxy_get_request::ProxyGetRequestLayer;
-
-use self::proxy_get_request::ProxyGetRequestMethod;
+use super::{Extension, ExtensionRegistry};
+use crate::extensions::rate_limit::{RateLimitBuilder, XFF};
 
 mod proxy_get_request;
+use proxy_get_request::{ProxyGetRequestLayer, ProxyGetRequestMethod};
 
 pub struct SubwayServerBuilder {
     pub config: ServerConfig,
@@ -90,40 +96,79 @@ impl SubwayServerBuilder {
 
     pub async fn build<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
-        rate_limit: Option<RateLimit>,
-        builder: impl FnOnce() -> Fut,
+        rate_limit_builder: Option<Arc<RateLimitBuilder>>,
+        rpc_module_builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
-        let rpc_middleware = RpcServiceBuilder::new().option_layer(rate_limit);
+        let config = self.config.clone();
 
-        let service_builder = tower::ServiceBuilder::new()
-            .layer(cors_layer(self.config.cors.clone()).expect("Invalid CORS config"))
-            .layer(
-                ProxyGetRequestLayer::new(
-                    self.config
-                        .http_methods
-                        .iter()
-                        .map(|m| ProxyGetRequestMethod {
-                            path: m.path.clone(),
-                            method: m.method.clone(),
-                        })
-                        .collect(),
-                )
-                .expect("Invalid health config"),
-            );
+        let (stop_handle, server_handle) = stop_channel();
+        let handle = stop_handle.clone();
+        let rpc_module = rpc_module_builder().await?;
 
-        let server = ServerBuilder::default()
-            .set_rpc_middleware(rpc_middleware)
-            .set_http_middleware(service_builder)
-            .max_connections(self.config.max_connections)
-            .set_id_provider(RandomStringIdProvider::new(16))
-            .build((self.config.listen_address.as_str(), self.config.port))
-            .await?;
+        // make_service handle each connection
+        let make_service = make_service_fn(move |socket: &AddrStream| {
+            let socket_ip = socket.remote_addr().ip().to_string();
 
-        let module = builder().await?;
+            let http_middleware: ServiceBuilder<_> = tower::ServiceBuilder::new()
+                .layer(cors_layer(config.cors.clone()).expect("Invalid CORS config"))
+                .layer(
+                    ProxyGetRequestLayer::new(
+                        config
+                            .http_methods
+                            .iter()
+                            .map(|m| ProxyGetRequestMethod {
+                                path: m.path.clone(),
+                                method: m.method.clone(),
+                            })
+                            .collect(),
+                    )
+                    .expect("Invalid health config"),
+                );
 
-        let addr = server.local_addr()?;
-        let server = server.start(module);
+            let rpc_module = rpc_module.clone();
+            let stop_handle = stop_handle.clone();
+            let rate_limit_builder = rate_limit_builder.clone();
 
-        Ok((addr, server))
+            async move {
+                // service_fn handle each request
+                Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+                    let mut socket_ip = socket_ip.clone();
+                    let methods: Methods = rpc_module.clone().into();
+                    let stop_handle = stop_handle.clone();
+                    let http_middleware = http_middleware.clone();
+
+                    if let Some(true) = rate_limit_builder.as_ref().map(|r| r.use_xff()) {
+                        socket_ip = req.xxf_ip().unwrap_or(socket_ip);
+                    }
+
+                    let rpc_middleware = RpcServiceBuilder::new()
+                        .option_layer(rate_limit_builder.as_ref().and_then(|r| r.ip_limit(socket_ip)))
+                        .option_layer(rate_limit_builder.as_ref().and_then(|r| r.connection_limit()));
+
+                    let service_builder = ServerBuilder::default()
+                        .set_rpc_middleware(rpc_middleware)
+                        .set_http_middleware(http_middleware)
+                        .max_connections(config.max_connections)
+                        .set_id_provider(RandomStringIdProvider::new(16))
+                        .to_service_builder();
+
+                    let mut service = service_builder.build(methods, stop_handle);
+                    service.call(req)
+                }))
+            }
+        });
+
+        let ip_addr = std::net::IpAddr::from_str(&self.config.listen_address)?;
+        let addr = SocketAddr::new(ip_addr, self.config.port);
+
+        let server = hyper::Server::bind(&addr).serve(make_service);
+        let addr = server.local_addr();
+
+        tokio::spawn(async move {
+            let graceful = server.with_graceful_shutdown(async move { handle.shutdown().await });
+            graceful.await.unwrap()
+        });
+
+        Ok((addr, server_handle))
     }
 }
