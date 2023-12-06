@@ -35,6 +35,13 @@ pub struct RpcMethod {
 
     #[serde(default)]
     pub delay_ms: Option<u64>,
+
+    #[serde(default = "default_rate_limit_weight")]
+    pub rate_limit_weight: u32,
+}
+
+fn default_rate_limit_weight() -> u32 {
+    1
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]

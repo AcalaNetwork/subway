@@ -16,7 +16,7 @@ use tower::ServiceBuilder;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::{Extension, ExtensionRegistry};
-use crate::extensions::rate_limit::{RateLimitBuilder, XFF};
+use crate::extensions::rate_limit::{MethodWeights, RateLimitBuilder, XFF};
 
 mod proxy_get_request;
 use proxy_get_request::{ProxyGetRequestLayer, ProxyGetRequestMethod};
@@ -97,6 +97,7 @@ impl SubwayServerBuilder {
     pub async fn build<Fut: Future<Output = anyhow::Result<RpcModule<()>>>>(
         &self,
         rate_limit_builder: Option<Arc<RateLimitBuilder>>,
+        rpc_method_weights: MethodWeights,
         rpc_module_builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
         let config = self.config.clone();
@@ -128,6 +129,7 @@ impl SubwayServerBuilder {
             let rpc_module = rpc_module.clone();
             let stop_handle = stop_handle.clone();
             let rate_limit_builder = rate_limit_builder.clone();
+            let rpc_method_weights = rpc_method_weights.clone();
 
             async move {
                 // service_fn handle each request
@@ -142,8 +144,16 @@ impl SubwayServerBuilder {
                     }
 
                     let rpc_middleware = RpcServiceBuilder::new()
-                        .option_layer(rate_limit_builder.as_ref().and_then(|r| r.ip_limit(socket_ip)))
-                        .option_layer(rate_limit_builder.as_ref().and_then(|r| r.connection_limit()));
+                        .option_layer(
+                            rate_limit_builder
+                                .as_ref()
+                                .and_then(|r| r.ip_limit(socket_ip, rpc_method_weights.clone())),
+                        )
+                        .option_layer(
+                            rate_limit_builder
+                                .as_ref()
+                                .and_then(|r| r.connection_limit(rpc_method_weights.clone())),
+                        );
 
                     let service_builder = ServerBuilder::default()
                         .set_rpc_middleware(rpc_middleware)

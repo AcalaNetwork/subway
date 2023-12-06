@@ -1,24 +1,32 @@
+use crate::{extensions::rate_limit::MethodWeights, utils::errors};
 use futures::{future::BoxFuture, FutureExt};
 use governor::{DefaultKeyedRateLimiter, Jitter};
 use jsonrpsee::{
     server::{middleware::rpc::RpcServiceT, types::Request},
     MethodResponse,
 };
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 #[derive(Clone)]
 pub struct IpRateLimitLayer {
     ip_addr: String,
     limiter: Arc<DefaultKeyedRateLimiter<String>>,
     jitter: Jitter,
+    method_weights: MethodWeights,
 }
 
 impl IpRateLimitLayer {
-    pub fn new(ip_addr: String, limiter: Arc<DefaultKeyedRateLimiter<String>>, jitter: Jitter) -> Self {
+    pub fn new(
+        ip_addr: String,
+        limiter: Arc<DefaultKeyedRateLimiter<String>>,
+        jitter: Jitter,
+        method_weights: MethodWeights,
+    ) -> Self {
         Self {
             ip_addr,
             limiter,
             jitter,
+            method_weights,
         }
     }
 }
@@ -27,7 +35,13 @@ impl<S> tower::Layer<S> for IpRateLimitLayer {
     type Service = IpRateLimit<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        IpRateLimit::new(service, self.ip_addr.clone(), self.limiter.clone(), self.jitter)
+        IpRateLimit::new(
+            service,
+            self.ip_addr.clone(),
+            self.limiter.clone(),
+            self.jitter,
+            self.method_weights.clone(),
+        )
     }
 }
 
@@ -37,15 +51,23 @@ pub struct IpRateLimit<S> {
     ip_addr: String,
     limiter: Arc<DefaultKeyedRateLimiter<String>>,
     jitter: Jitter,
+    method_weights: MethodWeights,
 }
 
 impl<S> IpRateLimit<S> {
-    pub fn new(service: S, ip_addr: String, limiter: Arc<DefaultKeyedRateLimiter<String>>, jitter: Jitter) -> Self {
+    pub fn new(
+        service: S,
+        ip_addr: String,
+        limiter: Arc<DefaultKeyedRateLimiter<String>>,
+        jitter: Jitter,
+        method_weights: MethodWeights,
+    ) -> Self {
         Self {
             service,
             ip_addr,
             limiter,
             jitter,
+            method_weights,
         }
     }
 }
@@ -61,9 +83,17 @@ where
         let jitter = self.jitter;
         let service = self.service.clone();
         let limiter = self.limiter.clone();
-
+        let weight = self.method_weights.get(req.method_name());
         async move {
-            limiter.until_key_ready_with_jitter(&ip_addr, jitter).await;
+            if let Some(n) = NonZeroU32::new(weight) {
+                if limiter
+                    .until_key_n_ready_with_jitter(&ip_addr, n, jitter)
+                    .await
+                    .is_err()
+                {
+                    return MethodResponse::error(req.id, errors::failed("rate limit exceeded"));
+                }
+            }
             service.call(req).await
         }
         .boxed()
