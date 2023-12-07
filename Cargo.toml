@@ -44,7 +44,7 @@ tracing-serde = "0.1.3"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
 
 jsonrpsee = { path = "./vendor/jsonrpsee/jsonrpsee", features = ["full"] }
-governor = "0.6.0"
+governor = { path = "./vendor/governor/governor" }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_tokio", "html_reports"] }

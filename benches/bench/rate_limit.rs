@@ -26,6 +26,7 @@ pub fn connection_rate_limit(c: &mut Criterion) {
         NonZeroU32::new(1000).unwrap(),
         Duration::from_millis(1000),
         Jitter::up_to(Duration::from_millis(10)),
+        Default::default(),
     );
 
     c.bench_function("rate_limit/connection_rate_limit", |b| {
@@ -42,6 +43,7 @@ pub fn ip_rate_limit(c: &mut Criterion) {
         "::1".to_string(),
         std::sync::Arc::new(limiter),
         Jitter::up_to(Duration::from_millis(10)),
+        Default::default(),
     );
 
     c.bench_function("rate_limit/ip_rate_limit", |b| {

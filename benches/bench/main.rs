@@ -243,6 +243,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_FAST_CALL.to_string(),
@@ -250,6 +251,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
                 RpcMethod {
                     method: helpers::SYNC_MEM_CALL.to_string(),
@@ -257,6 +259,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_MEM_CALL.to_string(),
@@ -264,6 +267,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
                 RpcMethod {
                     method: helpers::SYNC_SLOW_CALL.to_string(),
@@ -271,6 +275,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_SLOW_CALL.to_string(),
@@ -278,6 +283,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
                 RpcMethod {
                     method: helpers::ASYNC_INJECT_CALL.to_string(),
@@ -298,6 +304,7 @@ fn config() -> Config {
                     response: None,
                     cache: None,
                     delay_ms: None,
+                    rate_limit_weight: 1,
                 },
             ],
             subscriptions: vec![RpcSubscription {

@@ -348,6 +348,7 @@ mod tests {
                 params: vec![],
                 response: None,
                 delay_ms: None,
+                rate_limit_weight: 1,
             },
             &ext,
         )
@@ -365,6 +366,7 @@ mod tests {
                 params: vec![],
                 response: None,
                 delay_ms: None,
+                rate_limit_weight: 1,
             },
             &ext,
         )
@@ -382,6 +384,7 @@ mod tests {
                 params: vec![],
                 response: None,
                 delay_ms: None,
+                rate_limit_weight: 1,
             },
             &ext,
         )
@@ -396,6 +399,7 @@ mod tests {
                 params: vec![],
                 response: None,
                 delay_ms: None,
+                rate_limit_weight: 1,
             },
             &ext,
         )
