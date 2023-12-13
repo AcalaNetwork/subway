@@ -214,4 +214,5 @@ aliases:
   - [ chain_getBlockHash, chain_getHead ]
   - [ state_getKeysPaged, state_getKeysPagedAt ]
   - [ state_getStorage, state_getStorageAt ]
+  - [ state_getRuntimeVersion, chain_getRuntimeVersion ]
   - [ childstate_getKeysPaged, childstate_getKeysPagedAt ]
