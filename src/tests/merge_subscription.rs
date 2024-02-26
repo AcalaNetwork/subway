@@ -64,7 +64,7 @@ async fn merge_subscription_works() {
             ..Default::default()
         },
         middlewares: MiddlewaresConfig {
-            methods: vec![],
+            methods: Default::default(),
             subscriptions: vec!["merge_subscription".to_string(), "upstream".to_string()],
         },
         rpcs: RpcDefinitions {

@@ -251,7 +251,7 @@ mod tests {
                 ..Default::default()
             },
             middlewares: MiddlewaresConfig {
-                methods: vec!["crazy".to_string(), "upstream".to_string()],
+                methods: vec!["crazy".to_string(), "upstream".to_string()].into_iter().collect(),
                 subscriptions: vec![],
             },
             rpcs: RpcDefinitions {

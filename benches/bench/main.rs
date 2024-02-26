@@ -232,7 +232,9 @@ fn config() -> Config {
             ..Default::default()
         },
         middlewares: MiddlewaresConfig {
-            methods: vec!["inject_params".to_string(), "upstream".to_string()],
+            methods: vec!["inject_params".to_string(), "upstream".to_string()]
+                .into_iter()
+                .collect(),
             subscriptions: vec!["upstream".to_string()],
         },
         rpcs: RpcDefinitions {

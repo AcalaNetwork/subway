@@ -1,4 +1,4 @@
-use std::fs;
+use std::{collections::BTreeSet, fs};
 
 use clap::Parser;
 use serde::Deserialize;
@@ -118,7 +118,7 @@ impl From<RpcOptions> for RpcDefinitions {
 
 #[derive(Deserialize, Debug)]
 pub struct MiddlewaresConfig {
-    pub methods: Vec<String>,
+    pub methods: BTreeSet<String>,
     pub subscriptions: Vec<String>,
 }
 
