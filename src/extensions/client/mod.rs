@@ -1,21 +1,11 @@
 use std::{
-    sync::{
-        atomic::{AtomicU32, AtomicUsize},
-        Arc,
-    },
+    sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::TryFutureExt;
-use jsonrpsee::{
-    core::{
-        client::{ClientT, Subscription, SubscriptionClientT},
-        Error, JsonValue,
-    },
-    ws_client::{WsClient, WsClientBuilder},
-};
+use jsonrpsee::core::{client::Subscription, Error, JsonValue};
 use opentelemetry::trace::FutureExt;
 use rand::{seq::SliceRandom, thread_rng};
 use serde::Deserialize;
@@ -27,6 +17,9 @@ use crate::{
     middlewares::CallResult,
     utils::{self, errors},
 };
+
+mod endpoint;
+use endpoint::Endpoint;
 
 #[cfg(test)]
 pub mod mock;
@@ -105,7 +98,16 @@ impl Client {
             return Err(anyhow!("No endpoints provided"));
         }
 
+        if let Some(0) = retries {
+            return Err(anyhow!("Retries need to be at least 1"));
+        }
+
         tracing::debug!("New client with endpoints: {:?}", endpoints);
+
+        let endpoints = endpoints
+            .into_iter()
+            .map(|e| Arc::new(Endpoint::new(e, request_timeout, connection_timeout)))
+            .collect::<Vec<_>>();
 
         let (message_tx, mut message_rx) = tokio::sync::mpsc::channel::<Message>(100);
 
@@ -115,57 +117,37 @@ impl Client {
         let rotation_notify_bg = rotation_notify.clone();
 
         let background_task = tokio::spawn(async move {
-            let connect_backoff_counter = Arc::new(AtomicU32::new(0));
             let request_backoff_counter = Arc::new(AtomicU32::new(0));
 
-            let current_endpoint = AtomicUsize::new(0);
-
-            let connect_backoff_counter2 = connect_backoff_counter.clone();
-            let build_ws = || async {
-                let build = || {
-                    let current_endpoint = current_endpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let url = &endpoints[current_endpoint % endpoints.len()];
-
-                    tracing::info!("Connecting to endpoint: {}", url);
-
-                    // TODO: make those configurable
-                    WsClientBuilder::default()
-                        .request_timeout(request_timeout.unwrap_or(Duration::from_secs(30)))
-                        .connection_timeout(connection_timeout.unwrap_or(Duration::from_secs(30)))
-                        .max_buffer_capacity_per_subscription(2048)
-                        .max_concurrent_requests(2048)
-                        .max_response_size(20 * 1024 * 1024)
-                        .build(url)
-                        .map_err(|e| (e, url.to_string()))
-                };
-
-                loop {
-                    match build().await {
-                        Ok(ws) => {
-                            let ws = Arc::new(ws);
-                            tracing::info!("Endpoint connected");
-                            connect_backoff_counter2.store(0, std::sync::atomic::Ordering::Relaxed);
-                            break ws;
-                        }
-                        Err((e, url)) => {
-                            tracing::warn!("Unable to connect to endpoint: '{url}' error: {e}");
-                            tokio::time::sleep(get_backoff_time(&connect_backoff_counter2)).await;
-                        }
-                    }
+            // select next endpoint with the highest health score, excluding the current one if provided
+            let rotate_endpoint = |current_endpoint: Option<Arc<Endpoint>>| async {
+                if endpoints.len() == 1 {
+                    let selected_endpoint = endpoints[0].clone();
+                    selected_endpoint.connected().await;
+                    return selected_endpoint;
                 }
+
+                let mut endpoints = endpoints.clone();
+                // sort by health score
+                endpoints.sort_by(|a, b| b.health.score().cmp(&a.health.score()));
+                // remove the current endpoint from the list
+                if let Some(current_endpoint) = current_endpoint {
+                    endpoints.retain(|e| e.url != current_endpoint.url);
+                }
+                // pick the first one
+                let selected_endpoint = endpoints[0].clone();
+                selected_endpoint.connected().await;
+                selected_endpoint
             };
 
-            let mut ws = build_ws().await;
+            let mut selected_endpoint = rotate_endpoint(None).await;
 
-            let handle_message = |message: Message, ws: Arc<WsClient>| {
+            let handle_message = |message: Message, endpoint: Arc<Endpoint>| {
                 let tx = message_tx_bg.clone();
                 let request_backoff_counter = request_backoff_counter.clone();
 
                 // total timeout for a request
-                let task_timeout = request_timeout
-                    .unwrap_or(Duration::from_secs(30))
-                    // buffer 5 seconds for the request to be processed
-                    .saturating_add(Duration::from_secs(5));
+                let task_timeout = request_timeout.unwrap_or(Duration::from_secs(30));
 
                 tokio::spawn(async move {
                     match message {
@@ -183,7 +165,7 @@ impl Client {
                             }
 
                             if let Ok(result) =
-                                tokio::time::timeout(task_timeout, ws.request(&method, params.clone())).await
+                                tokio::time::timeout(task_timeout, endpoint.request(&method, params.clone())).await
                             {
                                 match result {
                                     result @ Ok(_) => {
@@ -201,6 +183,10 @@ impl Client {
                                             | Error::Transport(_)
                                             | Error::RestartNeeded(_)
                                             | Error::MaxSlotsExceeded => {
+                                                tx.send(Message::RotateEndpoint)
+                                                    .await
+                                                    .expect("Failed to send rotate message");
+
                                                 tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                                 // make sure it's still connected
@@ -212,12 +198,6 @@ impl Client {
                                                 if retries == 0 {
                                                     let _ = response.send(Err(Error::RequestTimeout));
                                                     return;
-                                                }
-
-                                                if matches!(err, Error::RequestTimeout) {
-                                                    tx.send(Message::RotateEndpoint)
-                                                        .await
-                                                        .expect("Failed to send rotate message");
                                                 }
 
                                                 tx.send(Message::Request {
@@ -260,7 +240,7 @@ impl Client {
 
                             if let Ok(result) = tokio::time::timeout(
                                 task_timeout,
-                                ws.subscribe(&subscribe, params.clone(), &unsubscribe),
+                                endpoint.subscribe(&subscribe, params.clone(), &unsubscribe),
                             )
                             .await
                             {
@@ -280,6 +260,10 @@ impl Client {
                                             | Error::Transport(_)
                                             | Error::RestartNeeded(_)
                                             | Error::MaxSlotsExceeded => {
+                                                tx.send(Message::RotateEndpoint)
+                                                    .await
+                                                    .expect("Failed to send rotate message");
+
                                                 tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                                 // make sure it's still connected
@@ -291,12 +275,6 @@ impl Client {
                                                 if retries == 0 {
                                                     let _ = response.send(Err(Error::RequestTimeout));
                                                     return;
-                                                }
-
-                                                if matches!(err, Error::RequestTimeout) {
-                                                    tx.send(Message::RotateEndpoint)
-                                                        .await
-                                                        .expect("Failed to send rotate message");
                                                 }
 
                                                 tx.send(Message::Subscribe {
@@ -338,20 +316,15 @@ impl Client {
 
             loop {
                 tokio::select! {
-                    _ = ws.on_disconnect() => {
-                        tracing::info!("Endpoint disconnected");
-                        tokio::time::sleep(get_backoff_time(&connect_backoff_counter)).await;
-                        ws = build_ws().await;
-                    }
                     message = message_rx.recv() => {
                         tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
                                 rotation_notify_bg.notify_waiters();
                                 tracing::info!("Rotate endpoint");
-                                ws = build_ws().await;
+                                selected_endpoint = rotate_endpoint(Some(selected_endpoint.clone())).await;
                             }
-                            Some(message) => handle_message(message, ws.clone()),
+                            Some(message) => handle_message(message, selected_endpoint.clone()),
                             None => {
                                 tracing::debug!("Client dropped");
                                 break;
@@ -361,10 +334,6 @@ impl Client {
                 };
             }
         });
-
-        if let Some(0) = retries {
-            return Err(anyhow!("Retries need to be at least 1"));
-        }
 
         Ok(Self {
             sender: message_tx,
@@ -435,7 +404,7 @@ impl Client {
     }
 }
 
-fn get_backoff_time(counter: &Arc<AtomicU32>) -> Duration {
+pub fn get_backoff_time(counter: &Arc<AtomicU32>) -> Duration {
     let min_time = 100u64;
     let step = 100u64;
     let max_count = 10u32;
