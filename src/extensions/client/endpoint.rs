@@ -150,13 +150,7 @@ impl Endpoint {
                         .get("methods")
                         .unwrap_or(&serde_json::json!([]))
                         .as_array()
-                        .map(|methods| {
-                            methods
-                                .into_iter()
-                                .map(|x| x.as_str().unwrap())
-                                .find(|x| x == &method_name)
-                                .is_some()
-                        })
+                        .map(|methods| methods.iter().any(|x| x.as_str() == Some(method_name)))
                         .unwrap_or_default();
                     if !has_health_method {
                         tracing::warn!("Endpoint '{url_}' does not have the '{method_name}' method");
