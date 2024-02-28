@@ -46,10 +46,33 @@ pub struct ClientConfig {
     pub endpoints: Vec<String>,
     #[serde(default = "bool_true")]
     pub shuffle_endpoints: bool,
+    pub health_check: Option<HealthCheckConfig>,
 }
 
 pub fn bool_true() -> bool {
     true
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct HealthCheckConfig {
+    #[serde(default = "interval_sec")]
+    pub interval_sec: u64,
+    #[serde(default = "response_threshold_ms")]
+    pub response_threshold_ms: u64,
+    #[serde(default = "system_health")]
+    pub health_method: String,
+}
+
+pub fn interval_sec() -> u64 {
+    10
+}
+
+pub fn response_threshold_ms() -> u64 {
+    250
+}
+
+pub fn system_health() -> String {
+    "system_health".to_string()
 }
 
 #[derive(Debug)]
@@ -75,12 +98,13 @@ impl Extension for Client {
     type Config = ClientConfig;
 
     async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
+        let health_check = config.health_check.clone();
         if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();
             endpoints.shuffle(&mut thread_rng());
-            Ok(Self::new(endpoints, None, None, None)?)
+            Ok(Self::new(endpoints, None, None, None, health_check)?)
         } else {
-            Ok(Self::new(config.endpoints.clone(), None, None, None)?)
+            Ok(Self::new(config.endpoints.clone(), None, None, None, health_check)?)
         }
     }
 }
@@ -91,7 +115,9 @@ impl Client {
         request_timeout: Option<Duration>,
         connection_timeout: Option<Duration>,
         retries: Option<u32>,
+        health_config: Option<HealthCheckConfig>,
     ) -> Result<Self, anyhow::Error> {
+        let health_config = health_config.unwrap_or_default();
         let endpoints: Vec<_> = endpoints.into_iter().map(|e| e.as_ref().to_string()).collect();
 
         if endpoints.is_empty() {
@@ -106,7 +132,14 @@ impl Client {
 
         let endpoints = endpoints
             .into_iter()
-            .map(|e| Arc::new(Endpoint::new(e, request_timeout, connection_timeout)))
+            .map(|e| {
+                Arc::new(Endpoint::new(
+                    e,
+                    request_timeout,
+                    connection_timeout,
+                    health_config.clone(),
+                ))
+            })
             .collect::<Vec<_>>();
 
         let (message_tx, mut message_rx) = tokio::sync::mpsc::channel::<Message>(100);
@@ -344,7 +377,7 @@ impl Client {
     }
 
     pub fn with_endpoints(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
-        Self::new(endpoints, None, None, None)
+        Self::new(endpoints, None, None, None, None)
     }
 
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> CallResult {

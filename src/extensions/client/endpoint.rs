@@ -1,4 +1,7 @@
-use crate::{extensions::client::get_backoff_time, utils::errors};
+use crate::{
+    extensions::client::{get_backoff_time, HealthCheckConfig},
+    utils::errors,
+};
 use jsonrpsee::{
     async_client::Client,
     core::client::{ClientT, Subscription, SubscriptionClientT},
@@ -78,7 +81,12 @@ impl Drop for Endpoint {
 }
 
 impl Endpoint {
-    pub fn new(url: String, request_timeout: Option<Duration>, connection_timeout: Option<Duration>) -> Self {
+    pub fn new(
+        url: String,
+        request_timeout: Option<Duration>,
+        connection_timeout: Option<Duration>,
+        health_config: HealthCheckConfig,
+    ) -> Self {
         let (client_tx, client_rx) = tokio::sync::watch::channel(None);
         let on_client_ready = Arc::new(tokio::sync::Notify::new());
         let health = Arc::new(Health::default());
@@ -133,14 +141,16 @@ impl Endpoint {
             // Wait for the client to be ready before starting the health check
             on_client_ready_.notified().await;
 
-            let method_name = "system_health";
-            let interval = Duration::from_secs(10);
+            let method_name = health_config.health_method.as_str();
+            let interval = Duration::from_secs(health_config.interval_sec);
+            let response_threshold = Duration::from_micros(health_config.response_threshold_ms);
+
             let client = match client_rx_.borrow().clone() {
                 Some(client) => client,
                 None => return,
             };
 
-            // Check if the endpoint has the 'system_health' method
+            // Check if the endpoint has the health method
             match client
                 .request::<serde_json::Value, Vec<serde_json::Value>>("rpc_methods", vec![])
                 .await
@@ -179,8 +189,7 @@ impl Endpoint {
                             health_.update(Event::StaleChain);
                             continue;
                         }
-                        // TODO: make this configurable
-                        if request_start.elapsed().as_millis() > 250 {
+                        if request_start.elapsed() > response_threshold {
                             health_.update(Event::SlowResponse);
                             continue;
                         }

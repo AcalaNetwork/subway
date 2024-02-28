@@ -235,6 +235,7 @@ mod tests {
                 client: Some(ClientConfig {
                     endpoints: vec![endpoint],
                     shuffle_endpoints: false,
+                    health_check: None,
                 }),
                 server: Some(ServerConfig {
                     listen_address: "127.0.0.1".to_string(),

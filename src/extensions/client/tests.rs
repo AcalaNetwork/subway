@@ -152,6 +152,7 @@ async fn retry_requests_successful() {
         Some(Duration::from_millis(100)),
         None,
         Some(2),
+        None,
     )
     .unwrap();
 
@@ -189,6 +190,7 @@ async fn retry_requests_out_of_retries() {
         Some(Duration::from_millis(100)),
         None,
         Some(2),
+        None,
     )
     .unwrap();
 
