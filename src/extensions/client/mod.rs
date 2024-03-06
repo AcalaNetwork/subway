@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod endpoint;
+mod health;
 use endpoint::Endpoint;
 
 #[cfg(test)]
