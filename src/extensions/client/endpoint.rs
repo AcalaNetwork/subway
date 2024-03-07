@@ -84,14 +84,7 @@ impl Endpoint {
         });
 
         // This task will check the health of the endpoint and update the health score
-        let health_ = health.clone();
-        let on_client_ready_ = on_client_ready.clone();
-        let client_rx_ = client_rx.clone();
-        let health_checker = tokio::spawn(async move {
-            // Wait for the client to be ready before starting the health check
-            on_client_ready_.notified().await;
-            health_.monitor(client_rx_).await;
-        });
+        let health_checker = Health::monitor(health.clone(), client_rx.clone(), on_client_ready.clone());
 
         Self {
             url,
