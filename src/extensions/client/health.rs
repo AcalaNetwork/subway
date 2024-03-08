@@ -74,6 +74,7 @@ impl Health {
         health: Arc<Health>,
         client_rx_: tokio::sync::watch::Receiver<Option<Arc<Client>>>,
         on_client_ready: Arc<tokio::sync::Notify>,
+        on_client_unhealthy: Arc<tokio::sync::Notify>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             if health.config.health_method.is_empty() {
@@ -85,7 +86,7 @@ impl Health {
 
             let method_name = health.config.health_method.as_str();
             let interval = Duration::from_secs(health.config.interval_sec);
-            let response_threshold = Duration::from_micros(health.config.response_threshold_ms);
+            let response_threshold = Duration::from_micros(health.config.healthy_response_time_ms);
 
             let client = match client_rx_.borrow().clone() {
                 Some(client) => client,
@@ -116,12 +117,13 @@ impl Health {
             };
 
             loop {
-                tokio::time::sleep(interval).await;
+                // Check if the client is unhealthy
+                if health.score() < 50 {
+                    on_client_unhealthy.notify_waiters();
+                }
 
-                let client = match client_rx_.borrow().clone() {
-                    Some(client) => client,
-                    None => continue,
-                };
+                // Wait for the next interval
+                tokio::time::sleep(interval).await;
 
                 let request_start = std::time::Instant::now();
                 match client

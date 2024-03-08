@@ -5,7 +5,7 @@ extensions:
       - wss://acala-rpc-0.aca-api.network
     health_check:
       interval_sec: 10 # check interval, default is 10s
-      response_threshold_ms: 250 # max response time to be considered healthy, default is 250ms
+      healthy_response_time_ms: 500 # max response time to be considered healthy, default is 500ms
   event_bus:
   substrate_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes

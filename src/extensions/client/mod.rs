@@ -58,8 +58,8 @@ pub fn bool_true() -> bool {
 pub struct HealthCheckConfig {
     #[serde(default = "interval_sec")]
     pub interval_sec: u64,
-    #[serde(default = "response_threshold_ms")]
-    pub response_threshold_ms: u64,
+    #[serde(default = "healthy_response_time_ms")]
+    pub healthy_response_time_ms: u64,
     #[serde(default = "system_health")]
     pub health_method: String,
 }
@@ -68,8 +68,8 @@ pub fn interval_sec() -> u64 {
     10
 }
 
-pub fn response_threshold_ms() -> u64 {
-    250
+pub fn healthy_response_time_ms() -> u64 {
+    500
 }
 
 pub fn system_health() -> String {
@@ -350,12 +350,17 @@ impl Client {
 
             loop {
                 tokio::select! {
+                    _ = selected_endpoint.on_client_unhealthy.notified() => {
+                        tracing::info!("Endpoint {url} is unhealthy. Rotating endpoint ...", url = selected_endpoint.url);
+                        rotation_notify_bg.notify_waiters();
+                        selected_endpoint = rotate_endpoint(Some(selected_endpoint.clone())).await;
+                    }
                     message = message_rx.recv() => {
                         tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
+                                tracing::info!("Rotating endpoint ...");
                                 rotation_notify_bg.notify_waiters();
-                                tracing::info!("Rotate endpoint");
                                 selected_endpoint = rotate_endpoint(Some(selected_endpoint.clone())).await;
                             }
                             Some(message) => handle_message(message, selected_endpoint.clone()),

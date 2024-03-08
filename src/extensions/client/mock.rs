@@ -153,6 +153,16 @@ pub async fn dummy_server() -> (
     (addr, handle, rx, sub_rx)
 }
 
+pub async fn dummy_server_extend(extend: Box<dyn FnOnce(&mut TestServerBuilder)>) -> (SocketAddr, ServerHandle) {
+    let mut builder = TestServerBuilder::new();
+
+    extend(&mut builder);
+
+    let (addr, handle) = builder.build().await;
+
+    (addr, handle)
+}
+
 pub enum SinkTask {
     Sleep(u64),
     Send(JsonValue),
