@@ -153,28 +153,30 @@ impl Client {
         let background_task = tokio::spawn(async move {
             let request_backoff_counter = Arc::new(AtomicU32::new(0));
 
-            // select next endpoint with the highest health score, excluding the current one if provided
-            let rotate_endpoint = |current_endpoint: Option<Arc<Endpoint>>| async {
+            // Select next endpoint with the highest health score, excluding the current one if provided
+            let healthiest_endpoint = |exclude: Option<Arc<Endpoint>>| async {
                 if endpoints.len() == 1 {
                     let selected_endpoint = endpoints[0].clone();
+                    // Ensure it's connected
                     selected_endpoint.connected().await;
                     return selected_endpoint;
                 }
 
                 let mut endpoints = endpoints.clone();
-                // sort by health score
-                endpoints.sort_by(|a, b| b.health.score().cmp(&a.health.score()));
-                // remove the current endpoint from the list
-                if let Some(current_endpoint) = current_endpoint {
-                    endpoints.retain(|e| e.url != current_endpoint.url);
+                // Remove the current endpoint from the list
+                if let Some(exclude) = exclude {
+                    endpoints.retain(|e| e.url != exclude.url);
                 }
-                // pick the first one
+                // Sort by health score
+                endpoints.sort_by(|a, b| b.health.score().cmp(&a.health.score()));
+                // Pick the first one
                 let selected_endpoint = endpoints[0].clone();
+                // Ensure it's connected
                 selected_endpoint.connected().await;
                 selected_endpoint
             };
 
-            let mut selected_endpoint = rotate_endpoint(None).await;
+            let mut selected_endpoint = healthiest_endpoint(None).await;
 
             let handle_message = |message: Message, endpoint: Arc<Endpoint>| {
                 let tx = message_tx_bg.clone();
@@ -351,17 +353,22 @@ impl Client {
             loop {
                 tokio::select! {
                     _ = selected_endpoint.on_client_unhealthy.notified() => {
-                        tracing::info!("Endpoint {url} is unhealthy. Rotating endpoint ...", url = selected_endpoint.url);
-                        rotation_notify_bg.notify_waiters();
-                        selected_endpoint = rotate_endpoint(Some(selected_endpoint.clone())).await;
+                        // Current selected endpoint is unhealthy, try to rotate to another one.
+                        // In case of all endpoints are unhealthy, we don't want to keep rotating but stick with the healthiest one.
+                        let new_selected_endpoint = healthiest_endpoint(None).await;
+                        if new_selected_endpoint.url != selected_endpoint.url {
+                            tracing::info!("Endpoint {current_url} is unhealthy, switch to endpoint: {new_url}", current_url = selected_endpoint.url, new_url=new_selected_endpoint.url);
+                            selected_endpoint = new_selected_endpoint;
+                            rotation_notify_bg.notify_waiters();
+                        }
                     }
                     message = message_rx.recv() => {
                         tracing::trace!("Received message {message:?}");
                         match message {
                             Some(Message::RotateEndpoint) => {
                                 tracing::info!("Rotating endpoint ...");
+                                selected_endpoint = healthiest_endpoint(Some(selected_endpoint.clone())).await;
                                 rotation_notify_bg.notify_waiters();
-                                selected_endpoint = rotate_endpoint(Some(selected_endpoint.clone())).await;
                             }
                             Some(message) => handle_message(message, selected_endpoint.clone()),
                             None => {
