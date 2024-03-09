@@ -43,7 +43,7 @@ impl Health {
         let current_score = self.score.load(Ordering::Relaxed);
         let new_score = u32::min(
             match event {
-                Event::ResponseOk => current_score.saturating_add(1),
+                Event::ResponseOk => current_score.saturating_add(5),
                 Event::SlowResponse => current_score.saturating_sub(5),
                 Event::RequestTimeout => current_score.saturating_sub(10),
                 Event::ConnectionFailed | Event::StaleChain => 0,
@@ -86,7 +86,7 @@ impl Health {
 
             let method_name = health.config.health_method.as_str();
             let interval = Duration::from_secs(health.config.interval_sec);
-            let response_threshold = Duration::from_micros(health.config.healthy_response_time_ms);
+            let healthy_response_time = Duration::from_millis(health.config.healthy_response_time_ms);
 
             let client = match client_rx_.borrow().clone() {
                 Some(client) => client,
@@ -145,7 +145,7 @@ impl Health {
                         }
 
                         // Check response time
-                        if duration > response_threshold {
+                        if duration > healthy_response_time {
                             health.update(Event::SlowResponse);
                             continue;
                         }

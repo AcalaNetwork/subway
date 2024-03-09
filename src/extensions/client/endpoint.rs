@@ -122,10 +122,7 @@ impl Endpoint {
             .ok_or(errors::failed("client not connected"))?;
 
         match client.request(method, params.clone()).await {
-            Ok(response) => {
-                self.health.update(Event::ResponseOk);
-                Ok(response)
-            }
+            Ok(response) => Ok(response),
             Err(err) => {
                 self.health.on_error(&err);
                 Err(err)
@@ -149,10 +146,7 @@ impl Endpoint {
             .subscribe(subscribe_method, params.clone(), unsubscribe_method)
             .await
         {
-            Ok(response) => {
-                self.health.update(Event::ResponseOk);
-                Ok(response)
-            }
+            Ok(response) => Ok(response),
             Err(err) => {
                 self.health.on_error(&err);
                 Err(err)
