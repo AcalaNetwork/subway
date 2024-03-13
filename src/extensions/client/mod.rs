@@ -54,7 +54,7 @@ pub fn bool_true() -> bool {
     true
 }
 
-#[derive(Deserialize, Debug, Default, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct HealthCheckConfig {
     #[serde(default = "interval_sec")]
     pub interval_sec: u64,
@@ -62,6 +62,16 @@ pub struct HealthCheckConfig {
     pub healthy_response_time_ms: u64,
     #[serde(default = "system_health")]
     pub health_method: String,
+}
+
+impl Default for HealthCheckConfig {
+    fn default() -> Self {
+        Self {
+            interval_sec: interval_sec(),
+            healthy_response_time_ms: healthy_response_time_ms(),
+            health_method: system_health(),
+        }
+    }
 }
 
 pub fn interval_sec() -> u64 {
@@ -129,7 +139,7 @@ impl Client {
             return Err(anyhow!("Retries need to be at least 1"));
         }
 
-        tracing::debug!("New client with endpoints: {:?}", endpoints);
+        tracing::debug!("New client with endpoints: {endpoints:?}");
 
         let endpoints = endpoints
             .into_iter()
@@ -178,7 +188,7 @@ impl Client {
 
             let mut selected_endpoint = healthiest_endpoint(None).await;
 
-            let handle_message = |message: Message, endpoint: Arc<Endpoint>| {
+            let handle_message = |message: Message, endpoint: Arc<Endpoint>, rotation_notify: Arc<Notify>| {
                 let tx = message_tx_bg.clone();
                 let request_backoff_counter = request_backoff_counter.clone();
 
@@ -200,69 +210,57 @@ impl Client {
                                 return;
                             }
 
-                            if let Ok(result) =
-                                tokio::time::timeout(task_timeout, endpoint.request(&method, params.clone())).await
-                            {
-                                match result {
-                                    result @ Ok(_) => {
-                                        request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
-                                        // make sure it's still connected
-                                        if response.is_closed() {
-                                            return;
-                                        }
-                                        let _ = response.send(result);
+                            match endpoint.request(&method, params.clone(), task_timeout).await {
+                                result @ Ok(_) => {
+                                    request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
+                                    // make sure it's still connected
+                                    if response.is_closed() {
+                                        return;
                                     }
-                                    Err(err) => {
-                                        tracing::debug!("Request failed: {:?}", err);
-                                        match err {
-                                            Error::RequestTimeout
-                                            | Error::Transport(_)
-                                            | Error::RestartNeeded(_)
-                                            | Error::MaxSlotsExceeded => {
-                                                tx.send(Message::RotateEndpoint)
-                                                    .await
-                                                    .expect("Failed to send rotate message");
+                                    let _ = response.send(result);
+                                }
+                                Err(err) => {
+                                    tracing::debug!("Request failed: {err:?}");
+                                    match err {
+                                        Error::RequestTimeout
+                                        | Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::MaxSlotsExceeded => {
+                                            // Make sure endpoint is rotated
+                                            rotation_notify.notified().await;
 
-                                                tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
+                                            tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
-                                                // make sure it's still connected
-                                                if response.is_closed() {
-                                                    return;
-                                                }
-
-                                                // make sure we still have retries left
-                                                if retries == 0 {
-                                                    let _ = response.send(Err(Error::RequestTimeout));
-                                                    return;
-                                                }
-
-                                                tx.send(Message::Request {
-                                                    method,
-                                                    params,
-                                                    response,
-                                                    retries,
-                                                })
-                                                .await
-                                                .expect("Failed to send request message");
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
                                             }
-                                            err => {
-                                                // make sure it's still connected
-                                                if response.is_closed() {
-                                                    return;
-                                                }
-                                                // not something we can handle, send it back to the caller
-                                                let _ = response.send(Err(err));
+
+                                            // make sure we still have retries left
+                                            if retries == 0 {
+                                                let _ = response.send(Err(Error::RequestTimeout));
+                                                return;
                                             }
+
+                                            tx.send(Message::Request {
+                                                method,
+                                                params,
+                                                response,
+                                                retries,
+                                            })
+                                            .await
+                                            .expect("Failed to send request message");
+                                        }
+                                        err => {
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
+                                            }
+                                            // not something we can handle, send it back to the caller
+                                            let _ = response.send(Err(err));
                                         }
                                     }
                                 }
-                            } else {
-                                tracing::error!("request timed out method: {} params: {:?}", method, params);
-                                // make sure it's still connected
-                                if response.is_closed() {
-                                    return;
-                                }
-                                let _ = response.send(Err(Error::RequestTimeout));
                             }
                         }
                         Message::Subscribe {
@@ -274,73 +272,61 @@ impl Client {
                         } => {
                             retries = retries.saturating_sub(1);
 
-                            if let Ok(result) = tokio::time::timeout(
-                                task_timeout,
-                                endpoint.subscribe(&subscribe, params.clone(), &unsubscribe),
-                            )
-                            .await
+                            match endpoint
+                                .subscribe(&subscribe, params.clone(), &unsubscribe, task_timeout)
+                                .await
                             {
-                                match result {
-                                    result @ Ok(_) => {
-                                        request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
-                                        // make sure it's still connected
-                                        if response.is_closed() {
-                                            return;
-                                        }
-                                        let _ = response.send(result);
+                                result @ Ok(_) => {
+                                    request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
+                                    // make sure it's still connected
+                                    if response.is_closed() {
+                                        return;
                                     }
-                                    Err(err) => {
-                                        tracing::debug!("Subscribe failed: {:?}", err);
-                                        match err {
-                                            Error::RequestTimeout
-                                            | Error::Transport(_)
-                                            | Error::RestartNeeded(_)
-                                            | Error::MaxSlotsExceeded => {
-                                                tx.send(Message::RotateEndpoint)
-                                                    .await
-                                                    .expect("Failed to send rotate message");
+                                    let _ = response.send(result);
+                                }
+                                Err(err) => {
+                                    tracing::debug!("Subscribe failed: {err:?}");
+                                    match err {
+                                        Error::RequestTimeout
+                                        | Error::Transport(_)
+                                        | Error::RestartNeeded(_)
+                                        | Error::MaxSlotsExceeded => {
+                                            // Make sure endpoint is rotated
+                                            rotation_notify.notified().await;
 
-                                                tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
+                                            tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
-                                                // make sure it's still connected
-                                                if response.is_closed() {
-                                                    return;
-                                                }
-
-                                                // make sure we still have retries left
-                                                if retries == 0 {
-                                                    let _ = response.send(Err(Error::RequestTimeout));
-                                                    return;
-                                                }
-
-                                                tx.send(Message::Subscribe {
-                                                    subscribe,
-                                                    params,
-                                                    unsubscribe,
-                                                    response,
-                                                    retries,
-                                                })
-                                                .await
-                                                .expect("Failed to send subscribe message")
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
                                             }
-                                            err => {
-                                                // make sure it's still connected
-                                                if response.is_closed() {
-                                                    return;
-                                                }
-                                                // not something we can handle, send it back to the caller
-                                                let _ = response.send(Err(err));
+
+                                            // make sure we still have retries left
+                                            if retries == 0 {
+                                                let _ = response.send(Err(Error::RequestTimeout));
+                                                return;
                                             }
+
+                                            tx.send(Message::Subscribe {
+                                                subscribe,
+                                                params,
+                                                unsubscribe,
+                                                response,
+                                                retries,
+                                            })
+                                            .await
+                                            .expect("Failed to send subscribe message")
+                                        }
+                                        err => {
+                                            // make sure it's still connected
+                                            if response.is_closed() {
+                                                return;
+                                            }
+                                            // not something we can handle, send it back to the caller
+                                            let _ = response.send(Err(err));
                                         }
                                     }
                                 }
-                            } else {
-                                tracing::error!("subscribe timed out subscribe: {} params: {:?}", subscribe, params);
-                                // make sure it's still connected
-                                if response.is_closed() {
-                                    return;
-                                }
-                                let _ = response.send(Err(Error::RequestTimeout));
                             }
                         }
                         Message::RotateEndpoint => {
@@ -352,7 +338,7 @@ impl Client {
 
             loop {
                 tokio::select! {
-                    _ = selected_endpoint.on_client_unhealthy.notified() => {
+                    _ = selected_endpoint.health.unhealthy.notified() => {
                         // Current selected endpoint is unhealthy, try to rotate to another one.
                         // In case of all endpoints are unhealthy, we don't want to keep rotating but stick with the healthiest one.
                         let new_selected_endpoint = healthiest_endpoint(None).await;
@@ -370,7 +356,7 @@ impl Client {
                                 selected_endpoint = healthiest_endpoint(Some(selected_endpoint.clone())).await;
                                 rotation_notify_bg.notify_waiters();
                             }
-                            Some(message) => handle_message(message, selected_endpoint.clone()),
+                            Some(message) => handle_message(message, selected_endpoint.clone(), rotation_notify_bg.clone()),
                             None => {
                                 tracing::debug!("Client dropped");
                                 break;

@@ -23,6 +23,7 @@ pub struct Health {
     pub url: String,
     pub config: HealthCheckConfig,
     pub score: AtomicU32,
+    pub unhealthy: tokio::sync::Notify,
 }
 
 impl Health {
@@ -31,6 +32,7 @@ impl Health {
             url,
             config,
             score: AtomicU32::new(100),
+            unhealthy: tokio::sync::Notify::new(),
         }
     }
 
@@ -45,13 +47,15 @@ impl Health {
             match event {
                 Event::ResponseOk => current_score.saturating_add(5),
                 Event::SlowResponse => current_score.saturating_sub(5),
-                Event::RequestTimeout => current_score.saturating_sub(10),
-                Event::ConnectionFailed | Event::StaleChain => 0,
+                Event::RequestTimeout | Event::ConnectionFailed | Event::StaleChain => 0,
                 Event::ConnectionSuccessful => 100,
             },
             MAX_SCORE,
         );
         self.score.store(new_score, Ordering::Relaxed);
+        if new_score < 50 {
+            self.unhealthy.notify_waiters();
+        }
     }
 
     pub fn on_error(&self, err: &jsonrpsee::core::Error) {
@@ -74,13 +78,8 @@ impl Health {
         health: Arc<Health>,
         client_rx_: tokio::sync::watch::Receiver<Option<Arc<Client>>>,
         on_client_ready: Arc<tokio::sync::Notify>,
-        on_client_unhealthy: Arc<tokio::sync::Notify>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
-            if health.config.health_method.is_empty() {
-                return;
-            }
-
             // Wait for the client to be ready before starting the health check
             on_client_ready.notified().await;
 
@@ -117,11 +116,6 @@ impl Health {
             };
 
             loop {
-                // Check if the client is unhealthy
-                if health.score() < 50 {
-                    on_client_unhealthy.notify_waiters();
-                }
-
                 // Wait for the next interval
                 tokio::time::sleep(interval).await;
 

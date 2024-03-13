@@ -21,7 +21,6 @@ pub struct Endpoint {
     pub health: Arc<Health>,
     client_rx: tokio::sync::watch::Receiver<Option<Arc<Client>>>,
     on_client_ready: Arc<tokio::sync::Notify>,
-    pub on_client_unhealthy: Arc<tokio::sync::Notify>,
     background_tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -40,7 +39,6 @@ impl Endpoint {
     ) -> Self {
         let (client_tx, client_rx) = tokio::sync::watch::channel(None);
         let on_client_ready = Arc::new(tokio::sync::Notify::new());
-        let on_client_unhealthy = Arc::new(tokio::sync::Notify::new());
         let url_ = url.clone();
         let health = Arc::new(Health::new(url_, health_config));
 
@@ -86,19 +84,13 @@ impl Endpoint {
         });
 
         // This task will check the health of the endpoint and update the health score
-        let health_checker = Health::monitor(
-            health.clone(),
-            client_rx.clone(),
-            on_client_ready.clone(),
-            on_client_unhealthy.clone(),
-        );
+        let health_checker = Health::monitor(health.clone(), client_rx.clone(), on_client_ready.clone());
 
         Self {
             url,
             health,
             client_rx,
             on_client_ready,
-            on_client_unhealthy,
             background_tasks: vec![connection_task, health_checker],
         }
     }
@@ -114,6 +106,7 @@ impl Endpoint {
         &self,
         method: &str,
         params: Vec<serde_json::Value>,
+        timeout: Duration,
     ) -> Result<serde_json::Value, jsonrpsee::core::Error> {
         let client = self
             .client_rx
@@ -121,11 +114,16 @@ impl Endpoint {
             .clone()
             .ok_or(errors::failed("client not connected"))?;
 
-        match client.request(method, params.clone()).await {
-            Ok(response) => Ok(response),
-            Err(err) => {
+        match tokio::time::timeout(timeout, client.request(method, params.clone())).await {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(err)) => {
                 self.health.on_error(&err);
                 Err(err)
+            }
+            Err(_) => {
+                tracing::error!("request timed out method: {method} params: {params:?}");
+                self.health.on_error(&jsonrpsee::core::Error::RequestTimeout);
+                Err(jsonrpsee::core::Error::RequestTimeout)
             }
         }
     }
@@ -135,6 +133,7 @@ impl Endpoint {
         subscribe_method: &str,
         params: Vec<serde_json::Value>,
         unsubscribe_method: &str,
+        timeout: Duration,
     ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::Error> {
         let client = self
             .client_rx
@@ -142,14 +141,21 @@ impl Endpoint {
             .clone()
             .ok_or(errors::failed("client not connected"))?;
 
-        match client
-            .subscribe(subscribe_method, params.clone(), unsubscribe_method)
-            .await
+        match tokio::time::timeout(
+            timeout,
+            client.subscribe(subscribe_method, params.clone(), unsubscribe_method),
+        )
+        .await
         {
-            Ok(response) => Ok(response),
-            Err(err) => {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(err)) => {
                 self.health.on_error(&err);
                 Err(err)
+            }
+            Err(_) => {
+                tracing::error!("subscribe timed out subscribe: {subscribe_method} params: {params:?}");
+                self.health.on_error(&jsonrpsee::core::Error::RequestTimeout);
+                Err(jsonrpsee::core::Error::RequestTimeout)
             }
         }
     }
