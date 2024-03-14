@@ -26,6 +26,9 @@ pub struct Health {
     pub unhealthy: tokio::sync::Notify,
 }
 
+const MAX_SCORE: u32 = 100;
+const THRESHOLD: u32 = MAX_SCORE / 2;
+
 impl Health {
     pub fn new(url: String, config: HealthCheckConfig) -> Self {
         Self {
@@ -41,7 +44,6 @@ impl Health {
     }
 
     pub fn update(&self, event: Event) {
-        const MAX_SCORE: u32 = 100;
         let current_score = self.score.load(Ordering::Relaxed);
         let new_score = u32::min(
             match event {
@@ -53,7 +55,8 @@ impl Health {
             MAX_SCORE,
         );
         self.score.store(new_score, Ordering::Relaxed);
-        if new_score < 50 {
+        // Notify waiters if the score has dropped below the threshold
+        if current_score >= THRESHOLD && new_score < THRESHOLD {
             self.unhealthy.notify_waiters();
         }
     }
