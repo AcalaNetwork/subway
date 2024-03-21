@@ -25,9 +25,9 @@ jobs:
       with:
         submodules: recursive
     - name: Check format
-      run: cargo fmt --all -- --check
+      run: cargo +nightly fmt --all -- --check
     - name: Check clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      run: cargo +nightly clippy --all-targets --all-features -- -D warnings
     - name: Build
       run: cargo build --verbose
     - name: Run tests
