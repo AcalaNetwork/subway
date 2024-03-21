@@ -220,7 +220,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed, cannot determine finalized block
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // no replacement
                             assert_eq!(req.params, params);
                             Ok(json!("0x1111"))
@@ -280,7 +280,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed for latest
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // latest block replaced with block number
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x4321")]);
                             Ok(json!("0x1111"))
@@ -301,7 +301,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed, block tag not replaced
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // block tag not replaced
                             assert_eq!(req.params, vec![json!("0x1234"), json!("finalized")]);
                             Ok(json!("0x1111"))
@@ -325,7 +325,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache not bypassed, finalized replaced with block number
-                            assert_eq!(bypass_cache(&context), false);
+                            assert!(!bypass_cache(&context));
                             // block tag replaced with block number
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x4321")]);
                             Ok(json!("0x1111"))
@@ -346,7 +346,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed for latest
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // latest block replaced with block number
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x5432")]);
                             Ok(json!("0x1111"))

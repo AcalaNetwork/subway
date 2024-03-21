@@ -521,7 +521,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache not bypassed
-                            assert_eq!(bypass_cache(&context), false);
+                            assert!(!bypass_cache(&context));
                             // block number is not finalized
                             assert_eq!(req.params, vec![json!("0x1234"), json!(0x4321)]);
                             Ok(json!("0x1111"))
@@ -556,7 +556,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // block number is injected
                             assert_eq!(req.params, vec![json!("0x1234"), json!(0x5432)]);
                             Ok(json!("0x1111"))
@@ -578,7 +578,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // params not changed
                             assert_eq!(req.params, vec![json!("0x1234"), json!(0x5432)]);
                             Ok(json!("0x1111"))
@@ -600,7 +600,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache not bypassed
-                            assert_eq!(bypass_cache(&context), false);
+                            assert!(!bypass_cache(&context));
                             // params not changed
                             assert_eq!(req.params, vec![json!("0x1234"), json!(0x4321)]);
                             Ok(json!("0x1111"))
@@ -626,7 +626,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache not bypassed
-                            assert_eq!(bypass_cache(&context), false);
+                            assert!(!bypass_cache(&context));
                             // params not changed
                             assert_eq!(req.params, vec![json!("0x1234"), json!(0x4321), json!("0xabcd")]);
                             Ok(json!("0x1111"))
@@ -649,7 +649,7 @@ mod tests {
                     Box::new(move |req: CallRequest, context| {
                         async move {
                             // cache bypassed
-                            assert_eq!(bypass_cache(&context), true);
+                            assert!(bypass_cache(&context));
                             // params not changed
                             assert_eq!(req.params, vec![json!("0x1234"), json!(0x5432), json!("0xabcd")]);
                             Ok(json!("0x1111"))
