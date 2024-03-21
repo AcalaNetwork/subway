@@ -21,6 +21,8 @@ jobs:
     steps:
     - name: Install toolchain
       uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rustfmt, clippy
     - uses: actions/checkout@v3
       with:
         submodules: recursive
