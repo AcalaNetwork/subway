@@ -7,10 +7,12 @@ use super::{Extension, ExtensionRegistry};
 
 mod connection;
 mod ip;
+mod weight;
 mod xff;
 
 pub use connection::{ConnectionRateLimit, ConnectionRateLimitLayer};
 pub use ip::{IpRateLimit, IpRateLimitLayer};
+pub use weight::MethodWeights;
 pub use xff::XFF;
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -88,20 +90,25 @@ impl RateLimitBuilder {
             }
         }
     }
-    pub fn connection_limit(&self) -> Option<ConnectionRateLimitLayer> {
+    pub fn connection_limit(&self, method_weights: MethodWeights) -> Option<ConnectionRateLimitLayer> {
         if let Some(ref rule) = self.config.connection {
             let burst = NonZeroU32::new(rule.burst).unwrap();
             let period = Duration::from_secs(rule.period_secs);
             let jitter = Jitter::up_to(Duration::from_millis(rule.jitter_up_to_millis));
-            Some(ConnectionRateLimitLayer::new(burst, period, jitter))
+            Some(ConnectionRateLimitLayer::new(burst, period, jitter, method_weights))
         } else {
             None
         }
     }
-    pub fn ip_limit(&self, remote_ip: String) -> Option<IpRateLimitLayer> {
-        self.ip_limiter
-            .as_ref()
-            .map(|ip_limiter| IpRateLimitLayer::new(remote_ip, ip_limiter.clone(), self.ip_jitter.unwrap_or_default()))
+    pub fn ip_limit(&self, remote_ip: String, method_weights: MethodWeights) -> Option<IpRateLimitLayer> {
+        self.ip_limiter.as_ref().map(|ip_limiter| {
+            IpRateLimitLayer::new(
+                remote_ip,
+                ip_limiter.clone(),
+                self.ip_jitter.unwrap_or_default(),
+                method_weights,
+            )
+        })
     }
 
     // whether to use the X-Forwarded-For header to get the remote ip

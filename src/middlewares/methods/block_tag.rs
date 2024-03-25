@@ -60,6 +60,8 @@ impl BlockTagMiddleware {
                         }
                     }
                     "latest" => {
+                        // bypass cache for latest block to avoid caching forks
+                        context.insert(BypassCache(true));
                         let (_, number) = self.api.get_head().read().await;
                         Some(format!("0x{:x}", number).into())
                     }
@@ -68,7 +70,23 @@ impl BlockTagMiddleware {
                         context.insert(BypassCache(true));
                         None
                     }
-                    _ => None,
+                    number => {
+                        // bypass cache for block number to avoid caching forks unless it's a finalized block
+                        let mut bypass_cache = true;
+                        if let Some((_, finalized_number)) = self.api.current_finalized_head() {
+                            if let Some(hex_number) = number.strip_prefix("0x") {
+                                if let Ok(number) = u64::from_str_radix(hex_number, 16) {
+                                    if number <= finalized_number {
+                                        bypass_cache = false;
+                                    }
+                                }
+                            }
+                        }
+                        if bypass_cache {
+                            context.insert(BypassCache(true));
+                        }
+                        None
+                    }
                 }
             } else {
                 None
@@ -136,6 +154,10 @@ mod tests {
         }
     }
 
+    fn bypass_cache(context: &TypeRegistry) -> bool {
+        context.get::<BypassCache>().map_or(false, |x| x.0)
+    }
+
     async fn create_client() -> (ExecutionContext, EthApi) {
         let mut builder = TestServerBuilder::new();
 
@@ -169,7 +191,7 @@ mod tests {
 
     #[tokio::test]
     async fn skip_replacement_if_no_tag() {
-        let params = vec![json!("0x1234"), json!("0x5678")];
+        let params = vec![json!("0x1234"), json!("0x4321")];
         let (middleware, mut context) = create_block_tag_middleware(vec![
             MethodParam {
                 name: "key".to_string(),
@@ -195,8 +217,11 @@ mod tests {
                 .call(
                     CallRequest::new("state_getStorage", params.clone()),
                     Default::default(),
-                    Box::new(move |req: CallRequest, _| {
+                    Box::new(move |req: CallRequest, context| {
                         async move {
+                            // cache bypassed, cannot determine finalized block
+                            assert!(bypass_cache(&context));
+                            // no replacement
                             assert_eq!(req.params, params);
                             Ok(json!("0x1111"))
                         }
@@ -236,7 +261,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
             let sub = context.subscribe_rx.recv().await.unwrap();
             if sub.params.as_array().unwrap().contains(&json!("newFinalizedHeads")) {
-                sub.run_sink_tasks(vec![SinkTask::Send(json!({ "number": "0x5430", "hash": "0x00" }))])
+                sub.run_sink_tasks(vec![SinkTask::Send(json!({ "number": "0x4321", "hash": "0x01" }))])
                     .await
             }
 
@@ -252,8 +277,11 @@ mod tests {
                 .call(
                     CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("latest")]),
                     Default::default(),
-                    Box::new(move |req: CallRequest, _| {
+                    Box::new(move |req: CallRequest, context| {
                         async move {
+                            // cache bypassed for latest
+                            assert!(bypass_cache(&context));
+                            // latest block replaced with block number
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x4321")]);
                             Ok(json!("0x1111"))
                         }
@@ -270,8 +298,11 @@ mod tests {
                 .call(
                     CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("finalized")],),
                     Default::default(),
-                    Box::new(move |req: CallRequest, _| {
+                    Box::new(move |req: CallRequest, context| {
                         async move {
+                            // cache bypassed, block tag not replaced
+                            assert!(bypass_cache(&context));
+                            // block tag not replaced
                             assert_eq!(req.params, vec![json!("0x1234"), json!("finalized")]);
                             Ok(json!("0x1111"))
                         }
@@ -291,9 +322,12 @@ mod tests {
                 .call(
                     CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("finalized")],),
                     Default::default(),
-                    Box::new(move |req: CallRequest, _| {
+                    Box::new(move |req: CallRequest, context| {
                         async move {
-                            assert_eq!(req.params, vec![json!("0x1234"), json!("0x5430")]);
+                            // cache not bypassed, finalized replaced with block number
+                            assert!(!bypass_cache(&context));
+                            // block tag replaced with block number
+                            assert_eq!(req.params, vec![json!("0x1234"), json!("0x4321")]);
                             Ok(json!("0x1111"))
                         }
                         .boxed()
@@ -309,8 +343,11 @@ mod tests {
                 .call(
                     CallRequest::new("state_getStorage", vec![json!("0x1234"), json!("latest")]),
                     Default::default(),
-                    Box::new(move |req: CallRequest, _| {
+                    Box::new(move |req: CallRequest, context| {
                         async move {
+                            // cache bypassed for latest
+                            assert!(bypass_cache(&context));
+                            // latest block replaced with block number
                             assert_eq!(req.params, vec![json!("0x1234"), json!("0x5432")]);
                             Ok(json!("0x1111"))
                         }

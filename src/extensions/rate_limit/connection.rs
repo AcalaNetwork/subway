@@ -1,22 +1,28 @@
+use crate::{extensions::rate_limit::MethodWeights, utils::errors};
 use futures::{future::BoxFuture, FutureExt};
 use governor::{DefaultDirectRateLimiter, Jitter, RateLimiter};
 use jsonrpsee::{
     server::{middleware::rpc::RpcServiceT, types::Request},
     MethodResponse,
 };
-use std::num::NonZeroU32;
-use std::{sync::Arc, time::Duration};
+use std::{num::NonZeroU32, sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub struct ConnectionRateLimitLayer {
     burst: NonZeroU32,
     period: Duration,
     jitter: Jitter,
+    method_weights: MethodWeights,
 }
 
 impl ConnectionRateLimitLayer {
-    pub fn new(burst: NonZeroU32, period: Duration, jitter: Jitter) -> Self {
-        Self { burst, period, jitter }
+    pub fn new(burst: NonZeroU32, period: Duration, jitter: Jitter, method_weights: MethodWeights) -> Self {
+        Self {
+            burst,
+            period,
+            jitter,
+            method_weights,
+        }
     }
 }
 
@@ -24,7 +30,13 @@ impl<S> tower::Layer<S> for ConnectionRateLimitLayer {
     type Service = ConnectionRateLimit<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        ConnectionRateLimit::new(service, self.burst, self.period, self.jitter)
+        ConnectionRateLimit::new(
+            service,
+            self.burst,
+            self.period,
+            self.jitter,
+            self.method_weights.clone(),
+        )
     }
 }
 
@@ -33,16 +45,18 @@ pub struct ConnectionRateLimit<S> {
     service: S,
     limiter: Arc<DefaultDirectRateLimiter>,
     jitter: Jitter,
+    method_weights: MethodWeights,
 }
 
 impl<S> ConnectionRateLimit<S> {
-    pub fn new(service: S, burst: NonZeroU32, period: Duration, jitter: Jitter) -> Self {
+    pub fn new(service: S, burst: NonZeroU32, period: Duration, jitter: Jitter, method_weights: MethodWeights) -> Self {
         let quota = super::build_quota(burst, period);
         let limiter = Arc::new(RateLimiter::direct(quota));
         Self {
             service,
             limiter,
             jitter,
+            method_weights,
         }
     }
 }
@@ -57,9 +71,14 @@ where
         let jitter = self.jitter;
         let service = self.service.clone();
         let limiter = self.limiter.clone();
+        let weight = self.method_weights.get(req.method_name());
 
         async move {
-            limiter.until_ready_with_jitter(jitter).await;
+            if let Some(n) = NonZeroU32::new(weight) {
+                if limiter.until_n_ready_with_jitter(n, jitter).await.is_err() {
+                    return MethodResponse::error(req.id, errors::failed("rate limit exceeded"));
+                }
+            }
             service.call(req).await
         }
         .boxed()
@@ -88,6 +107,7 @@ mod tests {
             NonZeroU32::new(10).unwrap(),
             Duration::from_millis(100),
             Jitter::up_to(Duration::from_millis(10)),
+            Default::default(),
         );
 
         let batch = |service: ConnectionRateLimit<MockService>, count: usize, delay| async move {

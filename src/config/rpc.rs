@@ -35,6 +35,21 @@ pub struct RpcMethod {
 
     #[serde(default)]
     pub delay_ms: Option<u64>,
+
+    /// This should not exceed max cell capacity. If it does,
+    /// method will return error. Burst size is the max cell capacity.
+    /// If rate limit is not configured, this will be ignored.
+    /// e.g. if rate limit is configured as 10r per 2s and rate_limit_weight is 10,
+    /// then only 1 call is allowed per 2s. If rate_limit_weight is 5, then 2 calls
+    /// are allowed per 2s. If rate_limit_weight is greater than 10, then method will
+    /// return error "rate limit exceeded".
+    /// Add this if you want to modify the default value of 1.
+    #[serde(default = "default_rate_limit_weight")]
+    pub rate_limit_weight: u32,
+}
+
+fn default_rate_limit_weight() -> u32 {
+    1
 }
 
 #[derive(Copy, Clone, Deserialize, Debug)]
