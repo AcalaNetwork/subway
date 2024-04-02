@@ -95,29 +95,6 @@ impl Health {
                 None => return,
             };
 
-            // Check if the endpoint has the health method
-            match client
-                .request::<serde_json::Value, Vec<serde_json::Value>>("rpc_methods", vec![])
-                .await
-            {
-                Ok(response) => {
-                    let has_health_method = response
-                        .get("methods")
-                        .unwrap_or(&serde_json::json!([]))
-                        .as_array()
-                        .map(|methods| methods.iter().any(|x| x.as_str() == Some(method_name)))
-                        .unwrap_or_default();
-                    if !has_health_method {
-                        tracing::warn!(
-                            "Endpoint {url} does not have the {method_name:?} method",
-                            url = health.url
-                        );
-                        return;
-                    }
-                }
-                Err(_) => return,
-            };
-
             loop {
                 // Wait for the next interval
                 tokio::time::sleep(interval).await;
@@ -130,16 +107,31 @@ impl Health {
                     Ok(response) => {
                         let duration = request_start.elapsed();
 
-                        // Check if the node is syncing
-                        if response
-                            .get("isSyncing")
-                            .unwrap_or(&serde_json::json!(false))
-                            .as_bool()
-                            .unwrap_or_default()
-                        {
-                            health.update(Event::StaleChain);
-                            continue;
-                        }
+                        // Check known health responses
+                        match method_name {
+                            "system_health" => {
+                                // Substrate node
+                                if let Some(true) = response.get("isSyncing").and_then(|x| x.as_bool()) {
+                                    health.update(Event::StaleChain);
+                                    continue;
+                                }
+                            }
+                            "net_health" => {
+                                // Eth-RPC-Adapter (bodhijs)
+                                if let Some(false) = response.get("isHealthy").and_then(|x| x.as_bool()) {
+                                    health.update(Event::StaleChain);
+                                    continue;
+                                }
+                            }
+                            "eth_syncing" => {
+                                // Ethereum node
+                                if let Some(true) = response.as_bool() {
+                                    health.update(Event::StaleChain);
+                                    continue;
+                                }
+                            }
+                            _ => {}
+                        };
 
                         // Check response time
                         if duration > healthy_response_time {

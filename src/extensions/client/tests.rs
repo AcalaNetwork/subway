@@ -223,13 +223,9 @@ async fn retry_requests_out_of_retries() {
 async fn health_check_works() {
     let (addr1, handle1) = dummy_server_extend(Box::new(|builder| {
         let mut system_health = builder.register_method("system_health");
-        let mut rpc_methods = builder.register_method("rpc_methods");
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(req) = rpc_methods.recv() => {
-                        req.respond(json!({ "methods": ["system_health"] }));
-                    }
                     Some(req) = system_health.recv() => {
                         req.respond(json!({ "isSyncing": true, "peers": 1, "shouldHavePeers": true }));
                     }
@@ -241,13 +237,9 @@ async fn health_check_works() {
 
     let (addr2, handle2) = dummy_server_extend(Box::new(|builder| {
         let mut system_health = builder.register_method("system_health");
-        let mut rpc_methods = builder.register_method("rpc_methods");
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(req) = rpc_methods.recv() => {
-                        req.respond(json!({ "methods": ["system_health"] }));
-                    }
                     Some(req) = system_health.recv() => {
                         req.respond(json!({ "isSyncing": false, "peers": 1, "shouldHavePeers": true }));
                     }
