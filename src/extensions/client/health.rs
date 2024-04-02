@@ -125,7 +125,7 @@ impl Health {
                             }
                             "eth_syncing" => {
                                 // Ethereum node
-                                if let Some(true) = response.as_bool() {
+                                if response.as_bool().unwrap_or(true) {
                                     health.update(Event::StaleChain);
                                     continue;
                                 }
