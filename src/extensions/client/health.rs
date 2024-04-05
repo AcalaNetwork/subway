@@ -103,10 +103,16 @@ impl Health {
         on_client_ready: Arc<tokio::sync::Notify>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
+            // no health method
+            if health.config.health_method.is_none() {
+                return;
+            }
+
             // Wait for the client to be ready before starting the health check
             on_client_ready.notified().await;
 
-            let method_name = health.config.health_method.as_str();
+            let method_name = health.config.health_method.as_ref().expect("checked above");
+            let expected_response = health.config.expected_response.clone();
             let interval = Duration::from_secs(health.config.interval_sec);
             let healthy_response_time = Duration::from_millis(health.config.healthy_response_time_ms);
 
@@ -127,31 +133,13 @@ impl Health {
                     Ok(response) => {
                         let duration = request_start.elapsed();
 
-                        // Check known health responses
-                        match method_name {
-                            "system_health" => {
-                                // Substrate node
-                                if let Some(true) = response.get("isSyncing").and_then(|x| x.as_bool()) {
-                                    health.update(Event::StaleChain);
-                                    continue;
-                                }
+                        // Check response
+                        if let Some(ref expected) = expected_response {
+                            if !expected.validate(&response) {
+                                health.update(Event::StaleChain);
+                                continue;
                             }
-                            "net_health" => {
-                                // Eth-RPC-Adapter (bodhijs)
-                                if let Some(false) = response.get("isHealthy").and_then(|x| x.as_bool()) {
-                                    health.update(Event::StaleChain);
-                                    continue;
-                                }
-                            }
-                            "eth_syncing" => {
-                                // Ethereum node
-                                if response.as_bool().unwrap_or(true) {
-                                    health.update(Event::StaleChain);
-                                    continue;
-                                }
-                            }
-                            _ => {}
-                        };
+                        }
 
                         // Check response time
                         if duration > healthy_response_time {

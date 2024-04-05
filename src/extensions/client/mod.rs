@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::{client::Subscription, Error, JsonValue};
 use opentelemetry::trace::FutureExt;
 use rand::{seq::SliceRandom, thread_rng};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 
 use super::ExtensionRegistry;
@@ -60,8 +60,8 @@ pub struct HealthCheckConfig {
     pub interval_sec: u64,
     #[serde(default = "healthy_response_time_ms")]
     pub healthy_response_time_ms: u64,
-    #[serde(default = "system_health")]
-    pub health_method: String,
+    pub health_method: Option<String>,
+    pub expected_response: Option<HealthResponse>,
 }
 
 impl Default for HealthCheckConfig {
@@ -69,7 +69,8 @@ impl Default for HealthCheckConfig {
         Self {
             interval_sec: interval_sec(),
             healthy_response_time_ms: healthy_response_time_ms(),
-            health_method: system_health(),
+            health_method: None,
+            expected_response: None,
         }
     }
 }
@@ -82,8 +83,32 @@ pub fn healthy_response_time_ms() -> u64 {
     500
 }
 
-pub fn system_health() -> String {
-    "system_health".to_string()
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HealthResponse {
+    Value(JsonValue),
+    Object(Vec<(String, Box<HealthResponse>)>),
+}
+
+impl HealthResponse {
+    pub fn validate(&self, response: &JsonValue) -> bool {
+        match (self, response) {
+            (HealthResponse::Value(value), response) => value.eq(response),
+            (HealthResponse::Object(items), response) => {
+                for (key, expected) in items {
+                    if let Some(response) = response.get(key) {
+                        if !expected.validate(response) {
+                            return false;
+                        }
+                    } else {
+                        // key missing
+                        return false;
+                    }
+                }
+                true
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -465,4 +490,112 @@ fn test_get_backoff_time() {
         times,
         vec![100, 200, 500, 1000, 1700, 2600, 3700, 5000, 6500, 8200, 10100, 10100]
     );
+}
+
+#[test]
+fn health_response_serialize_deserialize_works() {
+    let response = HealthResponse::Object(vec![(
+        "isSyncing".to_string(),
+        Box::new(HealthResponse::Value(false.into())),
+    )]);
+
+    let expected = serde_yaml::from_str::<HealthResponse>(
+        &r#"
+        !object
+            - - isSyncing
+              - !value false
+    "#,
+    )
+    .unwrap();
+
+    assert_eq!(response, expected);
+}
+
+#[test]
+fn health_response_validation_works() {
+    use serde_json::json;
+
+    let expected = serde_yaml::from_str::<HealthResponse>(
+        &r#"
+            !value true
+        "#,
+    )
+    .unwrap();
+    assert!(expected.validate(&json!(true)));
+    assert!(!expected.validate(&json!(false)));
+
+    let expected = serde_yaml::from_str::<HealthResponse>(
+        &r#"
+        !object
+            - - isSyncing
+              - !value false
+    "#,
+    )
+    .unwrap();
+    let cases = [
+        (json!({ "isSyncing": false }), true),
+        (json!({ "isSyncing": true }), false),
+        (json!({ "isSyncing": false, "peers": 2 }), true),
+        (json!({ "isSyncing": true, "peers": 2 }), false),
+        (json!({}), false),
+        (json!(true), false),
+    ];
+    for (input, output) in cases {
+        assert_eq!(expected.validate(&input), output);
+    }
+
+    // multiple items
+    let expected = serde_yaml::from_str::<HealthResponse>(
+        &r#"
+        !object
+            - - isSyncing
+              - !value false
+            - - peers
+              - !value 3
+    "#,
+    )
+    .unwrap();
+    let cases = [
+        (json!({ "isSyncing": false, "peers": 3 }), true),
+        (json!({ "isSyncing": false, "peers": 2 }), false),
+        (json!({ "isSyncing": true, "peers": 3 }), false),
+    ];
+    for (input, output) in cases {
+        assert_eq!(expected.validate(&input), output);
+    }
+
+    // works with strings
+    let expected = serde_yaml::from_str::<HealthResponse>(
+        &r#"
+        !object
+            - - foo
+              - !value bar
+        "#,
+    )
+    .unwrap();
+    assert!(expected.validate(&json!({ "foo": "bar"  })));
+    assert!(!expected.validate(&json!({ "foo": "bar bar" })));
+
+    // multiple nested items
+    let expected = serde_yaml::from_str::<HealthResponse>(
+        &r#"
+        !object
+            - - foo
+              - !object
+                - - one
+                  - !value subway
+                - - two
+                  - !value subway
+        "#,
+    )
+    .unwrap();
+    let cases = [
+        (json!({ "foo": { "one": "subway", "two": "subway"  } }), true),
+        (json!({ "foo": { "subway": "one" } }), false),
+        (json!({ "bar" : { "foo": { "subway": "one", "two": "subway" } }}), false),
+        (json!({ "foo": "subway" }), false),
+    ];
+    for (input, output) in cases {
+        assert_eq!(expected.validate(&input), output);
+    }
 }
