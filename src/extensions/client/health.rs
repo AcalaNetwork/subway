@@ -18,12 +18,26 @@ pub enum Event {
     StaleChain,
 }
 
+impl Event {
+    pub fn update_score(&self, current: u32) -> u32 {
+        u32::min(
+            match self {
+                Event::ResponseOk => current.saturating_add(2),
+                Event::SlowResponse => current.saturating_sub(5),
+                Event::RequestTimeout | Event::ConnectionFailed | Event::StaleChain => 0,
+                Event::ConnectionSuccessful => MAX_SCORE / 5 * 4, // 80% of max score
+            },
+            MAX_SCORE,
+        )
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Health {
-    pub url: String,
-    pub config: HealthCheckConfig,
-    pub score: AtomicU32,
-    pub unhealthy: tokio::sync::Notify,
+    url: String,
+    config: HealthCheckConfig,
+    score: AtomicU32,
+    unhealthy: tokio::sync::Notify,
 }
 
 const MAX_SCORE: u32 = 100;
@@ -34,7 +48,7 @@ impl Health {
         Self {
             url,
             config,
-            score: AtomicU32::new(100),
+            score: AtomicU32::new(0),
             unhealthy: tokio::sync::Notify::new(),
         }
     }
@@ -45,23 +59,25 @@ impl Health {
 
     pub fn update(&self, event: Event) {
         let current_score = self.score.load(Ordering::Relaxed);
-        let new_score = u32::min(
-            match event {
-                Event::ResponseOk => current_score.saturating_add(5),
-                Event::SlowResponse => current_score.saturating_sub(5),
-                Event::RequestTimeout | Event::ConnectionFailed | Event::StaleChain => 0,
-                Event::ConnectionSuccessful => 100,
-            },
-            MAX_SCORE,
-        );
+        let new_score = event.update_score(current_score);
+        if new_score == current_score {
+            return;
+        }
         self.score.store(new_score, Ordering::Relaxed);
+        log::trace!(
+            "Endpoint {:?} score updated from: {current_score} to: {new_score}",
+            self.url
+        );
+
         // Notify waiters if the score has dropped below the threshold
         if current_score >= THRESHOLD && new_score < THRESHOLD {
+            log::warn!("Endpoint {:?} became unhealthy", self.url);
             self.unhealthy.notify_waiters();
         }
     }
 
     pub fn on_error(&self, err: &jsonrpsee::core::Error) {
+        log::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
         match err {
             jsonrpsee::core::Error::RequestTimeout => {
                 self.update(Event::RequestTimeout);
@@ -73,6 +89,10 @@ impl Health {
             }
             _ => {}
         };
+    }
+
+    pub async fn unhealthy(&self) {
+        self.unhealthy.notified().await;
     }
 }
 

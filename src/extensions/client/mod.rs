@@ -338,12 +338,12 @@ impl Client {
 
             loop {
                 tokio::select! {
-                    _ = selected_endpoint.health.unhealthy.notified() => {
+                    _ = selected_endpoint.health.unhealthy() => {
                         // Current selected endpoint is unhealthy, try to rotate to another one.
                         // In case of all endpoints are unhealthy, we don't want to keep rotating but stick with the healthiest one.
                         let new_selected_endpoint = healthiest_endpoint(None).await;
                         if new_selected_endpoint.url != selected_endpoint.url {
-                            tracing::info!("Endpoint {current_url} is unhealthy, switch to endpoint: {new_url}", current_url = selected_endpoint.url, new_url=new_selected_endpoint.url);
+                            tracing::warn!("Switch to endpoint: {new_url}", new_url=new_selected_endpoint.url);
                             selected_endpoint = new_selected_endpoint;
                             rotation_notify_bg.notify_waiters();
                         }

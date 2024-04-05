@@ -39,8 +39,7 @@ impl Endpoint {
     ) -> Self {
         let (client_tx, client_rx) = tokio::sync::watch::channel(None);
         let on_client_ready = Arc::new(tokio::sync::Notify::new());
-        let url_ = url.clone();
-        let health = Arc::new(Health::new(url_, health_config));
+        let health = Arc::new(Health::new(url.clone(), health_config));
 
         let url_ = url.clone();
         let health_ = health.clone();
@@ -51,7 +50,7 @@ impl Endpoint {
             let connect_backoff_counter = Arc::new(AtomicU32::new(0));
 
             loop {
-                tracing::info!("Connecting to endpoint: {url_}");
+                tracing::info!("Connecting endpoint: {url_}");
 
                 let client = WsClientBuilder::default()
                     .request_timeout(request_timeout.unwrap_or(Duration::from_secs(30)))
