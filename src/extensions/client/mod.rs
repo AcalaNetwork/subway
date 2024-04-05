@@ -200,10 +200,10 @@ impl Client {
                 let mut endpoints = endpoints.clone();
                 // Remove the current endpoint from the list
                 if let Some(exclude) = exclude {
-                    endpoints.retain(|e| e.url != exclude.url);
+                    endpoints.retain(|e| e.url() != exclude.url());
                 }
                 // Sort by health score
-                endpoints.sort_by(|a, b| b.health.score().cmp(&a.health.score()));
+                endpoints.sort_by(|a, b| b.health().score().cmp(&a.health().score()));
                 // Pick the first one
                 let selected_endpoint = endpoints[0].clone();
                 // Ensure it's connected
@@ -363,12 +363,12 @@ impl Client {
 
             loop {
                 tokio::select! {
-                    _ = selected_endpoint.health.unhealthy() => {
+                    _ = selected_endpoint.health().unhealthy() => {
                         // Current selected endpoint is unhealthy, try to rotate to another one.
                         // In case of all endpoints are unhealthy, we don't want to keep rotating but stick with the healthiest one.
                         let new_selected_endpoint = healthiest_endpoint(None).await;
-                        if new_selected_endpoint.url != selected_endpoint.url {
-                            tracing::warn!("Switch to endpoint: {new_url}", new_url=new_selected_endpoint.url);
+                        if new_selected_endpoint.url() != selected_endpoint.url() {
+                            tracing::warn!("Switch to endpoint: {new_url}", new_url=new_selected_endpoint.url());
                             selected_endpoint = new_selected_endpoint;
                             rotation_notify_bg.notify_waiters();
                         }

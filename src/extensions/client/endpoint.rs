@@ -17,8 +17,8 @@ use std::{
 };
 
 pub struct Endpoint {
-    pub url: String,
-    pub health: Arc<Health>,
+    url: String,
+    health: Arc<Health>,
     client_rx: tokio::sync::watch::Receiver<Option<Arc<Client>>>,
     on_client_ready: Arc<tokio::sync::Notify>,
     background_tasks: Vec<tokio::task::JoinHandle<()>>,
@@ -92,6 +92,14 @@ impl Endpoint {
             on_client_ready,
             background_tasks: vec![connection_task, health_checker],
         }
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn health(&self) -> &Health {
+        self.health.as_ref()
     }
 
     pub async fn connected(&self) {
