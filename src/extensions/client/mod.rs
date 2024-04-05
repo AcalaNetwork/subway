@@ -203,7 +203,7 @@ impl Client {
                     endpoints.retain(|e| e.url() != exclude.url());
                 }
                 // Sort by health score
-                endpoints.sort_by(|a, b| b.health().score().cmp(&a.health().score()));
+                endpoints.sort_by_key(|endpoint| std::cmp::Reverse(endpoint.health().score()));
                 // Pick the first one
                 let selected_endpoint = endpoints[0].clone();
                 // Ensure it's connected
