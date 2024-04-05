@@ -500,11 +500,11 @@ fn health_response_serialize_deserialize_works() {
     )]);
 
     let expected = serde_yaml::from_str::<HealthResponse>(
-        &r#"
+        r"
         !object
             - - isSyncing
               - !value false
-    "#,
+        ",
     )
     .unwrap();
 
@@ -516,20 +516,20 @@ fn health_response_validation_works() {
     use serde_json::json;
 
     let expected = serde_yaml::from_str::<HealthResponse>(
-        &r#"
+        r"
             !value true
-        "#,
+        ",
     )
     .unwrap();
     assert!(expected.validate(&json!(true)));
     assert!(!expected.validate(&json!(false)));
 
     let expected = serde_yaml::from_str::<HealthResponse>(
-        &r#"
+        r"
         !object
             - - isSyncing
               - !value false
-    "#,
+        ",
     )
     .unwrap();
     let cases = [
@@ -546,13 +546,13 @@ fn health_response_validation_works() {
 
     // multiple items
     let expected = serde_yaml::from_str::<HealthResponse>(
-        &r#"
+        r"
         !object
             - - isSyncing
               - !value false
             - - peers
               - !value 3
-    "#,
+        ",
     )
     .unwrap();
     let cases = [
@@ -566,11 +566,11 @@ fn health_response_validation_works() {
 
     // works with strings
     let expected = serde_yaml::from_str::<HealthResponse>(
-        &r#"
+        r"
         !object
             - - foo
               - !value bar
-        "#,
+        ",
     )
     .unwrap();
     assert!(expected.validate(&json!({ "foo": "bar"  })));
@@ -578,7 +578,7 @@ fn health_response_validation_works() {
 
     // multiple nested items
     let expected = serde_yaml::from_str::<HealthResponse>(
-        &r#"
+        r"
         !object
             - - foo
               - !object
@@ -586,7 +586,7 @@ fn health_response_validation_works() {
                   - !value subway
                 - - two
                   - !value subway
-        "#,
+        ",
     )
     .unwrap();
     let cases = [
