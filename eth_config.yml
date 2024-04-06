@@ -13,7 +13,7 @@ extensions:
         - - isRPCOK
           - !eq true
 #      health_method: eth_syncing # eth node
-#      expected_response: !value false
+#      expected_response: !eq false
   event_bus:
   eth_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
