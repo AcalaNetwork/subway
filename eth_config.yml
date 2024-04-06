@@ -8,10 +8,10 @@ extensions:
       health_method: net_health # eth-rpc-adapter bodhijs
       response: # response contains { isHealthy: true, isRPCOK: true }
         !contains
-        - - isHealthy
-          - !eq true
-        - - isRPCOK
-          - !eq true
+          - - isHealthy
+            - !eq true
+          - - isRPCOK
+            - !eq true
 #      health_method: eth_syncing # eth node
 #      response: !eq false
   event_bus:
