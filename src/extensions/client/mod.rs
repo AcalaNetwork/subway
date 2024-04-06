@@ -86,15 +86,17 @@ pub fn healthy_response_time_ms() -> u64 {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthResponse {
-    Value(JsonValue),
-    Object(Vec<(String, Box<HealthResponse>)>),
+    Eq(JsonValue),
+    NotEq(JsonValue),
+    Contains(Vec<(String, Box<HealthResponse>)>),
 }
 
 impl HealthResponse {
     pub fn validate(&self, response: &JsonValue) -> bool {
-        match (self, response) {
-            (HealthResponse::Value(value), response) => value.eq(response),
-            (HealthResponse::Object(items), response) => {
+        match self {
+            HealthResponse::Eq(value) => value.eq(response),
+            HealthResponse::NotEq(value) => !value.eq(response),
+            HealthResponse::Contains(items) => {
                 for (key, expected) in items {
                     if let Some(response) = response.get(key) {
                         if !expected.validate(response) {
@@ -494,16 +496,16 @@ fn test_get_backoff_time() {
 
 #[test]
 fn health_response_serialize_deserialize_works() {
-    let response = HealthResponse::Object(vec![(
+    let response = HealthResponse::Contains(vec![(
         "isSyncing".to_string(),
-        Box::new(HealthResponse::Value(false.into())),
+        Box::new(HealthResponse::Eq(false.into())),
     )]);
 
     let expected = serde_yaml::from_str::<HealthResponse>(
         r"
-        !object
+        !contains
             - - isSyncing
-              - !value false
+              - !eq false
         ",
     )
     .unwrap();
@@ -517,7 +519,7 @@ fn health_response_validation_works() {
 
     let expected = serde_yaml::from_str::<HealthResponse>(
         r"
-            !value true
+            !eq true
         ",
     )
     .unwrap();
@@ -526,9 +528,9 @@ fn health_response_validation_works() {
 
     let expected = serde_yaml::from_str::<HealthResponse>(
         r"
-        !object
+        !contains
             - - isSyncing
-              - !value false
+              - !eq false
         ",
     )
     .unwrap();
@@ -547,11 +549,11 @@ fn health_response_validation_works() {
     // multiple items
     let expected = serde_yaml::from_str::<HealthResponse>(
         r"
-        !object
+        !contains
             - - isSyncing
-              - !value false
+              - !eq false
             - - peers
-              - !value 3
+              - !eq 3
         ",
     )
     .unwrap();
@@ -567,9 +569,9 @@ fn health_response_validation_works() {
     // works with strings
     let expected = serde_yaml::from_str::<HealthResponse>(
         r"
-        !object
+        !contains
             - - foo
-              - !value bar
+              - !eq bar
         ",
     )
     .unwrap();
@@ -579,18 +581,19 @@ fn health_response_validation_works() {
     // multiple nested items
     let expected = serde_yaml::from_str::<HealthResponse>(
         r"
-        !object
+        !contains
             - - foo
-              - !object
+              - !contains
                 - - one
-                  - !value subway
+                  - !eq subway
                 - - two
-                  - !value subway
+                  - !not_eq subway
         ",
     )
     .unwrap();
     let cases = [
-        (json!({ "foo": { "one": "subway", "two": "subway"  } }), true),
+        (json!({ "foo": { "one": "subway", "two": "not_subway"  } }), true),
+        (json!({ "foo": { "one": "subway", "two": "subway"  } }), false),
         (json!({ "foo": { "subway": "one" } }), false),
         (json!({ "bar" : { "foo": { "subway": "one", "two": "subway" } }}), false),
         (json!({ "foo": "subway" }), false),

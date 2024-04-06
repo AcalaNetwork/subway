@@ -258,9 +258,9 @@ async fn health_check_works() {
             interval_sec: 1,
             healthy_response_time_ms: 250,
             health_method: Some("system_health".into()),
-            expected_response: Some(HealthResponse::Object(vec![(
+            expected_response: Some(HealthResponse::Contains(vec![(
                 "isSyncing".to_string(),
-                Box::new(HealthResponse::Value(false.into())),
+                Box::new(HealthResponse::Eq(false.into())),
             )])),
         }),
     )

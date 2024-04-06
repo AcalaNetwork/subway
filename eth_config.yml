@@ -7,11 +7,11 @@ extensions:
       healthy_response_time_ms: 500 # max response time to be considered healthy, default is 500ms
       health_method: net_health # eth-rpc-adapter bodhijs
       expected_response: # response contains { isHealthy: true, isRPCOK: true }
-        !object
+        !contains
         - - isHealthy
-          - !value true
+          - !eq true
         - - isRPCOK
-          - !value true
+          - !eq true
 #      health_method: eth_syncing # eth node
 #      expected_response: !value false
   event_bus:
