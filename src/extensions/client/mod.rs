@@ -61,7 +61,7 @@ pub struct HealthCheckConfig {
     #[serde(default = "healthy_response_time_ms")]
     pub healthy_response_time_ms: u64,
     pub health_method: Option<String>,
-    pub expected_response: Option<HealthResponse>,
+    pub response: Option<HealthResponse>,
 }
 
 impl Default for HealthCheckConfig {
@@ -70,7 +70,7 @@ impl Default for HealthCheckConfig {
             interval_sec: interval_sec(),
             healthy_response_time_ms: healthy_response_time_ms(),
             health_method: None,
-            expected_response: None,
+            response: None,
         }
     }
 }

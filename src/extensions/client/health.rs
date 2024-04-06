@@ -112,7 +112,7 @@ impl Health {
             on_client_ready.notified().await;
 
             let method_name = health.config.health_method.as_ref().expect("checked above");
-            let expected_response = health.config.expected_response.clone();
+            let health_response = health.config.response.clone();
             let interval = Duration::from_secs(health.config.interval_sec);
             let healthy_response_time = Duration::from_millis(health.config.healthy_response_time_ms);
 
@@ -134,8 +134,8 @@ impl Health {
                         let duration = request_start.elapsed();
 
                         // Check response
-                        if let Some(ref expected) = expected_response {
-                            if !expected.validate(&response) {
+                        if let Some(ref health_response) = health_response {
+                            if !health_response.validate(&response) {
                                 health.update(Event::StaleChain);
                                 continue;
                             }

@@ -7,7 +7,7 @@ extensions:
       interval_sec: 10 # check interval, default is 10s
       healthy_response_time_ms: 500 # max response time to be considered healthy, default is 500ms
       health_method: system_health
-      expected_response: # response contains { isSyncing: false }
+      response: # response contains { isSyncing: false }
         !contains
           - - isSyncing
             - !eq false

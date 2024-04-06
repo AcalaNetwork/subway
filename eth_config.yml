@@ -6,14 +6,14 @@ extensions:
       interval_sec: 10 # check interval, default is 10s
       healthy_response_time_ms: 500 # max response time to be considered healthy, default is 500ms
       health_method: net_health # eth-rpc-adapter bodhijs
-      expected_response: # response contains { isHealthy: true, isRPCOK: true }
+      response: # response contains { isHealthy: true, isRPCOK: true }
         !contains
         - - isHealthy
           - !eq true
         - - isRPCOK
           - !eq true
 #      health_method: eth_syncing # eth node
-#      expected_response: !eq false
+#      response: !eq false
   event_bus:
   eth_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
