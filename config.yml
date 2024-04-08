@@ -3,6 +3,14 @@ extensions:
     endpoints:
       - wss://acala-rpc.dwellir.com
       - wss://acala-rpc-0.aca-api.network
+    health_check:
+      interval_sec: 10 # check interval, default is 10s
+      healthy_response_time_ms: 500 # max response time to be considered healthy, default is 500ms
+      health_method: system_health
+      response: # response contains { isSyncing: false }
+        !contains
+          - - isSyncing
+            - !eq false
   event_bus:
   substrate_api:
     stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes

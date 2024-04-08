@@ -152,6 +152,7 @@ async fn retry_requests_successful() {
         Some(Duration::from_millis(100)),
         None,
         Some(2),
+        None,
     )
     .unwrap();
 
@@ -189,6 +190,7 @@ async fn retry_requests_out_of_retries() {
         Some(Duration::from_millis(100)),
         None,
         Some(2),
+        None,
     )
     .unwrap();
 
@@ -212,6 +214,78 @@ async fn retry_requests_out_of_retries() {
     h3.await.unwrap();
     h1.await.unwrap();
     h2.await.unwrap();
+
+    handle1.stop().unwrap();
+    handle2.stop().unwrap();
+}
+
+#[tokio::test]
+async fn health_check_works() {
+    let (addr1, handle1) = dummy_server_extend(Box::new(|builder| {
+        let mut system_health = builder.register_method("system_health");
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(req) = system_health.recv() => {
+                        req.respond(json!({ "isSyncing": true, "peers": 1, "shouldHavePeers": true }));
+                    }
+                }
+            }
+        });
+    }))
+    .await;
+
+    let (addr2, handle2) = dummy_server_extend(Box::new(|builder| {
+        let mut system_health = builder.register_method("system_health");
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(req) = system_health.recv() => {
+                        req.respond(json!({ "isSyncing": false, "peers": 1, "shouldHavePeers": true }));
+                    }
+                }
+            }
+        });
+    }))
+    .await;
+
+    let client = Client::new(
+        [format!("ws://{addr1}"), format!("ws://{addr2}")],
+        None,
+        None,
+        None,
+        Some(HealthCheckConfig {
+            interval_sec: 1,
+            healthy_response_time_ms: 250,
+            health_method: Some("system_health".into()),
+            response: Some(HealthResponse::Contains(vec![(
+                "isSyncing".to_string(),
+                Box::new(HealthResponse::Eq(false.into())),
+            )])),
+        }),
+    )
+    .unwrap();
+
+    // first endpoint is stale
+    let res = client.request("system_health", vec![]).await;
+    assert_eq!(
+        res.unwrap(),
+        json!({ "isSyncing": true, "peers": 1, "shouldHavePeers": true })
+    );
+
+    // wait for the health check to run
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(1_050)).await;
+    })
+    .await
+    .unwrap();
+
+    // second endpoint is healthy
+    let res = client.request("system_health", vec![]).await;
+    assert_eq!(
+        res.unwrap(),
+        json!({ "isSyncing": false, "peers": 1, "shouldHavePeers": true })
+    );
 
     handle1.stop().unwrap();
     handle2.stop().unwrap();
