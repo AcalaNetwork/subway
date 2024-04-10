@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use futures::FutureExt as Boxed;
 use jsonrpsee::core::{client::Subscription, Error, JsonValue};
 use opentelemetry::trace::FutureExt;
 use rand::{seq::SliceRandom, thread_rng};
@@ -204,6 +205,8 @@ impl Client {
                 if let Some(exclude) = exclude {
                     endpoints.retain(|e| e.url() != exclude.url());
                 }
+                // wait for at least one endpoint to connect
+                futures::future::select_all(endpoints.iter().map(|x| x.connected().boxed())).await;
                 // Sort by health score
                 endpoints.sort_by_key(|endpoint| std::cmp::Reverse(endpoint.health().score()));
                 // Pick the first one
