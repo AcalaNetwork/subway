@@ -1,0 +1,5 @@
+# skip validation for methods listed below
+system_health
+system_name
+system_version
+author_pendingExtrinsics
