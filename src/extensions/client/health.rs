@@ -64,20 +64,20 @@ impl Health {
             return;
         }
         self.score.store(new_score, Ordering::Relaxed);
-        log::trace!(
+        tracing::trace!(
             "Endpoint {:?} score updated from: {current_score} to: {new_score}",
             self.url
         );
 
         // Notify waiters if the score has dropped below the threshold
         if current_score >= THRESHOLD && new_score < THRESHOLD {
-            log::warn!("Endpoint {:?} became unhealthy", self.url);
+            tracing::warn!("Endpoint {:?} became unhealthy", self.url);
             self.unhealthy.notify_waiters();
         }
     }
 
     pub fn on_error(&self, err: &jsonrpsee::core::Error) {
-        log::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
+        tracing::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
         match err {
             jsonrpsee::core::Error::RequestTimeout => {
                 self.update(Event::RequestTimeout);

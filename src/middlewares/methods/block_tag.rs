@@ -94,7 +94,7 @@ impl BlockTagMiddleware {
         };
 
         if let Some(value) = maybe_value {
-            log::trace!(
+            tracing::trace!(
                 "Replacing params {:?} updated with {:?}",
                 request.params,
                 (self.index, &value),
