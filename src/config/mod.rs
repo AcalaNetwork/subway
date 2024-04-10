@@ -156,7 +156,7 @@ pub fn read_config() -> Result<Config, String> {
     let mut config: Config = config.into();
 
     if let Ok(endpoints) = std::env::var("ENDPOINTS") {
-        log::debug!("Override endpoints with env.ENDPOINTS");
+        tracing::debug!("Override endpoints with env.ENDPOINTS");
         let endpoints = endpoints
             .split(',')
             .map(|x| x.trim().to_string())
@@ -171,7 +171,7 @@ pub fn read_config() -> Result<Config, String> {
     }
 
     if let Ok(env_port) = std::env::var("PORT") {
-        log::debug!("Override port with env.PORT");
+        tracing::debug!("Override port with env.PORT");
         let port = env_port.parse::<u16>();
         if let Ok(port) = port {
             config

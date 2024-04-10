@@ -51,7 +51,7 @@ impl Telemetry {
 
 pub fn setup_telemetry(options: &TelemetryConfig) -> Result<Option<Tracer>, TraceError> {
     global::set_error_handler(|e| {
-        log::warn!("OpenTelemetry error: {}", e);
+        tracing::warn!("OpenTelemetry error: {}", e);
     })
     .expect("failed to set OpenTelemetry error handler");
 

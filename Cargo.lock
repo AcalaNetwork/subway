@@ -3083,7 +3083,6 @@ dependencies = [
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
  "jsonrpsee",
- "log",
  "moka",
  "opentelemetry",
  "opentelemetry-datadog",
