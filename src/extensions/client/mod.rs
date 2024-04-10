@@ -210,10 +210,7 @@ impl Client {
                 // Sort by health score
                 endpoints.sort_by_key(|endpoint| std::cmp::Reverse(endpoint.health().score()));
                 // Pick the first one
-                let selected_endpoint = endpoints[0].clone();
-                // Ensure it's connected
-                selected_endpoint.connected().await;
-                selected_endpoint
+                endpoints[0].clone()
             };
 
             let mut selected_endpoint = healthiest_endpoint(None).await;
