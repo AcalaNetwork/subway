@@ -14,7 +14,7 @@ pub enum Event {
     SlowResponse,
     RequestTimeout,
     ConnectionSuccessful,
-    ConnectionFailed,
+    ServerError,
     StaleChain,
 }
 
@@ -24,7 +24,7 @@ impl Event {
             match self {
                 Event::ResponseOk => current.saturating_add(2),
                 Event::SlowResponse => current.saturating_sub(5),
-                Event::RequestTimeout | Event::ConnectionFailed | Event::StaleChain => 0,
+                Event::RequestTimeout | Event::ServerError | Event::StaleChain => 0,
                 Event::ConnectionSuccessful => MAX_SCORE / 5 * 4, // 80% of max score
             },
             MAX_SCORE,
@@ -77,17 +77,18 @@ impl Health {
     }
 
     pub fn on_error(&self, err: &jsonrpsee::core::Error) {
-        tracing::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
         match err {
+            jsonrpsee::core::Error::Call(_) => {
+                // NOT SERVER ERROR
+            }
             jsonrpsee::core::Error::RequestTimeout => {
+                tracing::warn!("Endpoint {:?} request timeout", self.url);
                 self.update(Event::RequestTimeout);
             }
-            jsonrpsee::core::Error::Transport(_)
-            | jsonrpsee::core::Error::RestartNeeded(_)
-            | jsonrpsee::core::Error::MaxSlotsExceeded => {
-                self.update(Event::ConnectionFailed);
+            _ => {
+                tracing::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
+                self.update(Event::ServerError);
             }
-            _ => {}
         };
     }
 
