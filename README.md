@@ -92,7 +92,7 @@ NOTE: Keep in mind that if you place `validate` middleware before `inject_params
 Ignored methods can be defined in extension config:
 ```yml
 extensions:
-  validate:
+  validator:
     ignore_methods:
       - system_health
       - system_name
