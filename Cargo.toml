@@ -58,9 +58,6 @@ jsonrpc-pubsub = { version = "18.0.0" }
 name = "bench"
 harness = false
 
-[features]
-validate = []
-
 [target.'cfg(tokio_unstable)'.dependencies]
 console-subscriber = "0.2.0"
 

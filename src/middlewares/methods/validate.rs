@@ -1,22 +1,21 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use std::{fs::File, io::Read};
 
 use crate::utils::errors;
 use crate::{
-    extensions::client::Client,
+    extensions::{client::Client, validate::Validate},
     middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 
 pub struct ValidateMiddleware {
+    validate: Arc<Validate>,
     client: Arc<Client>,
-    ignore_methods: Vec<String>,
 }
 
 impl ValidateMiddleware {
-    pub fn new(client: Arc<Client>, ignore_methods: Vec<String>) -> Self {
-        Self { client, ignore_methods }
+    pub fn new(validate: Arc<Validate>, client: Arc<Client>) -> Self {
+        Self { validate, client }
     }
 }
 
@@ -26,26 +25,14 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for ValidateMiddlewar
         _method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        // read ignored methods from file
-        let mut ignore_methods = vec![];
-        if let Ok(mut file) = File::open(".validateignore") {
-            if let Err(err) = file.read_to_end(&mut ignore_methods) {
-                tracing::error!("Read .validateignore failed: {err:?}");
-            }
-        }
-        let ignore_methods = String::from_utf8(ignore_methods)
-            .unwrap_or_default()
-            .split('\n')
-            .map(|x| x.trim().to_string())
-            .filter(|x| !x.starts_with('#') && !x.starts_with("//")) // filter comments
-            .collect();
+        let validate = extensions.read().await.get::<Validate>().unwrap_or_default();
 
         let client = extensions
             .read()
             .await
             .get::<Client>()
             .expect("Client extension not found");
-        Some(Box::new(ValidateMiddleware::new(client, ignore_methods)))
+        Some(Box::new(ValidateMiddleware::new(validate, client)))
     }
 }
 
@@ -61,7 +48,7 @@ impl Middleware<CallRequest, CallResult> for ValidateMiddleware {
         let result = next(request.clone(), context).await;
         let actual = result.clone();
 
-        if self.ignore_methods.contains(&request.method) {
+        if self.validate.ignore(&request.method) {
             return result;
         }
 
