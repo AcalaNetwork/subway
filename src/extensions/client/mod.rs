@@ -31,6 +31,7 @@ mod tests;
 const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client");
 
 pub struct Client {
+    endpoints: Vec<Arc<Endpoint>>,
     sender: tokio::sync::mpsc::Sender<Message>,
     rotation_notify: Arc<Notify>,
     retries: u32,
@@ -187,6 +188,7 @@ impl Client {
 
         let rotation_notify = Arc::new(Notify::new());
         let rotation_notify_bg = rotation_notify.clone();
+        let endpoints_ = endpoints.clone();
 
         let background_task = tokio::spawn(async move {
             let request_backoff_counter = Arc::new(AtomicU32::new(0));
@@ -395,6 +397,7 @@ impl Client {
         });
 
         Ok(Self {
+            endpoints: endpoints_,
             sender: message_tx,
             rotation_notify,
             retries: retries.unwrap_or(3),
@@ -404,6 +407,10 @@ impl Client {
 
     pub fn with_endpoints(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
         Self::new(endpoints, None, None, None, None)
+    }
+
+    pub fn endpoints(&self) -> &Vec<Arc<Endpoint>> {
+        self.endpoints.as_ref()
     }
 
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> CallResult {

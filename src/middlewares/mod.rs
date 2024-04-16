@@ -6,6 +6,7 @@ use jsonrpsee::{
     PendingSubscriptionSink,
 };
 use opentelemetry::trace::FutureExt as _;
+use serde::Serialize;
 use std::{
     fmt::{Debug, Formatter},
     sync::Arc,
@@ -20,7 +21,7 @@ pub mod factory;
 pub mod methods;
 pub mod subscriptions;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize)]
 /// Represents a RPC request made to a middleware function.
 pub struct CallRequest {
     pub method: String,

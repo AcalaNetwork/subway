@@ -76,3 +76,26 @@ It's also possible to run individual benchmarks by:
 ```
 cargo bench --bench bench ws_round_trip
 ```
+
+## Validate Middleware
+
+This middleware will intercept all method request/responses and compare the result directly with healthy endpoint responses.
+This is useful for debugging to make sure the returned values are as expected.
+You can enable validate middleware on your config file.
+```yml
+middlewares:
+  methods:
+    - validate
+```
+NOTE: Keep in mind that if you place `validate` middleware before `inject_params` you may get false positive errors because the request will not be the same.
+
+Ignored methods can be defined in extension config:
+```yml
+extensions:
+  validator:
+    ignore_methods:
+      - system_health
+      - system_name
+      - system_version
+      - author_pendingExtrinsics
+```
