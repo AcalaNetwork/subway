@@ -20,11 +20,11 @@ Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [tokio-console](https://gi
 
 - `RUST_LOG`
   - Log level. Default: `info`.
-- `PORT`
-  - Override port configuration in config file.
 - `LOG_FORMAT`
   - Log format. Default: `full`.
   - Options: `full`, `pretty`, `json`, `compact`
+
+In addition, you can refer env variables in `config.yml` by using `${env.SOME_ENV}`
 
 ## Features
 
@@ -62,7 +62,7 @@ Subway is build with middleware pattern.
   - TODO: Limit batch size, request size and response size.
 - TODO: Metrics
   - Getting insights of the RPC calls and server performance.
-  
+
 ## Benchmarks
 
 To run all benchmarks:
@@ -82,14 +82,17 @@ cargo bench --bench bench ws_round_trip
 This middleware will intercept all method request/responses and compare the result directly with healthy endpoint responses.
 This is useful for debugging to make sure the returned values are as expected.
 You can enable validate middleware on your config file.
+
 ```yml
 middlewares:
   methods:
     - validate
 ```
+
 NOTE: Keep in mind that if you place `validate` middleware before `inject_params` you may get false positive errors because the request will not be the same.
 
 Ignored methods can be defined in extension config:
+
 ```yml
 extensions:
   validator:
