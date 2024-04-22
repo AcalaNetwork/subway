@@ -170,8 +170,8 @@ pub fn read_config() -> Result<Config, anyhow::Error> {
 }
 
 fn render_template(templated_config_str: &str) -> Result<String, anyhow::Error> {
-    // match pattern: ${env.SOME_VAR}
-    let re = Regex::new(r"\$\{env\.([^\}]+)\}").unwrap();
+    // match pattern: ${SOME_VAR}
+    let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
 
     let mut config_str = String::with_capacity(templated_config_str.len());
     let mut last_match = 0;
@@ -228,15 +228,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_render_template() {
+    fn render_template_basically_works() {
         env::set_var("KEY", "value");
         env::set_var("ANOTHER_KEY", "another_value");
-        let templated_config_str = "${env.KEY} ${env.ANOTHER_KEY}";
+        let templated_config_str = "${KEY} ${ANOTHER_KEY}";
         let config_str = render_template(templated_config_str).unwrap();
         assert_eq!(config_str, "value another_value");
 
         env::remove_var("KEY");
         let config_str = render_template(templated_config_str);
         assert!(config_str.is_err());
+        env::remove_var("ANOTHER_KEY");
     }
 }

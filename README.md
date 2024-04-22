@@ -24,7 +24,7 @@ Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [tokio-console](https://gi
   - Log format. Default: `full`.
   - Options: `full`, `pretty`, `json`, `compact`
 
-In addition, you can refer env variables in `config.yml` by using `${env.SOME_ENV}`
+In addition, you can refer env variables in `config.yml` by using `${SOME_ENV}`
 
 ## Features
 
