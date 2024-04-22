@@ -1,3 +1,6 @@
+use anyhow::{bail, Context};
+use regex::{Captures, Regex};
+use std::env;
 use std::fs;
 
 use clap::Parser;
@@ -147,43 +150,18 @@ impl From<ParseConfig> for Config {
 }
 
 // read config file specified in command line
-pub fn read_config() -> Result<Config, String> {
+pub fn read_config() -> Result<Config, anyhow::Error> {
     let cmd = Command::parse();
 
-    let config = fs::File::open(cmd.config).map_err(|e| format!("Unable to open config file: {e}"))?;
+    let templated_config_str =
+        fs::read_to_string(&cmd.config).with_context(|| format!("Unable to read config file: {}", cmd.config))?;
+
+    let config_str = render_template(&templated_config_str)
+        .with_context(|| format!("Unable to preprocess config file: {}", cmd.config))?;
+
     let config: ParseConfig =
-        serde_yaml::from_reader(&config).map_err(|e| format!("Unable to parse config file: {e}"))?;
-    let mut config: Config = config.into();
-
-    if let Ok(endpoints) = std::env::var("ENDPOINTS") {
-        tracing::debug!("Override endpoints with env.ENDPOINTS");
-        let endpoints = endpoints
-            .split(',')
-            .map(|x| x.trim().to_string())
-            .collect::<Vec<String>>();
-
-        config
-            .extensions
-            .client
-            .as_mut()
-            .expect("Client extension not configured")
-            .endpoints = endpoints;
-    }
-
-    if let Ok(env_port) = std::env::var("PORT") {
-        tracing::debug!("Override port with env.PORT");
-        let port = env_port.parse::<u16>();
-        if let Ok(port) = port {
-            config
-                .extensions
-                .server
-                .as_mut()
-                .expect("Server extension not configured")
-                .port = port;
-        } else {
-            return Err(format!("Invalid port: {}", env_port));
-        }
-    }
+        serde_yaml::from_str(&config_str).with_context(|| format!("Unable to parse config file: {}", cmd.config))?;
+    let config: Config = config.into();
 
     // TODO: shouldn't need to do this here. Creating a server should validates everything
     validate_config(&config)?;
@@ -191,19 +169,42 @@ pub fn read_config() -> Result<Config, String> {
     Ok(config)
 }
 
-fn validate_config(config: &Config) -> Result<(), String> {
+fn render_template(templated_config_str: &str) -> Result<String, anyhow::Error> {
+    // match pattern: ${SOME_VAR}
+    let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
+
+    let mut config_str = String::with_capacity(templated_config_str.len());
+    let mut last_match = 0;
+    // replace pattern: with env variables
+    let replacement = |caps: &Captures| -> Result<String, env::VarError> { env::var(&caps[1]) };
+
+    // replace every matches with early return
+    // when encountering error
+    for caps in re.captures_iter(templated_config_str) {
+        let m = caps.get(0).expect("Matched pattern should have at least one capture");
+        config_str.push_str(&templated_config_str[last_match..m.start()]);
+        config_str.push_str(
+            &replacement(&caps).with_context(|| format!("Unable to replace environment variable {}", &caps[1]))?,
+        );
+        last_match = m.end();
+    }
+    config_str.push_str(&templated_config_str[last_match..]);
+    Ok(config_str)
+}
+
+fn validate_config(config: &Config) -> Result<(), anyhow::Error> {
     // TODO: validate logic should be in each individual extensions
     // validate endpoints
     for endpoint in &config.extensions.client.as_ref().unwrap().endpoints {
         if endpoint.parse::<jsonrpsee::client_transport::ws::Uri>().is_err() {
-            return Err(format!("Invalid endpoint {}", endpoint));
+            bail!("Invalid endpoint {}", endpoint);
         }
     }
 
     // ensure each method has only one param with inject=true
     for method in &config.rpcs.methods {
         if method.params.iter().filter(|x| x.inject).count() > 1 {
-            return Err(format!("Method {} has more than one inject param", method.method));
+            bail!("Method {} has more than one inject param", method.method);
         }
     }
 
@@ -214,13 +215,29 @@ fn validate_config(config: &Config) -> Result<(), String> {
             if param.optional {
                 has_optional = true;
             } else if has_optional {
-                return Err(format!(
-                    "Method {} has required param after optional param",
-                    method.method
-                ));
+                bail!("Method {} has required param after optional param", method.method);
             }
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_template_basically_works() {
+        env::set_var("KEY", "value");
+        env::set_var("ANOTHER_KEY", "another_value");
+        let templated_config_str = "${KEY} ${ANOTHER_KEY}";
+        let config_str = render_template(templated_config_str).unwrap();
+        assert_eq!(config_str, "value another_value");
+
+        env::remove_var("KEY");
+        let config_str = render_template(templated_config_str);
+        assert!(config_str.is_err());
+        env::remove_var("ANOTHER_KEY");
+    }
 }
