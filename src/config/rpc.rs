@@ -1,3 +1,4 @@
+use garde::Validate;
 use jsonrpsee::core::JsonValue;
 use serde::Deserialize;
 
@@ -20,13 +21,15 @@ pub struct MethodParam {
     pub inject: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Validate, Debug)]
+#[garde(allow_unvalidated)]
 pub struct RpcMethod {
     pub method: String,
 
     #[serde(default)]
     pub cache: Option<CacheParams>,
 
+    #[garde(custom(validate_params_with_name(&self.method)))]
     #[serde(default)]
     pub params: Vec<MethodParam>,
 
@@ -46,6 +49,31 @@ pub struct RpcMethod {
     /// Add this if you want to modify the default value of 1.
     #[serde(default = "default_rate_limit_weight")]
     pub rate_limit_weight: u32,
+}
+
+fn validate_params_with_name(method_name: &str) -> impl FnOnce(&[MethodParam], &()) -> garde::Result + '_ {
+    move |params, _| {
+        // ensure each method has only one param with inject=true
+        if params.iter().filter(|x| x.inject).count() > 1 {
+            return Err(garde::Error::new(format!(
+                "method {} has more than one inject param",
+                method_name
+            )));
+        }
+        // ensure there is no required param after optional param
+        let mut has_optional = false;
+        for param in params {
+            if param.optional {
+                has_optional = true;
+            } else if has_optional {
+                return Err(garde::Error::new(format!(
+                    "method {} has required param after optional param",
+                    method_name
+                )));
+            }
+        }
+        Ok(())
+    }
 }
 
 fn default_rate_limit_weight() -> u32 {
@@ -71,11 +99,68 @@ pub struct RpcSubscription {
     pub merge_strategy: Option<MergeStrategy>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Validate, Debug)]
+#[garde(allow_unvalidated)]
 pub struct RpcDefinitions {
+    #[garde(dive)]
     pub methods: Vec<RpcMethod>,
     #[serde(default)]
     pub subscriptions: Vec<RpcSubscription>,
     #[serde(default)]
     pub aliases: Vec<(String, String)>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_params_works() {
+        let method_name = "test";
+        let invalid_params = vec![
+            MethodParam {
+                name: "param1".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: false,
+            },
+            MethodParam {
+                name: "param2".to_string(),
+                ty: "u64".to_string(),
+                optional: true,
+                inject: false,
+            },
+            MethodParam {
+                name: "param3".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+        ];
+        let another_invalid_params = vec![
+            MethodParam {
+                name: "param1".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+            MethodParam {
+                name: "param2".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+            MethodParam {
+                name: "param3".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+        ];
+        let test_fn = validate_params_with_name(method_name);
+        assert!(test_fn(&invalid_params, &()).is_err());
+        // since test_fn is FnOnce, we need get a new one
+        let test_fn = validate_params_with_name(method_name);
+        assert!(test_fn(&another_invalid_params, &()).is_err());
+    }
 }

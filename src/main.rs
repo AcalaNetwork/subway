@@ -7,6 +7,10 @@ async fn main() -> anyhow::Result<()> {
     subway::logger::enable_logger();
     tracing::trace!("{:#?}", config);
 
+    if cli.just_validate() {
+        return subway::config::validate(&config).await;
+    }
+
     let subway_server = subway::server::build(config).await?;
     tracing::info!("Server running at {}", subway_server.addr);
 

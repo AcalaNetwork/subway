@@ -6,7 +6,9 @@ use std::{
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::FutureExt as Boxed;
+use garde::Validate;
 use jsonrpsee::core::{client::Subscription, Error, JsonValue};
+use jsonrpsee::ws_client::WsClientBuilder;
 use opentelemetry::trace::FutureExt;
 use rand::{seq::SliceRandom, thread_rng};
 use serde::{Deserialize, Serialize};
@@ -44,12 +46,62 @@ impl Drop for Client {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Validate, Debug)]
+#[garde(allow_unvalidated)]
 pub struct ClientConfig {
+    #[garde(inner(custom(validate_endpoint)))]
     pub endpoints: Vec<String>,
     #[serde(default = "bool_true")]
     pub shuffle_endpoints: bool,
     pub health_check: Option<HealthCheckConfig>,
+}
+
+fn validate_endpoint(endpoint: &str, _context: &()) -> garde::Result {
+    endpoint
+        .parse::<jsonrpsee::client_transport::ws::Uri>()
+        .map_err(|_| garde::Error::new(format!("Invalid endpoint format: {}", endpoint)))?;
+
+    Ok(())
+}
+
+impl ClientConfig {
+    pub async fn all_endpoints_can_be_connected(&self) -> bool {
+        let join_handles: Vec<_> = self
+            .endpoints
+            .iter()
+            .map(|endpoint| {
+                let endpoint = endpoint.clone();
+                tokio::spawn(async move {
+                    match check_endpoint_connection(&endpoint).await {
+                        Ok(_) => {
+                            tracing::info!("Connected to endpoint: {endpoint}");
+                            true
+                        }
+                        Err(err) => {
+                            tracing::error!("Failed to connect to endpoint: {endpoint}, error: {err:?}",);
+                            false
+                        }
+                    }
+                })
+            })
+            .collect();
+        let mut ok_all = true;
+        for join_handle in join_handles {
+            let ok = join_handle.await.unwrap_or_else(|e| {
+                tracing::error!("Failed to join: {e:?}");
+                false
+            });
+            if !ok {
+                ok_all = false
+            }
+        }
+        ok_all
+    }
+}
+// simple connection check with default client params and no retries
+async fn check_endpoint_connection(endpoint: &str) -> Result<(), anyhow::Error> {
+    let _ = WsClientBuilder::default().build(&endpoint).await?;
+    Ok(())
 }
 
 pub fn bool_true() -> bool {

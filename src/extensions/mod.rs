@@ -72,13 +72,15 @@ impl ExtensionRegistry {
 macro_rules! define_all_extensions {
     (
         $(
-            $ext_name:ident: $ext_type:ty
+            $(#[$attr:meta])* $ext_name:ident: $ext_type:ty
         ),* $(,)?
     ) => {
-        #[derive(Deserialize, Debug, Default)]
+        use garde::Validate;
+        #[derive(Deserialize, Debug, Validate, Default)]
+        #[garde(allow_unvalidated)]
         pub struct ExtensionsConfig {
             $(
-                #[serde(default)]
+                $(#[$attr])*
                 pub $ext_name: Option<<$ext_type as Extension>::Config>,
             )*
         }
@@ -132,6 +134,7 @@ macro_rules! define_all_extensions {
 define_all_extensions! {
     telemetry: telemetry::Telemetry,
     cache: cache::Cache,
+    #[garde(dive)]
     client: client::Client,
     merge_subscription: merge_subscription::MergeSubscription,
     substrate_api: api::SubstrateApi,

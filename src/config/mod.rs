@@ -1,9 +1,10 @@
-use anyhow::{bail, Context};
+use anyhow::Context;
 use regex::{Captures, Regex};
 use std::env;
 use std::fs;
 use std::path;
 
+use garde::Validate;
 use serde::Deserialize;
 
 use crate::extensions::ExtensionsConfig;
@@ -117,10 +118,13 @@ pub struct MiddlewaresConfig {
     pub subscriptions: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Validate)]
+#[garde(allow_unvalidated)]
 pub struct Config {
+    #[garde(dive)]
     pub extensions: ExtensionsConfig,
     pub middlewares: MiddlewaresConfig,
+    #[garde(dive)]
     pub rpcs: RpcDefinitions,
 }
 
@@ -153,9 +157,6 @@ pub fn read_config(path: impl AsRef<path::Path>) -> Result<Config, anyhow::Error
     let config: ParseConfig = serde_yaml::from_str(&config_str)
         .with_context(|| format!("Unable to parse config file: {}", path.display()))?;
     let config: Config = config.into();
-
-    // TODO: shouldn't need to do this here. Creating a server should validates everything
-    validate_config(&config)?;
 
     Ok(config)
 }
@@ -202,34 +203,17 @@ fn render_template(templated_config_str: &str) -> Result<String, anyhow::Error> 
     Ok(config_str)
 }
 
-fn validate_config(config: &Config) -> Result<(), anyhow::Error> {
-    // TODO: validate logic should be in each individual extensions
-    // validate endpoints
-    for endpoint in &config.extensions.client.as_ref().unwrap().endpoints {
-        if endpoint.parse::<jsonrpsee::client_transport::ws::Uri>().is_err() {
-            bail!("Invalid endpoint {}", endpoint);
+pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
+    // validate use garde::Validate
+    config.validate(&())?;
+    // since endpoints connection test is async
+    // we can't intergrate it into garde::Validate
+    // and it's not a static validation like format, length, .etc
+    if let Some(client_config) = &config.extensions.client {
+        if !client_config.all_endpoints_can_be_connected().await {
+            anyhow::bail!("Unable to connect to all endpoints");
         }
     }
-
-    // ensure each method has only one param with inject=true
-    for method in &config.rpcs.methods {
-        if method.params.iter().filter(|x| x.inject).count() > 1 {
-            bail!("Method {} has more than one inject param", method.method);
-        }
-    }
-
-    // ensure there is no required param after optional param
-    for method in &config.rpcs.methods {
-        let mut has_optional = false;
-        for param in &method.params {
-            if param.optional {
-                has_optional = true;
-            } else if has_optional {
-                bail!("Method {} has required param after optional param", method.method);
-            }
-        }
-    }
-
     Ok(())
 }
 
@@ -292,5 +276,30 @@ mod tests {
         // It's enough to check the replacement works
         // if config itself has proper data validation
         let _config = read_config("configs/config_with_env.yml").unwrap();
+    }
+
+    #[tokio::test]
+    async fn validate_broken_endpoints_should_fail() {
+        let config = read_config("configs/broken_endpoints.yml").expect("Unable to read config file");
+        let result = validate(&config).await;
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Unable to connect to all endpoints"));
+    }
+
+    #[tokio::test]
+    #[ignore = "This test is not support yet"]
+    async fn validate_middleware_with_no_paired_extension_should_fail() {
+        let config = read_config("configs/middleware_no_paired_extension.yml").expect("Unable to read config file");
+        let result = validate(&config).await;
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Unable to find extension for middleware"));
     }
 }
