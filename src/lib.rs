@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod config;
 pub mod extensions;
 pub mod logger;

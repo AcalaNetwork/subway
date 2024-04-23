@@ -1,7 +1,8 @@
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // read config from file
-    let config = subway::config::read_config()?;
+    let cli = subway::cli::parse_args();
+    let config = subway::config::read_config(&cli.config)?;
 
     subway::logger::enable_logger();
     tracing::trace!("{:#?}", config);
