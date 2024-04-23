@@ -27,7 +27,7 @@ Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [tokio-console](https://gi
 In addition, you can refer env variables in `config.yml` by using following syntax:
 
 - `${variable}`
-- `${variable:-word}` indicates that if variable is set then the result will be that value. If variable is not set then word will be the result. or
+- `${variable:-word}` indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
 - `${variable:+word}` indicates that if variable is set then word will be the result, otherwise the result is the empty string.
 
 ## Features
