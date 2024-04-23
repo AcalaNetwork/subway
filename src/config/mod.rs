@@ -2,8 +2,8 @@ use anyhow::{bail, Context};
 use regex::{Captures, Regex};
 use std::env;
 use std::fs;
+use std::path;
 
-use clap::Parser;
 use serde::Deserialize;
 
 use crate::extensions::ExtensionsConfig;
@@ -13,14 +13,6 @@ mod rpc;
 
 const SUBSTRATE_CONFIG: &str = include_str!("../../rpc_configs/substrate.yml");
 const ETHEREUM_CONFIG: &str = include_str!("../../rpc_configs/ethereum.yml");
-
-#[derive(Parser, Debug)]
-#[command(version, about)]
-struct Command {
-    /// The config file to use
-    #[arg(short, long, default_value = "./config.yml")]
-    config: String,
-}
 
 #[derive(Deserialize, Debug)]
 pub struct RpcDefinitionsWithBase {
@@ -150,17 +142,16 @@ impl From<ParseConfig> for Config {
 }
 
 // read config file specified in command line
-pub fn read_config() -> Result<Config, anyhow::Error> {
-    let cmd = Command::parse();
-
+pub fn read_config(path: impl AsRef<path::Path>) -> Result<Config, anyhow::Error> {
+    let path = path.as_ref();
     let templated_config_str =
-        fs::read_to_string(&cmd.config).with_context(|| format!("Unable to read config file: {}", cmd.config))?;
+        fs::read_to_string(path).with_context(|| format!("Unable to read config file: {}", path.display()))?;
 
     let config_str = render_template(&templated_config_str)
-        .with_context(|| format!("Unable to preprocess config file: {}", cmd.config))?;
+        .with_context(|| format!("Unable to preprocess config file: {}", path.display()))?;
 
-    let config: ParseConfig =
-        serde_yaml::from_str(&config_str).with_context(|| format!("Unable to parse config file: {}", cmd.config))?;
+    let config: ParseConfig = serde_yaml::from_str(&config_str)
+        .with_context(|| format!("Unable to parse config file: {}", path.display()))?;
     let config: Config = config.into();
 
     // TODO: shouldn't need to do this here. Creating a server should validates everything
@@ -170,18 +161,37 @@ pub fn read_config() -> Result<Config, anyhow::Error> {
 }
 
 fn render_template(templated_config_str: &str) -> Result<String, anyhow::Error> {
-    // match pattern: ${SOME_VAR}
-    let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
+    // match pattern with 1 group: {variable_name}
+    // match pattern with 3 groups: {variable:-word} or {variable:+word}
+    // note: incompete syntax like {variable:-} will be matched since group1 is ungreedy match
+    // but typically it will be rejected due to there is not corresponding env vars
+    let re = Regex::new(r"\$\{([^}]+?)(?:(:-|:\+)([^}]+))?\}").unwrap();
 
     let mut config_str = String::with_capacity(templated_config_str.len());
     let mut last_match = 0;
     // replace pattern: with env variables
-    let replacement = |caps: &Captures| -> Result<String, env::VarError> { env::var(&caps[1]) };
+    let replacement = |caps: &Captures| -> Result<String, env::VarError> {
+        match (caps.get(2), caps.get(3)) {
+            (Some(sign), Some(value_default)) => {
+                if sign.as_str() == ":-" {
+                    env::var(&caps[1]).or(Ok(value_default.as_str().to_string()))
+                } else if sign.as_str() == ":+" {
+                    Ok(env::var(&caps[1]).map_or("".to_string(), |_| value_default.as_str().to_string()))
+                } else {
+                    Err(env::VarError::NotPresent)
+                }
+            }
+            (None, None) => env::var(&caps[1]),
+            _ => Err(env::VarError::NotPresent),
+        }
+    };
 
     // replace every matches with early return
     // when encountering error
     for caps in re.captures_iter(templated_config_str) {
-        let m = caps.get(0).expect("Matched pattern should have at least one capture");
+        let m = caps
+            .get(0)
+            .expect("i==0 means implicit unnamed group that includes the entire match, which is infalliable");
         config_str.push_str(&templated_config_str[last_match..m.start()]);
         config_str.push_str(
             &replacement(&caps).with_context(|| format!("Unable to replace environment variable {}", &caps[1]))?,
@@ -231,13 +241,56 @@ mod tests {
     fn render_template_basically_works() {
         env::set_var("KEY", "value");
         env::set_var("ANOTHER_KEY", "another_value");
-        let templated_config_str = "${KEY} ${ANOTHER_KEY}";
+        let templated_config_str = "${KEY} some random_$tring {inside ${ANOTHER_KEY}";
         let config_str = render_template(templated_config_str).unwrap();
-        assert_eq!(config_str, "value another_value");
+        assert_eq!(config_str, "value some random_$tring {inside another_value");
 
         env::remove_var("KEY");
         let config_str = render_template(templated_config_str);
         assert!(config_str.is_err());
         env::remove_var("ANOTHER_KEY");
+    }
+
+    #[test]
+    fn render_template_supports_minus_word_syntax() {
+        // ${variable:-word} indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
+        env::set_var("absent_key", "value_set");
+        let templated_config_str = "${absent_key:-value_default}";
+        let config_str = render_template(templated_config_str).unwrap();
+        assert_eq!(config_str, "value_set");
+        // remove the env
+        env::remove_var("absent_key");
+        let config_str = render_template(templated_config_str).unwrap();
+        assert_eq!(config_str, "value_default")
+    }
+
+    #[test]
+    fn render_template_supports_plus_word_syntax() {
+        // ${variable:+word} indicates that if variable is set then word will be the result, otherwise the result is the empty string.
+        env::set_var("present_key", "any_value");
+        let templated_config_str = "${present_key:+value_default}";
+        let config_str = render_template(templated_config_str).unwrap();
+        assert_eq!(config_str, "value_default");
+        // remove the env
+        env::remove_var("present_key");
+        let config_str = render_template(templated_config_str).unwrap();
+        assert_eq!(config_str, "")
+    }
+
+    #[test]
+    fn render_template_gets_error_when_syntax_is_incomplete() {
+        let templated_config_str = "${variable:-}";
+        let config_str = render_template(templated_config_str);
+        assert!(config_str.is_err());
+        let template_config_str = "${variable:+}";
+        let config_str = render_template(template_config_str);
+        assert!(config_str.is_err());
+    }
+
+    #[test]
+    fn read_config_with_render_template_works() {
+        // It's enough to check the replacement works
+        // if config itself has proper data validation
+        let _config = read_config("configs/config_with_env.yml").unwrap();
     }
 }

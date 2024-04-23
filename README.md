@@ -10,9 +10,9 @@ This is a generalized JSON RPC proxy server with features specifically designed 
 
 Pull vendors: `git submodule update --init --recursive`
 
-Quick start: `cargo run -- --config config.yml`
+Quick start: `cargo run -- --config configs/config.yml`
 
-This will run a proxy server with [config.yml](config.yml) as the configuration file.
+This will run a proxy server with [config.yml](configs/config.yml) as the configuration file.
 
 Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [tokio-console](https://github.com/tokio-rs/console)
 
@@ -24,7 +24,11 @@ Run with `RUSTFLAGS="--cfg tokio_unstable"` to enable [tokio-console](https://gi
   - Log format. Default: `full`.
   - Options: `full`, `pretty`, `json`, `compact`
 
-In addition, you can refer env variables in `config.yml` by using `${SOME_ENV}`
+In addition, you can refer env variables in `config.yml` by using following syntax:
+
+- `${variable}`
+- `${variable:-word}` indicates that if variable is set then the result will be that value. If variable is not set then word will be the result.
+- `${variable:+word}` indicates that if variable is set then word will be the result, otherwise the result is the empty string.
 
 ## Features
 
