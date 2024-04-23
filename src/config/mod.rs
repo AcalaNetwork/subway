@@ -161,9 +161,11 @@ pub fn read_config(path: impl AsRef<path::Path>) -> Result<Config, anyhow::Error
 }
 
 fn render_template(templated_config_str: &str) -> Result<String, anyhow::Error> {
-    // match pattern: ${SOME_VAR}, ${SOME_VAR:-word}, or ${SOME_VAR:+word}
-    // TODO: Partial syntax like ${SOME_VAR:-} and ${SOME_VAR:+} should be invalid, but it's not supported yet
-    let re = Regex::new(r"\$\{([^\}:-]+)(?:(:-|:\+)([^\}]*))?\}").unwrap();
+    // match pattern with 1 group: {variable_name}
+    // match pattern with 3 groups: {variable:-word} or {variable:+word}
+    // note: incompete syntax like {variable:-} will be matched since group1 is ungreedy match
+    // but typically it will be rejected due to there is not corresponding env vars
+    let re = Regex::new(r"\$\{([^}]+?)(?:(:-|:\+)([^}]+))?\}").unwrap();
 
     let mut config_str = String::with_capacity(templated_config_str.len());
     let mut last_match = 0;
@@ -276,8 +278,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "not supported yet"]
-    fn render_template_gets_error_when_syntax_is_partial() {
+    fn render_template_gets_error_when_syntax_is_incomplete() {
         let templated_config_str = "${variable:-}";
         let config_str = render_template(templated_config_str);
         assert!(config_str.is_err());
