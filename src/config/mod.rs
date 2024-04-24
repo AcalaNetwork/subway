@@ -123,6 +123,7 @@ pub struct MiddlewaresConfig {
 pub struct Config {
     #[garde(dive)]
     pub extensions: ExtensionsConfig,
+    // TODO: #[garde(custom(has_matched_extensions(&self.extensions)))]
     pub middlewares: MiddlewaresConfig,
     #[garde(dive)]
     pub rpcs: RpcDefinitions,
@@ -276,6 +277,13 @@ mod tests {
         // It's enough to check the replacement works
         // if config itself has proper data validation
         let _config = read_config("configs/config_with_env.yml").unwrap();
+    }
+
+    #[tokio::test]
+    async fn validate_basic_config_should_work() {
+        let config = read_config("configs/config.yml").expect("Unable to read config file");
+        let result = validate(&config).await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
