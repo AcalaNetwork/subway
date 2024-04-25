@@ -115,7 +115,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn validate_params_works() {
+    fn validate_params_succeeds_for_valid_params() {
+        let valid_params = vec![
+            MethodParam {
+                name: "param1".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: false,
+            },
+            MethodParam {
+                name: "param2".to_string(),
+                ty: "u64".to_string(),
+                optional: true,
+                inject: false,
+            },
+            MethodParam {
+                name: "param3".to_string(),
+                ty: "u64".to_string(),
+                optional: true,
+                inject: false,
+            },
+        ];
+        let method_name = "test";
+        let test_fn = validate_params_with_name(method_name);
+        assert!(test_fn(&valid_params, &()).is_ok());
+    }
+
+    #[test]
+    fn validate_params_fails_for_more_than_one_param_has_inject_equals_true() {
+        let another_invalid_params = vec![
+            MethodParam {
+                name: "param1".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+            MethodParam {
+                name: "param2".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+            MethodParam {
+                name: "param3".to_string(),
+                ty: "u64".to_string(),
+                optional: false,
+                inject: true,
+            },
+        ];
+        let method_name = "test";
+        let test_fn = validate_params_with_name(method_name);
+        assert!(test_fn(&another_invalid_params, &()).is_err());
+    }
+
+    #[test]
+    fn validate_params_fails_for_optional_params_are_not_the_last() {
         let method_name = "test";
         let invalid_params = vec![
             MethodParam {
@@ -137,30 +191,7 @@ mod tests {
                 inject: true,
             },
         ];
-        let another_invalid_params = vec![
-            MethodParam {
-                name: "param1".to_string(),
-                ty: "u64".to_string(),
-                optional: false,
-                inject: true,
-            },
-            MethodParam {
-                name: "param2".to_string(),
-                ty: "u64".to_string(),
-                optional: false,
-                inject: true,
-            },
-            MethodParam {
-                name: "param3".to_string(),
-                ty: "u64".to_string(),
-                optional: false,
-                inject: true,
-            },
-        ];
         let test_fn = validate_params_with_name(method_name);
         assert!(test_fn(&invalid_params, &()).is_err());
-        // since test_fn is FnOnce, we need get a new one
-        let test_fn = validate_params_with_name(method_name);
-        assert!(test_fn(&another_invalid_params, &()).is_err());
     }
 }

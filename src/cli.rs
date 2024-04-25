@@ -21,7 +21,7 @@ pub fn parse_args() -> Cli {
 }
 
 impl Cli {
-    pub fn just_validate(&self) -> bool {
+    pub fn is_validate(&self) -> bool {
         matches!(self.command, Some(Command::Validate))
     }
 }
