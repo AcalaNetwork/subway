@@ -74,11 +74,10 @@ impl Endpoint {
                         health_.on_error(&err);
                         _ = client_tx.send(None);
                         tracing::warn!("Unable to connect to endpoint: {url_} error: {err}");
-                        tokio::time::sleep(get_backoff_time(&connect_backoff_counter)).await;
                     }
                 }
-                // Wait a second before trying to reconnect
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                // Wait a bit before trying to reconnect
+                tokio::time::sleep(get_backoff_time(&connect_backoff_counter)).await;
             }
         });
 
