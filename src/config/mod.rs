@@ -123,54 +123,9 @@ pub struct MiddlewaresConfig {
 pub struct Config {
     #[garde(dive)]
     pub extensions: ExtensionsConfig,
-    #[garde(custom(has_matched_extensions(&self.extensions)))]
     pub middlewares: MiddlewaresConfig,
     #[garde(dive)]
     pub rpcs: RpcDefinitions,
-}
-
-macro_rules! define_middleware_extension_mappings {
-    (
-        methods: [$(($method_mw:ident, $method_ext:ident)),*],
-        subscriptions: [$(($sub_mw:ident, $sub_ext:ident)),*]
-    ) => {
-        fn has_matched_extensions(extensions: &ExtensionsConfig) -> impl FnOnce(&MiddlewaresConfig, &()) -> garde::Result + '_ {
-            move |middlewares, _| {
-                for m in &middlewares.methods {
-                    match m.as_str() {
-                        $(
-                            stringify!($method_mw) => {
-                                if extensions.$method_ext.is_none() {
-                                    return Err(garde::Error::new(format!("No extension: {} for methods middleware: {} in the config. Please check the config.", stringify!($method_ext), stringify!($method_mw))));
-                                }
-                            }
-                        )*
-                        // We don't care the middleware that doesn't have matching extension
-                        _ => {}
-                    }
-                }
-                for s in &middlewares.subscriptions {
-                    match s.as_str() {
-                        $(
-                            stringify!($sub_mw) => {
-                                if extensions.$sub_ext.is_none() {
-                                    return Err(garde::Error::new(format!("No extension: {} for subscriptions middleware: {} in the config. Please check the config.", stringify!($sub_ext), stringify!($sub_mw))));
-                                }
-                            }
-                        )*
-                        // We don't care the middleware that doesn't have matching extension
-                        _ => {}
-                    }
-                }
-                Ok(())
-            }
-        }
-    };
-}
-
-define_middleware_extension_mappings! {
-    methods: [(cache, cache),(block_tags, eth_api),(inject_params, substrate_api),(upstream, client),(validate, validator)],
-    subscriptions: [(upstream,client)]
 }
 
 #[derive(Deserialize, Debug)]
@@ -340,17 +295,5 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("Unable to connect to all endpoints"));
-    }
-
-    #[tokio::test]
-    async fn validate_config_fails_for_no_cache_ext_for_cache_mw() {
-        let config = read_config("configs/no_cache_ext_for_cache_mw.yml").expect("Unable to read config file");
-        let result = validate(&config).await;
-        assert!(result.is_err());
-        assert!(result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("No extension: cache for methods middleware: cache"));
     }
 }
