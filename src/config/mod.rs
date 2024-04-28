@@ -275,7 +275,7 @@ mod tests {
     fn read_config_with_render_template_works() {
         // It's enough to check the replacement works
         // if config itself has proper data validation
-        let _config = read_config("configs/config_with_env.yml").unwrap();
+        let _config = read_config("tests/configs/config_with_env.yml").unwrap();
     }
 
     #[tokio::test]
@@ -287,7 +287,7 @@ mod tests {
 
     #[tokio::test]
     async fn validate_config_fails_for_broken_endpoints() {
-        let config = read_config("configs/broken_endpoints.yml").expect("Unable to read config file");
+        let config = read_config("tests/configs/broken_endpoints.yml").expect("Unable to read config file");
         let result = validate(&config).await;
         assert!(result.is_err());
         assert!(result
