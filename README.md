@@ -50,8 +50,8 @@ Subway is build with middleware pattern.
   - Inject optional `defaultBlock` parameter to requests to ensure downstream middleware such as cache can work properly.
 - Subscription
   - Forward requests to upstream servers.
-  - TODO: Merge duplicated subscriptions.
-- TODO: Rate Limit
+  - Merge duplicated subscriptions.
+- Rate Limit
   - Rate limit requests from downstream middleware.
 - TODO: Parameter filter
   - Deny requests with invalid parameters.
