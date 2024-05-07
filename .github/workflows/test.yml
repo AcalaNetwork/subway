@@ -2,11 +2,11 @@ name: Test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
     paths-ignore:
-      - '**/README.md'
+      - "**/README.md"
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,19 +19,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Install toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: nightly-2023-09-29
-        components: rustfmt, clippy
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
-    - name: Check format
-      run: cargo +nightly-2023-09-29 fmt --all -- --check
-    - name: Check clippy
-      run: cargo +nightly-2023-09-29 clippy --all-targets --all-features -- -D warnings
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly-2023-09-29
+          components: rustfmt, clippy
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Check format
+        run: cargo +nightly-2023-09-29 fmt --all -- --check
+      - name: Check clippy
+        run: cargo +nightly-2023-09-29 clippy --all-targets --all-features -- -D warnings
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
