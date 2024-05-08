@@ -289,7 +289,6 @@ mod tests {
     }
 
     #[tokio::test]
-
     async fn inject_if_param_is_null() {
         let params = vec![json!("0x1234"), json!(None::<()>)];
         let (middleware, _) = create_inject_middleware(
