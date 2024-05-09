@@ -111,6 +111,7 @@ impl Middleware<CallRequest, CallResult> for InjectParamsMiddleware {
                 if param.ty == "BlockNumber" {
                     if let Some(number) = request.params.get(idx).and_then(|x| x.as_u64()) {
                         let (_, finalized) = self.finalized.read().await;
+                        // avoid cache unfinalized data
                         if number > finalized {
                             context.insert(BypassCache(true));
                         }
@@ -121,17 +122,20 @@ impl Middleware<CallRequest, CallResult> for InjectParamsMiddleware {
         };
 
         let idx = self.get_index();
-        match request.params.len() {
-            len if len > idx + 1 => {
-                // unexpected number of params
+        let min_len = idx + 1;
+        let len = request.params.len();
+
+        match len.cmp(&min_len) {
+            std::cmp::Ordering::Greater => {
+                // too many params, no injection needed
                 return handle_request(request).await;
             }
-            len if len <= idx => {
-                // without current block
-                let params_passed = request.params.len();
-                while request.params.len() < idx {
-                    let current = request.params.len();
-                    if self.params[current].optional {
+            std::cmp::Ordering::Less => {
+                // too few params
+
+                // ensure missing params are optional and push null
+                for i in len..(min_len - 1) {
+                    if self.params[i].optional {
                         request.params.push(JsonValue::Null);
                     } else {
                         let (required, optional) = self.params_count();
@@ -139,19 +143,22 @@ impl Middleware<CallRequest, CallResult> for InjectParamsMiddleware {
                             "Expected {:?} parameters ({:?} optional), {:?} found instead",
                             required + optional,
                             optional,
-                            params_passed
+                            len
                         )));
                     }
                 }
+
                 // Set param to null, it will be replaced later
                 request.params.push(JsonValue::Null);
             }
-            _ => {} // full params, block potentially might be null
+            std::cmp::Ordering::Equal => {
+                // same number of params, no need to push params
+            }
         };
 
         // Here we are sure we have full params in the request, but it still might be set to null
         async move {
-            if request.params[idx] == JsonValue::Null {
+            if request.params[idx].is_null() {
                 let to_inject = self.get_parameter().await;
                 tracing::trace!("Injected param {} to method {}", &to_inject, request.method);
                 request.params[idx] = to_inject;
