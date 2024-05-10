@@ -135,6 +135,7 @@ macro_rules! define_all_extensions {
 define_all_extensions! {
     telemetry: telemetry::Telemetry,
     cache: cache::Cache,
+    #[garde(dive)]
     client: client::Client,
     merge_subscription: merge_subscription::MergeSubscription,
     substrate_api: api::SubstrateApi,
