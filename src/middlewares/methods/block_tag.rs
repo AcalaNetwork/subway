@@ -22,9 +22,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for BlockTagMiddlewar
         method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        let Some(index) = method.params.iter().position(|p| p.ty == "BlockTag" && p.inject) else {
-            return None;
-        };
+        let index = method.params.iter().position(|p| p.ty == "BlockTag" && p.inject)?;
 
         let eth_api = extensions
             .read()

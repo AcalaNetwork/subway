@@ -45,9 +45,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for InjectParamsMiddl
         method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        let Some(inject_type) = inject_type(&method.params) else {
-            return None;
-        };
+        let inject_type = inject_type(&method.params)?;
 
         let api = extensions
             .read()
