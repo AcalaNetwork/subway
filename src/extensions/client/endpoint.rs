@@ -134,7 +134,7 @@ impl Endpoint {
         params: Vec<serde_json::Value>,
         timeout: Duration,
     ) -> Result<serde_json::Value, jsonrpsee::core::client::Error> {
-        match tokio::time::timeout(timeout, async {
+        let request_result = tokio::time::timeout(timeout, async {
             self.connected().await;
             let client = self
                 .client_rx
@@ -149,8 +149,9 @@ impl Endpoint {
                 }
             }
         })
-        .await
-        {
+        .await;
+
+        match request_result {
             Ok(res) => res,
             Err(_) => {
                 tracing::error!("request timed out method: {method} params: {params:?}");
@@ -167,7 +168,7 @@ impl Endpoint {
         unsubscribe_method: &str,
         timeout: Duration,
     ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::client::Error> {
-        match tokio::time::timeout(timeout, async {
+        let subscription_result = tokio::time::timeout(timeout, async {
             self.connected().await;
             let client = self
                 .client_rx
@@ -185,8 +186,9 @@ impl Endpoint {
                 }
             }
         })
-        .await
-        {
+        .await;
+
+        match subscription_result {
             Ok(res) => res,
             Err(_) => {
                 tracing::error!("subscribe timed out subscribe: {subscribe_method} params: {params:?}");
