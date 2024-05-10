@@ -20,8 +20,10 @@ pub struct Endpoint {
     url: String,
     health: Arc<Health>,
     client_rx: tokio::sync::watch::Receiver<Option<Arc<Client>>>,
+    reconnect_tx: tokio::sync::mpsc::Sender<()>,
     on_client_ready: Arc<tokio::sync::Notify>,
     background_tasks: Vec<tokio::task::JoinHandle<()>>,
+    connect_counter: Arc<AtomicU32>,
 }
 
 impl Drop for Endpoint {
@@ -38,12 +40,15 @@ impl Endpoint {
         health_config: HealthCheckConfig,
     ) -> Self {
         let (client_tx, client_rx) = tokio::sync::watch::channel(None);
+        let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::channel(1);
         let on_client_ready = Arc::new(tokio::sync::Notify::new());
         let health = Arc::new(Health::new(url.clone(), health_config));
+        let connect_counter = Arc::new(AtomicU32::new(0));
 
         let url_ = url.clone();
         let health_ = health.clone();
         let on_client_ready_ = on_client_ready.clone();
+        let connect_counter_ = connect_counter.clone();
 
         // This task will try to connect to the endpoint and keep the connection alive
         let connection_task = tokio::spawn(async move {
@@ -51,6 +56,7 @@ impl Endpoint {
 
             loop {
                 tracing::info!("Connecting endpoint: {url_}");
+                connect_counter_.fetch_add(1, Ordering::Relaxed);
 
                 let client = WsClientBuilder::default()
                     .request_timeout(request_timeout.unwrap_or(Duration::from_secs(30)))
@@ -68,7 +74,15 @@ impl Endpoint {
                         on_client_ready_.notify_waiters();
                         tracing::info!("Endpoint connected: {url_}");
                         connect_backoff_counter.store(0, Ordering::Relaxed);
-                        client.on_disconnect().await;
+
+                        tokio::select! {
+                            _ = reconnect_rx.recv() => {
+                                tracing::debug!("Endpoint reconnect requested: {url_}");
+                            },
+                            _ = client.on_disconnect() => {
+                                tracing::debug!("Endpoint disconnected: {url_}");
+                            }
+                        }
                     }
                     Err(err) => {
                         health_.on_error(&err);
@@ -88,8 +102,10 @@ impl Endpoint {
             url,
             health,
             client_rx,
+            reconnect_tx,
             on_client_ready,
             background_tasks: vec![connection_task, health_checker],
+            connect_counter,
         }
     }
 
@@ -106,6 +122,10 @@ impl Endpoint {
             return;
         }
         self.on_client_ready.notified().await;
+    }
+
+    pub fn connect_counter(&self) -> u32 {
+        self.connect_counter.load(Ordering::Relaxed)
     }
 
     pub async fn request(
@@ -164,5 +184,10 @@ impl Endpoint {
                 Err(jsonrpsee::core::Error::RequestTimeout)
             }
         }
+    }
+
+    pub async fn reconnect(&self) {
+        // notify the client to reconnect
+        self.reconnect_tx.send(()).await.unwrap();
     }
 }

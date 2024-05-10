@@ -290,3 +290,46 @@ async fn health_check_works() {
     handle1.stop().unwrap();
     handle2.stop().unwrap();
 }
+
+#[tokio::test]
+async fn reconnect_on_disconnect() {
+    let (addr1, handle1, mut rx1, _) = dummy_server().await;
+    let (addr2, handle2, mut rx2, _) = dummy_server().await;
+
+    let client = Client::new(
+        [format!("ws://{addr1}"), format!("ws://{addr2}")],
+        Some(Duration::from_millis(100)),
+        None,
+        Some(2),
+        None,
+    )
+    .unwrap();
+
+    let h1 = tokio::spawn(async move {
+        let _req = rx1.recv().await.unwrap();
+        // no response, let it timeout
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    });
+
+    let h2 = tokio::spawn(async move {
+        let req = rx2.recv().await.unwrap();
+        req.respond(json!(1));
+    });
+
+    let h3 = tokio::spawn(async move {
+        let res = client.request("mock_rpc", vec![]).await;
+        assert_eq!(res.unwrap(), json!(1));
+
+        tokio::time::sleep(Duration::from_millis(2000)).await;
+
+        assert_eq!(client.endpoints()[0].connect_counter(), 2);
+        assert_eq!(client.endpoints()[1].connect_counter(), 1);
+    });
+
+    h3.await.unwrap();
+    h1.await.unwrap();
+    h2.await.unwrap();
+
+    handle1.stop().unwrap();
+    handle2.stop().unwrap();
+}

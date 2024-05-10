@@ -261,13 +261,17 @@ impl Client {
                 }
                 // wait for at least one endpoint to connect
                 futures::future::select_all(endpoints.iter().map(|x| x.connected().boxed())).await;
-                // Sort by health score
-                endpoints.sort_by_key(|endpoint| std::cmp::Reverse(endpoint.health().score()));
-                // Pick the first one
-                endpoints[0].clone()
+
+                endpoints
+                    .iter()
+                    .max_by_key(|endpoint| endpoint.health().score())
+                    .expect("No endpoints")
+                    .clone()
             };
 
-            let mut selected_endpoint = healthiest_endpoint(None).await;
+            let mut selected_endpoint = endpoints[0].clone();
+
+            selected_endpoint.connected().await;
 
             let handle_message = |message: Message, endpoint: Arc<Endpoint>, rotation_notify: Arc<Notify>| {
                 let tx = message_tx_bg.clone();
@@ -422,6 +426,10 @@ impl Client {
                     _ = selected_endpoint.health().unhealthy() => {
                         // Current selected endpoint is unhealthy, try to rotate to another one.
                         // In case of all endpoints are unhealthy, we don't want to keep rotating but stick with the healthiest one.
+
+                        // The ws client maybe in a state that requires a reconnect
+                        selected_endpoint.reconnect().await;
+
                         let new_selected_endpoint = healthiest_endpoint(None).await;
                         if new_selected_endpoint.url() != selected_endpoint.url() {
                             tracing::warn!("Switch to endpoint: {new_url}", new_url=new_selected_endpoint.url());
