@@ -1,0 +1,53 @@
+extensions:
+  client:
+    endpoints:
+      - wss://acala-rpc.dwellir.com
+      - wss://acala-rpc.aca-api.network
+      - wss://acala-rpc.aca-staging.network
+      - wss://acala-rpc-node-2.aca-api.network
+      - wss://acala-internal-rpc.aca-api.network:8443
+    health_check:
+      interval_sec: 30 # check interval, default is 10s
+      healthy_response_time_ms: 500 # max response time to be considered healthy, default is 500ms
+      health_method: system_health
+      response: # response contains { isSyncing: false }
+        !contains
+          - - isSyncing
+            - !eq false
+  event_bus:
+  substrate_api:
+    stale_timeout_seconds: 180 # rotate endpoint if no new blocks for 3 minutes
+  telemetry:
+    provider: none
+  cache:
+    default_ttl_seconds: 60
+    default_size: 500
+  merge_subscription:
+    keep_alive_seconds: 60
+  server:
+    port: 9944
+    listen_address: '0.0.0.0'
+    max_connections: 2000
+    http_methods:
+      - path: /health
+        method: system_health
+      - path: /liveness
+        method: chain_getBlockHash
+    cors: all
+  validator:
+    ignore_methods:
+      - system_health
+      - system_name
+      - system_version
+      - author_pendingExtrinsics
+
+middlewares:
+  methods:
+    - inject_params
+    - validate
+    - upstream
+  subscriptions:
+    - merge_subscription
+    - upstream
+
+rpcs: substrate

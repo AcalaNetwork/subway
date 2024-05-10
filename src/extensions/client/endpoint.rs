@@ -37,7 +37,7 @@ impl Endpoint {
         url: String,
         request_timeout: Option<Duration>,
         connection_timeout: Option<Duration>,
-        health_config: HealthCheckConfig,
+        health_config: Option<HealthCheckConfig>,
     ) -> Self {
         let (client_tx, client_rx) = tokio::sync::watch::channel(None);
         let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::channel(1);

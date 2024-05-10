@@ -61,11 +61,17 @@ async fn multiple_endpoints() {
     let (addr2, handle2, rx2, _) = dummy_server().await;
     let (addr3, handle3, rx3, _) = dummy_server().await;
 
-    let client = Client::with_endpoints([
-        format!("ws://{addr1}"),
-        format!("ws://{addr2}"),
-        format!("ws://{addr3}"),
-    ])
+    let client = Client::new(
+        [
+            format!("ws://{addr1}"),
+            format!("ws://{addr2}"),
+            format!("ws://{addr3}"),
+        ],
+        None,
+        None,
+        None,
+        Some(Default::default()),
+    )
     .unwrap();
 
     let handle_requests = |mut rx: mpsc::Receiver<MockRequest>, n: u32| {
@@ -88,7 +94,7 @@ async fn multiple_endpoints() {
 
     let result = client.request("mock_rpc", vec![22.into()]).await.unwrap();
 
-    assert_eq!(result.to_string(), "2");
+    assert_eq!(result.to_string(), "3");
 
     client.rotate_endpoint().await;
 
@@ -96,7 +102,7 @@ async fn multiple_endpoints() {
 
     let result = client.request("mock_rpc", vec![33.into()]).await.unwrap();
 
-    assert_eq!(result.to_string(), "3");
+    assert_eq!(result.to_string(), "2");
 
     handle3.stop().unwrap();
 
