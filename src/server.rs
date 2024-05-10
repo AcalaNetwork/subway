@@ -97,7 +97,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
                         let result = result_rx
                             .await
-                            .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout));
+                            .map_err(|_| errors::map_error(jsonrpsee::core::client::Error::RequestTimeout));
 
                         match result.as_ref() {
                             Ok(Ok(_)) => tracer.span_ok(),
@@ -172,7 +172,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
                             let result = result_rx
                                 .await
-                                .map_err(|_| errors::map_error(jsonrpsee::core::Error::RequestTimeout))?;
+                                .map_err(|_| errors::map_error(jsonrpsee::core::client::Error::RequestTimeout))?;
 
                             match result.as_ref() {
                                 Ok(_) => {

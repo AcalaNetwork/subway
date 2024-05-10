@@ -113,7 +113,7 @@ impl Endpoint {
         method: &str,
         params: Vec<serde_json::Value>,
         timeout: Duration,
-    ) -> Result<serde_json::Value, jsonrpsee::core::Error> {
+    ) -> Result<serde_json::Value, jsonrpsee::core::client::Error> {
         let client = self
             .client_rx
             .borrow()
@@ -128,8 +128,8 @@ impl Endpoint {
             }
             Err(_) => {
                 tracing::error!("request timed out method: {method} params: {params:?}");
-                self.health.on_error(&jsonrpsee::core::Error::RequestTimeout);
-                Err(jsonrpsee::core::Error::RequestTimeout)
+                self.health.on_error(&jsonrpsee::core::client::Error::RequestTimeout);
+                Err(jsonrpsee::core::client::Error::RequestTimeout)
             }
         }
     }
@@ -140,7 +140,7 @@ impl Endpoint {
         params: Vec<serde_json::Value>,
         unsubscribe_method: &str,
         timeout: Duration,
-    ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::Error> {
+    ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::client::Error> {
         let client = self
             .client_rx
             .borrow()
@@ -160,8 +160,8 @@ impl Endpoint {
             }
             Err(_) => {
                 tracing::error!("subscribe timed out subscribe: {subscribe_method} params: {params:?}");
-                self.health.on_error(&jsonrpsee::core::Error::RequestTimeout);
-                Err(jsonrpsee::core::Error::RequestTimeout)
+                self.health.on_error(&jsonrpsee::core::client::Error::RequestTimeout);
+                Err(jsonrpsee::core::client::Error::RequestTimeout)
             }
         }
     }

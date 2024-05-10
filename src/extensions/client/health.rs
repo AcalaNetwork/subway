@@ -76,12 +76,12 @@ impl Health {
         }
     }
 
-    pub fn on_error(&self, err: &jsonrpsee::core::Error) {
+    pub fn on_error(&self, err: &jsonrpsee::core::client::Error) {
         match err {
-            jsonrpsee::core::Error::Call(_) => {
+            jsonrpsee::core::client::Error::Call(_) => {
                 // NOT SERVER ERROR
             }
-            jsonrpsee::core::Error::RequestTimeout => {
+            jsonrpsee::core::client::Error::RequestTimeout => {
                 tracing::warn!("Endpoint {:?} request timeout", self.url);
                 self.update(Event::RequestTimeout);
             }
