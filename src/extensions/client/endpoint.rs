@@ -134,18 +134,24 @@ impl Endpoint {
         params: Vec<serde_json::Value>,
         timeout: Duration,
     ) -> Result<serde_json::Value, jsonrpsee::core::Error> {
-        let client = self
-            .client_rx
-            .borrow()
-            .clone()
-            .ok_or(errors::failed("client not connected"))?;
-
-        match tokio::time::timeout(timeout, client.request(method, params.clone())).await {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(err)) => {
-                self.health.on_error(&err);
-                Err(err)
+        match tokio::time::timeout(timeout, async {
+            self.connected().await;
+            let client = self
+                .client_rx
+                .borrow()
+                .clone()
+                .ok_or(errors::failed("client not connected"))?;
+            match client.request(method, params.clone()).await {
+                Ok(resp) => Ok(resp),
+                Err(err) => {
+                    self.health.on_error(&err);
+                    Err(err)
+                }
             }
+        })
+        .await
+        {
+            Ok(res) => res,
             Err(_) => {
                 tracing::error!("request timed out method: {method} params: {params:?}");
                 self.health.on_error(&jsonrpsee::core::Error::RequestTimeout);
@@ -161,23 +167,27 @@ impl Endpoint {
         unsubscribe_method: &str,
         timeout: Duration,
     ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::Error> {
-        let client = self
-            .client_rx
-            .borrow()
-            .clone()
-            .ok_or(errors::failed("client not connected"))?;
-
-        match tokio::time::timeout(
-            timeout,
-            client.subscribe(subscribe_method, params.clone(), unsubscribe_method),
-        )
+        match tokio::time::timeout(timeout, async {
+            self.connected().await;
+            let client = self
+                .client_rx
+                .borrow()
+                .clone()
+                .ok_or(errors::failed("client not connected"))?;
+            match client
+                .subscribe(subscribe_method, params.clone(), unsubscribe_method)
+                .await
+            {
+                Ok(resp) => Ok(resp),
+                Err(err) => {
+                    self.health.on_error(&err);
+                    Err(err)
+                }
+            }
+        })
         .await
         {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(err)) => {
-                self.health.on_error(&err);
-                Err(err)
-            }
+            Ok(res) => res,
             Err(_) => {
                 tracing::error!("subscribe timed out subscribe: {subscribe_method} params: {params:?}");
                 self.health.on_error(&jsonrpsee::core::Error::RequestTimeout);

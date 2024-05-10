@@ -129,20 +129,23 @@ async fn concurrent_requests() {
         let req2 = rx.recv().await.unwrap();
         let req3 = rx.recv().await.unwrap();
 
-        req1.respond(JsonValue::from_str("1").unwrap());
-        req2.respond(JsonValue::from_str("2").unwrap());
-        req3.respond(JsonValue::from_str("3").unwrap());
+        let p1 = req1.params.clone();
+        let p2 = req2.params.clone();
+        let p3 = req3.params.clone();
+        req1.respond(p1);
+        req2.respond(p2);
+        req3.respond(p3);
     });
 
-    let res1 = client.request("mock_rpc", vec![]);
-    let res2 = client.request("mock_rpc", vec![]);
-    let res3 = client.request("mock_rpc", vec![]);
+    let res1 = client.request("mock_rpc", vec![json!(1)]);
+    let res2 = client.request("mock_rpc", vec![json!(2)]);
+    let res3 = client.request("mock_rpc", vec![json!(3)]);
 
     let res = tokio::join!(res1, res2, res3);
 
-    assert_eq!(res.0.unwrap().to_string(), "1");
-    assert_eq!(res.1.unwrap().to_string(), "2");
-    assert_eq!(res.2.unwrap().to_string(), "3");
+    assert_eq!(res.0.unwrap(), json!([1]));
+    assert_eq!(res.1.unwrap(), json!([2]));
+    assert_eq!(res.2.unwrap(), json!([3]));
 
     handle.stop().unwrap();
     task.await.unwrap();

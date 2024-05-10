@@ -282,8 +282,6 @@ impl Client {
                 }
             };
 
-            selected_endpoint.connected().await;
-
             let handle_message = |message: Message, endpoint: Arc<Endpoint>, rotation_notify: Arc<Notify>| {
                 let tx = message_tx_bg.clone();
                 let request_backoff_counter = request_backoff_counter.clone();
