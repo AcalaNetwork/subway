@@ -13,6 +13,7 @@ use serde_json::json;
 use crate::{
     config::Config,
     extensions::{
+        prometheus::get_rpc_metrics,
         rate_limit::{MethodWeights, RateLimitBuilder},
         server::SubwayServerBuilder,
     },
@@ -52,9 +53,11 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
     let request_timeout_seconds = server_builder.config.request_timeout_seconds;
 
+    let metrics = get_rpc_metrics(&extensions_registry).await;
+
     let registry = extensions_registry.clone();
     let (addr, handle) = server_builder
-        .build(rate_limit_builder, rpc_method_weights, move || async move {
+        .build(rate_limit_builder, rpc_method_weights, metrics, move || async move {
             let mut module = RpcModule::new(());
 
             let tracer = telemetry::Tracer::new("server");

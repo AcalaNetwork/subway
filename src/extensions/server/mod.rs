@@ -4,21 +4,30 @@ use hyper::server::conn::AddrStream;
 use hyper::service::Service;
 use hyper::service::{make_service_fn, service_fn};
 use jsonrpsee::server::{
-    middleware::rpc::RpcServiceBuilder, stop_channel, RandomStringIdProvider, RpcModule, ServerBuilder, ServerHandle,
+    middleware::rpc::RpcServiceBuilder, stop_channel, ws, RandomStringIdProvider, RpcModule, ServerBuilder,
+    ServerHandle,
 };
 use jsonrpsee::Methods;
+
 use serde::ser::StdError;
 use serde::Deserialize;
+
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{future::Future, net::SocketAddr};
+use tower::layer::layer_fn;
 use tower::ServiceBuilder;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::{Extension, ExtensionRegistry};
 use crate::extensions::rate_limit::{MethodWeights, RateLimitBuilder, XFF};
+pub use prometheus::Protocol;
 
+mod prometheus;
 mod proxy_get_request;
+
+use crate::extensions::prometheus::RpcMetrics;
+use crate::extensions::server::prometheus::PrometheusService;
 use proxy_get_request::{ProxyGetRequestLayer, ProxyGetRequestMethod};
 
 pub struct SubwayServerBuilder {
@@ -98,6 +107,7 @@ impl SubwayServerBuilder {
         &self,
         rate_limit_builder: Option<Arc<RateLimitBuilder>>,
         rpc_method_weights: MethodWeights,
+        rpc_metrics: RpcMetrics,
         rpc_module_builder: impl FnOnce() -> Fut,
     ) -> anyhow::Result<(SocketAddr, ServerHandle)> {
         let config = self.config.clone();
@@ -130,14 +140,20 @@ impl SubwayServerBuilder {
             let stop_handle = stop_handle.clone();
             let rate_limit_builder = rate_limit_builder.clone();
             let rpc_method_weights = rpc_method_weights.clone();
+            let rpc_metrics = rpc_metrics.clone();
 
             async move {
                 // service_fn handle each request
                 Ok::<_, Box<dyn StdError + Send + Sync>>(service_fn(move |req| {
+                    let is_websocket = ws::is_upgrade_request(&req);
+                    let protocol = if is_websocket { Protocol::Ws } else { Protocol::Http };
+
                     let mut socket_ip = socket_ip.clone();
                     let methods: Methods = rpc_module.clone().into();
                     let stop_handle = stop_handle.clone();
                     let http_middleware = http_middleware.clone();
+                    let rpc_metrics = rpc_metrics.clone();
+                    let call_metrics = rpc_metrics.call_metrics();
 
                     if let Some(true) = rate_limit_builder.as_ref().map(|r| r.use_xff()) {
                         socket_ip = req.xxf_ip().unwrap_or(socket_ip);
@@ -153,6 +169,11 @@ impl SubwayServerBuilder {
                             rate_limit_builder
                                 .as_ref()
                                 .and_then(|r| r.connection_limit(rpc_method_weights.clone())),
+                        )
+                        .option_layer(
+                            call_metrics
+                                .as_ref()
+                                .map(|(a, b, c)| layer_fn(|s| PrometheusService::new(s, protocol, a, b, c))),
                         );
 
                     let service_builder = ServerBuilder::default()
@@ -163,6 +184,15 @@ impl SubwayServerBuilder {
                         .to_service_builder();
 
                     let mut service = service_builder.build(methods, stop_handle);
+
+                    if is_websocket {
+                        let on_ws_close = service.on_session_closed();
+                        rpc_metrics.ws_open();
+                        tokio::spawn(async move {
+                            on_ws_close.await;
+                            rpc_metrics.ws_closed();
+                        });
+                    }
                     service.call(req)
                 }))
             }
