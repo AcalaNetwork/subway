@@ -212,7 +212,6 @@ impl Client {
         retries: Option<u32>,
         health_config: Option<HealthCheckConfig>,
     ) -> Result<Self, anyhow::Error> {
-        let health_config = health_config.unwrap_or_default();
         let endpoints: Vec<_> = endpoints.into_iter().map(|e| e.as_ref().to_string()).collect();
 
         if endpoints.is_empty() {
@@ -243,34 +242,48 @@ impl Client {
 
         let rotation_notify = Arc::new(Notify::new());
         let rotation_notify_bg = rotation_notify.clone();
-        let endpoints_ = endpoints.clone();
+        let endpoints2 = endpoints.clone();
+        let has_health_method = health_config.is_some();
+
+        let mut current_endpoint_idx = 0;
+        let mut selected_endpoint = endpoints[0].clone();
 
         let background_task = tokio::spawn(async move {
             let request_backoff_counter = Arc::new(AtomicU32::new(0));
 
-            // Select next endpoint with the highest health score, excluding the current one if provided
-            let healthiest_endpoint = |exclude: Option<Arc<Endpoint>>| async {
+            // Select next endpoint with the highest health score, excluding the current one if possible
+            let select_healtiest = |endpoints: Vec<Arc<Endpoint>>, current_idx: usize| async move {
                 if endpoints.len() == 1 {
                     let selected_endpoint = endpoints[0].clone();
                     // Ensure it's connected
                     selected_endpoint.connected().await;
-                    return selected_endpoint;
+                    return (selected_endpoint, 0);
                 }
 
-                let mut endpoints = endpoints.clone();
-                // Remove the current endpoint from the list
-                if let Some(exclude) = exclude {
-                    endpoints.retain(|e| e.url() != exclude.url());
-                }
                 // wait for at least one endpoint to connect
                 futures::future::select_all(endpoints.iter().map(|x| x.connected().boxed())).await;
-                // Sort by health score
-                endpoints.sort_by_key(|endpoint| std::cmp::Reverse(endpoint.health().score()));
-                // Pick the first one
-                endpoints[0].clone()
+
+                let (idx, endpoint) = endpoints
+                    .iter()
+                    .enumerate()
+                    .filter(|(idx, _)| *idx != current_idx)
+                    .max_by_key(|(_, endpoint)| endpoint.health().score())
+                    .expect("No endpoints");
+                (endpoint.clone(), idx)
             };
 
-            let mut selected_endpoint = healthiest_endpoint(None).await;
+            let select_next = |endpoints: Vec<Arc<Endpoint>>, current_idx: usize| async move {
+                let idx = (current_idx + 1) % endpoints.len();
+                (endpoints[idx].clone(), idx)
+            };
+
+            let next_endpoint = |current_idx| {
+                if has_health_method {
+                    select_healtiest(endpoints2.clone(), current_idx).boxed()
+                } else {
+                    select_next(endpoints2.clone(), current_idx).boxed()
+                }
+            };
 
             let handle_message = |message: Message, endpoint: Arc<Endpoint>, rotation_notify: Arc<Notify>| {
                 let tx = message_tx_bg.clone();
@@ -425,10 +438,15 @@ impl Client {
                     _ = selected_endpoint.health().unhealthy() => {
                         // Current selected endpoint is unhealthy, try to rotate to another one.
                         // In case of all endpoints are unhealthy, we don't want to keep rotating but stick with the healthiest one.
-                        let new_selected_endpoint = healthiest_endpoint(None).await;
-                        if new_selected_endpoint.url() != selected_endpoint.url() {
+
+                        // The ws client maybe in a state that requires a reconnect
+                        selected_endpoint.reconnect().await;
+
+                        let (new_selected_endpoint, new_current_endpoint_idx) = next_endpoint(current_endpoint_idx).await;
+                        if new_current_endpoint_idx != current_endpoint_idx {
                             tracing::warn!("Switch to endpoint: {new_url}", new_url=new_selected_endpoint.url());
                             selected_endpoint = new_selected_endpoint;
+                            current_endpoint_idx = new_current_endpoint_idx;
                             rotation_notify_bg.notify_waiters();
                         }
                     }
@@ -437,7 +455,7 @@ impl Client {
                         match message {
                             Some(Message::RotateEndpoint) => {
                                 tracing::info!("Rotating endpoint ...");
-                                selected_endpoint = healthiest_endpoint(Some(selected_endpoint.clone())).await;
+                                (selected_endpoint, current_endpoint_idx) = next_endpoint(current_endpoint_idx).await;
                                 rotation_notify_bg.notify_waiters();
                             }
                             Some(message) => handle_message(message, selected_endpoint.clone(), rotation_notify_bg.clone()),
@@ -452,7 +470,7 @@ impl Client {
         });
 
         Ok(Self {
-            endpoints: endpoints_,
+            endpoints,
             sender: message_tx,
             rotation_notify,
             retries: retries.unwrap_or(3),
