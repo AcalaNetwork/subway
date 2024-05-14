@@ -88,7 +88,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonrpsee::types::{Id, ResponsePayload};
+    use jsonrpsee::types::Id;
+    use jsonrpsee::ResponsePayload;
 
     #[derive(Clone)]
     struct MockService;
@@ -96,7 +97,7 @@ mod tests {
         type Future = BoxFuture<'static, MethodResponse>;
 
         fn call(&self, req: Request<'static>) -> Self::Future {
-            async move { MethodResponse::response(req.id, ResponsePayload::result("ok"), 1024) }.boxed()
+            async move { MethodResponse::response(req.id, ResponsePayload::success("ok"), 1024) }.boxed()
         }
     }
 

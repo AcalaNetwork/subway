@@ -4,8 +4,8 @@ use futures_util::FutureExt;
 use governor::Jitter;
 use governor::RateLimiter;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
-use jsonrpsee::types::{Request, ResponsePayload};
-use jsonrpsee::MethodResponse;
+use jsonrpsee::types::Request;
+use jsonrpsee::{MethodResponse, ResponsePayload};
 use std::num::NonZeroU32;
 use std::time::Duration;
 use subway::extensions::rate_limit::{build_quota, ConnectionRateLimit, IpRateLimit};
@@ -16,7 +16,7 @@ impl RpcServiceT<'static> for MockService {
     type Future = BoxFuture<'static, MethodResponse>;
 
     fn call(&self, req: Request<'static>) -> Self::Future {
-        async move { MethodResponse::response(req.id, ResponsePayload::result("ok"), 1024) }.boxed()
+        async move { MethodResponse::response(req.id, ResponsePayload::success("ok"), 1024) }.boxed()
     }
 }
 
