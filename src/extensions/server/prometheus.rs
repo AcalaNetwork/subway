@@ -15,8 +15,8 @@ pub enum Protocol {
 impl Display for Protocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Self::Ws => "ws".to_string(),
-            Self::Http => "http".to_string(),
+            Self::Ws => "ws",
+            Self::Http => "http",
         };
         write!(f, "{}", str)
     }

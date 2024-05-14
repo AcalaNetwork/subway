@@ -81,10 +81,10 @@ impl Prometheus {
 }
 
 fn start_prometheus_exporter(registry: Registry, port: u16, listen_address: String) -> JoinHandle<()> {
-    let address = listen_address.parse().unwrap();
+    let address = listen_address.parse().expect("Invalid prometheus listen address");
     let addr = SocketAddr::new(address, port);
 
     tokio::spawn(async move {
-        init_prometheus(addr, registry).await.unwrap();
+        init_prometheus(addr, registry).await.expect("Init prometeus failed");
     })
 }
