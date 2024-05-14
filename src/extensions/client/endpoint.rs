@@ -218,7 +218,7 @@ impl Endpoint {
                                     health.on_error(err);
                                 }
 
-                                if let Err(_) = response.send(resp) {
+                                if response.send(resp).is_err() {
                                     tracing::error!("Unable to send response to message channel");
                                 }
                             });
@@ -258,7 +258,7 @@ impl Endpoint {
                                     health.on_error(err);
                                 }
 
-                                if let Err(_) = response.send(resp) {
+                                if response.send(resp).is_err() {
                                     tracing::error!("Unable to send response to message channel");
                                 }
                             });
