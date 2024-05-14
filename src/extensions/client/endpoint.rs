@@ -94,6 +94,8 @@ impl Endpoint {
         connection_timeout: Duration,
         health_config: Option<HealthCheckConfig>,
     ) -> Self {
+        tracing::info!("New endpoint: {url}");
+
         let health = Arc::new(Health::new(url.clone()));
         let connect_counter = Arc::new(AtomicU32::new(0));
         let (message_tx, message_rx) = tokio::sync::mpsc::channel::<Message>(4096);
@@ -296,6 +298,7 @@ impl Endpoint {
     fn start_health_monitor_task(&mut self, config: HealthCheckConfig) {
         let message_tx = self.message_tx.clone();
         let health = self.health.clone();
+        let url = self.url.clone();
 
         let handler = tokio::spawn(async move {
             let health_response = config.response.clone();
@@ -320,13 +323,13 @@ impl Endpoint {
                     .await;
 
                 if let Err(err) = res {
-                    tracing::error!("Unexpected error in message channel: {err}");
+                    tracing::error!("{url} Unexpected error in message channel: {err}");
                 }
 
                 let res = match response_rx.await {
                     Ok(resp) => resp,
                     Err(err) => {
-                        tracing::error!("Unexpected error in response channel: {err}");
+                        tracing::error!("{url} Unexpected error in response channel: {err}");
                         Err(jsonrpsee::core::Error::Custom("Internal server error".into()))
                     }
                 };
@@ -345,6 +348,7 @@ impl Endpoint {
 
                         // Check response time
                         if duration > healthy_response_time {
+                            tracing::warn!("{url} response time is too long: {duration:?}");
                             health.update(Event::SlowResponse);
                             continue;
                         }

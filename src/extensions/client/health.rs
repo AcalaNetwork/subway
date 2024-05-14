@@ -58,13 +58,13 @@ impl Health {
         }
         self.score.store(new_score, Ordering::Relaxed);
         tracing::trace!(
-            "Endpoint {:?} score updated from: {current_score} to: {new_score} because {event:?}",
+            "{:?} score updated from: {current_score} to: {new_score} because {event:?}",
             self.url
         );
 
         // Notify waiters if the score has dropped below the threshold
         if current_score >= THRESHOLD && new_score < THRESHOLD {
-            tracing::warn!("Endpoint {:?} became unhealthy", self.url);
+            tracing::warn!("{:?} became unhealthy", self.url);
             self.unhealthy.notify_waiters();
         }
     }
@@ -75,11 +75,11 @@ impl Health {
                 // NOT SERVER ERROR
             }
             jsonrpsee::core::Error::RequestTimeout => {
-                tracing::warn!("Endpoint {:?} request timeout", self.url);
+                tracing::warn!("{:?} request timeout", self.url);
                 self.update(Event::RequestTimeout);
             }
             _ => {
-                tracing::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
+                tracing::warn!("{:?} responded with error: {err:?}", self.url);
                 self.update(Event::ServerError);
             }
         };
