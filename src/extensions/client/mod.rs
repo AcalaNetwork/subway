@@ -1,4 +1,5 @@
 use std::{
+    fmt::{Debug, Formatter},
     sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
@@ -114,23 +115,12 @@ pub struct HealthCheckConfig {
     pub interval_sec: u64,
     #[serde(default = "healthy_response_time_ms")]
     pub healthy_response_time_ms: u64,
-    pub health_method: Option<String>,
+    pub health_method: String,
     pub response: Option<HealthResponse>,
 }
 
-impl Default for HealthCheckConfig {
-    fn default() -> Self {
-        Self {
-            interval_sec: interval_sec(),
-            healthy_response_time_ms: healthy_response_time_ms(),
-            health_method: None,
-            response: None,
-        }
-    }
-}
-
 pub fn interval_sec() -> u64 {
-    10
+    300
 }
 
 pub fn healthy_response_time_ms() -> u64 {
@@ -167,7 +157,6 @@ impl HealthResponse {
     }
 }
 
-#[derive(Debug)]
 enum Message {
     Request {
         method: String,
@@ -185,27 +174,57 @@ enum Message {
     RotateEndpoint,
 }
 
+impl Debug for Message {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Message::Request {
+                method,
+                params,
+                response: _,
+                retries,
+            } => write!(f, "Request({method}, {params:?}, _, {retries})"),
+            Message::Subscribe {
+                subscribe,
+                params,
+                unsubscribe,
+                response: _,
+                retries,
+            } => write!(f, "Subscribe({subscribe}, {params:?}, {unsubscribe}, _, {retries})"),
+            Message::RotateEndpoint => write!(f, "RotateEndpoint"),
+        }
+    }
+}
+
 #[async_trait]
 impl Extension for Client {
     type Config = ClientConfig;
 
     async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
         let health_check = config.health_check.clone();
-        if config.shuffle_endpoints {
+        let endpoints = if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();
             endpoints.shuffle(&mut thread_rng());
-            Ok(Self::new(endpoints, None, None, None, health_check)?)
+            endpoints
         } else {
-            Ok(Self::new(config.endpoints.clone(), None, None, None, health_check)?)
-        }
+            config.endpoints.clone()
+        };
+
+        // TODO: make the params configurable
+        Ok(Self::new(
+            endpoints,
+            Duration::from_secs(30),
+            Duration::from_secs(30),
+            None,
+            health_check,
+        )?)
     }
 }
 
 impl Client {
     pub fn new(
         endpoints: impl IntoIterator<Item = impl AsRef<str>>,
-        request_timeout: Option<Duration>,
-        connection_timeout: Option<Duration>,
+        request_timeout: Duration,
+        connection_timeout: Duration,
         retries: Option<u32>,
         health_config: Option<HealthCheckConfig>,
     ) -> Result<Self, anyhow::Error> {
@@ -252,13 +271,8 @@ impl Client {
             let select_healtiest = |endpoints: Vec<Arc<Endpoint>>, current_idx: usize| async move {
                 if endpoints.len() == 1 {
                     let selected_endpoint = endpoints[0].clone();
-                    // Ensure it's connected
-                    selected_endpoint.connected().await;
                     return (selected_endpoint, 0);
                 }
-
-                // wait for at least one endpoint to connect
-                futures::future::select_all(endpoints.iter().map(|x| x.connected().boxed())).await;
 
                 let (idx, endpoint) = endpoints
                     .iter()
@@ -282,12 +296,9 @@ impl Client {
                 }
             };
 
-            let handle_message = |message: Message, endpoint: Arc<Endpoint>, rotation_notify: Arc<Notify>| {
+            let handle_message = |message: Message, endpoint: Arc<Endpoint>| {
                 let tx = message_tx_bg.clone();
                 let request_backoff_counter = request_backoff_counter.clone();
-
-                // total timeout for a request
-                let task_timeout = request_timeout.unwrap_or(Duration::from_secs(30));
 
                 tokio::spawn(async move {
                     match message {
@@ -304,7 +315,7 @@ impl Client {
                                 return;
                             }
 
-                            match endpoint.request(&method, params.clone(), task_timeout).await {
+                            match endpoint.request(&method, params.clone(), request_timeout).await {
                                 result @ Ok(_) => {
                                     request_backoff_counter.store(0, std::sync::atomic::Ordering::Relaxed);
                                     // make sure it's still connected
@@ -320,9 +331,6 @@ impl Client {
                                         | Error::Transport(_)
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
-                                            // Make sure endpoint is rotated
-                                            rotation_notify.notified().await;
-
                                             tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                             // make sure it's still connected
@@ -367,7 +375,7 @@ impl Client {
                             retries = retries.saturating_sub(1);
 
                             match endpoint
-                                .subscribe(&subscribe, params.clone(), &unsubscribe, task_timeout)
+                                .subscribe(&subscribe, params.clone(), &unsubscribe, request_timeout)
                                 .await
                             {
                                 result @ Ok(_) => {
@@ -385,9 +393,6 @@ impl Client {
                                         | Error::Transport(_)
                                         | Error::RestartNeeded(_)
                                         | Error::MaxSlotsExceeded => {
-                                            // Make sure endpoint is rotated
-                                            rotation_notify.notified().await;
-
                                             tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                             // make sure it's still connected
@@ -444,8 +449,8 @@ impl Client {
                             tracing::warn!("Switch to endpoint: {new_url}", new_url=new_selected_endpoint.url());
                             selected_endpoint = new_selected_endpoint;
                             current_endpoint_idx = new_current_endpoint_idx;
-                            rotation_notify_bg.notify_waiters();
                         }
+                        rotation_notify_bg.notify_waiters();
                     }
                     message = message_rx.recv() => {
                         tracing::trace!("Received message {message:?}");
@@ -455,7 +460,7 @@ impl Client {
                                 (selected_endpoint, current_endpoint_idx) = next_endpoint(current_endpoint_idx).await;
                                 rotation_notify_bg.notify_waiters();
                             }
-                            Some(message) => handle_message(message, selected_endpoint.clone(), rotation_notify_bg.clone()),
+                            Some(message) => handle_message(message, selected_endpoint.clone()),
                             None => {
                                 tracing::debug!("Client dropped");
                                 break;
@@ -473,10 +478,6 @@ impl Client {
             retries: retries.unwrap_or(3),
             background_task,
         })
-    }
-
-    pub fn with_endpoints(endpoints: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self, anyhow::Error> {
-        Self::new(endpoints, None, None, None, None)
     }
 
     pub fn endpoints(&self) -> &Vec<Arc<Endpoint>> {

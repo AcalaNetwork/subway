@@ -1,31 +1,29 @@
-use crate::extensions::client::HealthCheckConfig;
-use jsonrpsee::{async_client::Client, core::client::ClientT};
-use std::{
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+const MAX_SCORE: u32 = 100;
+const THRESHOLD: u32 = 50;
 
 #[derive(Debug)]
 pub enum Event {
     ResponseOk,
+    ConnectionSuccessful,
     SlowResponse,
     RequestTimeout,
-    ConnectionSuccessful,
     ServerError,
-    StaleChain,
+    Unhealthy,
+    ConnectionClosed,
 }
 
 impl Event {
     pub fn update_score(&self, current: u32) -> u32 {
         u32::min(
             match self {
+                Event::ConnectionSuccessful => current.saturating_add(60),
                 Event::ResponseOk => current.saturating_add(2),
-                Event::SlowResponse => current.saturating_sub(5),
-                Event::RequestTimeout | Event::ServerError | Event::StaleChain => 0,
-                Event::ConnectionSuccessful => MAX_SCORE / 5 * 4, // 80% of max score
+                Event::SlowResponse => current.saturating_sub(20),
+                Event::RequestTimeout => current.saturating_sub(40),
+                Event::ConnectionClosed => current.saturating_sub(30),
+                Event::ServerError | Event::Unhealthy => 0,
             },
             MAX_SCORE,
         )
@@ -35,19 +33,14 @@ impl Event {
 #[derive(Debug, Default)]
 pub struct Health {
     url: String,
-    config: Option<HealthCheckConfig>,
     score: AtomicU32,
     unhealthy: tokio::sync::Notify,
 }
 
-const MAX_SCORE: u32 = 100;
-const THRESHOLD: u32 = MAX_SCORE / 2;
-
 impl Health {
-    pub fn new(url: String, config: Option<HealthCheckConfig>) -> Self {
+    pub fn new(url: String) -> Self {
         Self {
             url,
-            config,
             score: AtomicU32::new(0),
             unhealthy: tokio::sync::Notify::new(),
         }
@@ -65,13 +58,13 @@ impl Health {
         }
         self.score.store(new_score, Ordering::Relaxed);
         tracing::trace!(
-            "Endpoint {:?} score updated from: {current_score} to: {new_score}",
+            "{:?} score updated from: {current_score} to: {new_score} because {event:?}",
             self.url
         );
 
         // Notify waiters if the score has dropped below the threshold
         if current_score >= THRESHOLD && new_score < THRESHOLD {
-            tracing::warn!("Endpoint {:?} became unhealthy", self.url);
+            tracing::warn!("{:?} became unhealthy", self.url);
             self.unhealthy.notify_waiters();
         }
     }
@@ -82,11 +75,11 @@ impl Health {
                 // NOT SERVER ERROR
             }
             jsonrpsee::core::Error::RequestTimeout => {
-                tracing::warn!("Endpoint {:?} request timeout", self.url);
+                tracing::warn!("{:?} request timeout", self.url);
                 self.update(Event::RequestTimeout);
             }
             _ => {
-                tracing::warn!("Endpoint {:?} responded with error: {err:?}", self.url);
+                tracing::warn!("{:?} responded with error: {err:?}", self.url);
                 self.update(Event::ServerError);
             }
         };
@@ -94,67 +87,5 @@ impl Health {
 
     pub async fn unhealthy(&self) {
         self.unhealthy.notified().await;
-    }
-}
-
-impl Health {
-    pub fn monitor(
-        health: Arc<Health>,
-        client_rx_: tokio::sync::watch::Receiver<Option<Arc<Client>>>,
-        on_client_ready: Arc<tokio::sync::Notify>,
-    ) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            let config = match health.config {
-                Some(ref config) => config,
-                None => return,
-            };
-
-            // Wait for the client to be ready before starting the health check
-            on_client_ready.notified().await;
-
-            let method_name = config.health_method.as_ref().expect("Invalid health config");
-            let health_response = config.response.clone();
-            let interval = Duration::from_secs(config.interval_sec);
-            let healthy_response_time = Duration::from_millis(config.healthy_response_time_ms);
-
-            let client = match client_rx_.borrow().clone() {
-                Some(client) => client,
-                None => return,
-            };
-
-            loop {
-                // Wait for the next interval
-                tokio::time::sleep(interval).await;
-
-                let request_start = std::time::Instant::now();
-                match client
-                    .request::<serde_json::Value, Vec<serde_json::Value>>(method_name, vec![])
-                    .await
-                {
-                    Ok(response) => {
-                        let duration = request_start.elapsed();
-
-                        // Check response
-                        if let Some(ref health_response) = health_response {
-                            if !health_response.validate(&response) {
-                                health.update(Event::StaleChain);
-                                continue;
-                            }
-                        }
-
-                        // Check response time
-                        if duration > healthy_response_time {
-                            health.update(Event::SlowResponse);
-                            continue;
-                        }
-
-                        health.update(Event::ResponseOk);
-                    }
-                    Err(err) => {
-                        health.on_error(&err);
-                    }
-                }
-            }
-        })
     }
 }

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde_json::json;
 
 use crate::{
@@ -97,7 +99,14 @@ async fn merge_subscription_works() {
     let subway_server = server::build(config).await.unwrap();
     let addr = subway_server.addr;
 
-    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
+    let client = Client::new(
+        [format!("ws://{addr}")],
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        None,
+        None,
+    )
+    .unwrap();
     let mut first_sub = client
         .subscribe(subscribe_mock, vec![], unsubscribe_mock)
         .await
