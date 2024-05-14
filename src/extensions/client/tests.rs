@@ -11,7 +11,14 @@ use tokio::sync::mpsc;
 async fn basic_request() {
     let (addr, handle, mut rx, _) = dummy_server().await;
 
-    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
+    let client = Client::new(
+        [format!("ws://{addr}")],
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        None,
+        None,
+    )
+    .unwrap();
 
     let task = tokio::spawn(async move {
         let req = rx.recv().await.unwrap();
@@ -31,7 +38,14 @@ async fn basic_request() {
 async fn basic_subscription() {
     let (addr, handle, _, mut rx) = dummy_server().await;
 
-    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
+    let client = Client::new(
+        [format!("ws://{addr}")],
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        None,
+        None,
+    )
+    .unwrap();
 
     let task = tokio::spawn(async move {
         let sub = rx.recv().await.unwrap();
@@ -67,10 +81,15 @@ async fn multiple_endpoints() {
             format!("ws://{addr2}"),
             format!("ws://{addr3}"),
         ],
+        Duration::from_secs(1),
+        Duration::from_secs(1),
         None,
-        None,
-        None,
-        Some(Default::default()),
+        Some(HealthCheckConfig {
+            interval_sec: 1,
+            healthy_response_time_ms: 250,
+            health_method: "mock_rpc".into(),
+            response: None,
+        }),
     )
     .unwrap();
 
@@ -122,7 +141,14 @@ async fn multiple_endpoints() {
 async fn concurrent_requests() {
     let (addr, handle, mut rx, _) = dummy_server().await;
 
-    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
+    let client = Client::new(
+        [format!("ws://{addr}")],
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        None,
+        None,
+    )
+    .unwrap();
 
     let task = tokio::spawn(async move {
         let req1 = rx.recv().await.unwrap();
@@ -158,8 +184,8 @@ async fn retry_requests_successful() {
 
     let client = Client::new(
         [format!("ws://{addr1}"), format!("ws://{addr2}")],
-        Some(Duration::from_millis(100)),
-        None,
+        Duration::from_millis(100),
+        Duration::from_millis(100),
         Some(2),
         None,
     )
@@ -196,8 +222,8 @@ async fn retry_requests_out_of_retries() {
 
     let client = Client::new(
         [format!("ws://{addr1}"), format!("ws://{addr2}")],
-        Some(Duration::from_millis(100)),
-        None,
+        Duration::from_millis(100),
+        Duration::from_millis(100),
         Some(2),
         None,
     )
@@ -260,13 +286,13 @@ async fn health_check_works() {
 
     let client = Client::new(
         [format!("ws://{addr1}"), format!("ws://{addr2}")],
-        None,
-        None,
+        Duration::from_secs(1),
+        Duration::from_secs(1),
         None,
         Some(HealthCheckConfig {
             interval_sec: 1,
             healthy_response_time_ms: 250,
-            health_method: Some("system_health".into()),
+            health_method: "system_health".into(),
             response: Some(HealthResponse::Contains(vec![(
                 "isSyncing".to_string(),
                 Box::new(HealthResponse::Eq(false.into())),
@@ -307,8 +333,8 @@ async fn reconnect_on_disconnect() {
 
     let client = Client::new(
         [format!("ws://{addr1}"), format!("ws://{addr2}")],
-        Some(Duration::from_millis(100)),
-        None,
+        Duration::from_millis(100),
+        Duration::from_millis(100),
         Some(2),
         None,
     )
