@@ -1,5 +1,8 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
+const MAX_SCORE: u32 = 100;
+const THRESHOLD: u32 = 50;
+
 #[derive(Debug)]
 pub enum Event {
     ResponseOk,
@@ -15,10 +18,12 @@ impl Event {
     pub fn update_score(&self, current: u32) -> u32 {
         u32::min(
             match self {
+                Event::ConnectionSuccessful => current.saturating_add(60),
                 Event::ResponseOk => current.saturating_add(2),
-                Event::SlowResponse => current.saturating_sub(5),
-                Event::RequestTimeout | Event::ServerError | Event::Unhealthy | Event::ConnectionClosed => 0,
-                Event::ConnectionSuccessful => MAX_SCORE / 5 * 4, // 80% of max score
+                Event::SlowResponse => current.saturating_sub(20),
+                Event::RequestTimeout => current.saturating_sub(40),
+                Event::ConnectionClosed => current.saturating_sub(30),
+                Event::ServerError | Event::Unhealthy => 0,
             },
             MAX_SCORE,
         )
@@ -31,9 +36,6 @@ pub struct Health {
     score: AtomicU32,
     unhealthy: tokio::sync::Notify,
 }
-
-const MAX_SCORE: u32 = 100;
-const THRESHOLD: u32 = MAX_SCORE / 2;
 
 impl Health {
     pub fn new(url: String) -> Self {
@@ -56,7 +58,7 @@ impl Health {
         }
         self.score.store(new_score, Ordering::Relaxed);
         tracing::trace!(
-            "Endpoint {:?} score updated from: {current_score} to: {new_score}",
+            "Endpoint {:?} score updated from: {current_score} to: {new_score} because {event:?}",
             self.url
         );
 
