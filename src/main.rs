@@ -5,12 +5,13 @@ async fn main() -> anyhow::Result<()> {
     let config = subway::config::read_config(&cli.config)?;
     tracing::trace!("{:#?}", config);
 
-    if let Err(err) = subway::config::validate(&config).await {
+    let validate_res = subway::config::validate(&config).await;
+    if let Err(err) = &validate_res {
         tracing::error!("Config validation failed: {err:?}");
     }
     // early return if we're just validating the config
     if cli.is_validate() {
-        return Ok(());
+        return validate_res;
     }
 
     let subway_server = subway::server::build(config).await?;
