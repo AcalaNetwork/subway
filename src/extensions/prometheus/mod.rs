@@ -22,9 +22,9 @@ pub async fn get_rpc_metrics(registry: &TypeRegistryRef) -> RpcMetrics {
 }
 
 pub struct Prometheus {
-    pub registry: Registry,
+    registry: Registry,
     rpc_metrics: RpcMetrics,
-    pub exporter_task: JoinHandle<()>,
+    exporter_task: JoinHandle<()>,
 }
 
 impl Drop for Prometheus {
@@ -56,11 +56,14 @@ impl Prometheus {
             .chain_label
             .clone()
             .map(|l| iter::once(("chain".to_string(), l.clone())).collect());
+
+        // make sure the prefix is not an Option of Some empty string
         let prefix = match config.prefix {
             Some(p) if p.is_empty() => None,
             p => p,
         };
-        let registry = Registry::new_custom(prefix, labels).expect("Can't happen");
+        let registry = Registry::new_custom(prefix, labels)
+            .expect("It can't fail, we make sure the `prefix` is either `None` or `Some` of non-empty string");
         let rpc_metrics = RpcMetrics::new(&registry);
 
         let exporter_task = start_prometheus_exporter(registry.clone(), config.port, config.listen_address);
