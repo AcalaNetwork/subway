@@ -6,9 +6,12 @@ use std::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::FutureExt as Boxed;
+use futures::FutureExt as _;
 use garde::Validate;
-use jsonrpsee::core::{client::Subscription, Error, JsonValue};
+use jsonrpsee::core::{
+    client::{Error, Subscription},
+    JsonValue,
+};
 use jsonrpsee::ws_client::WsClientBuilder;
 use opentelemetry::trace::FutureExt;
 use rand::{seq::SliceRandom, thread_rng};

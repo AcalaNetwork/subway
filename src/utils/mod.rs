@@ -29,8 +29,8 @@ pub mod errors {
         ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, Some(msg.to_string()))
     }
 
-    pub fn map_error(err: jsonrpsee::core::Error) -> ErrorObjectOwned {
-        use jsonrpsee::core::Error::*;
+    pub fn map_error(err: jsonrpsee::core::client::Error) -> ErrorObjectOwned {
+        use jsonrpsee::core::client::Error::*;
         match err {
             Call(e) => e,
             x => internal_error(x),

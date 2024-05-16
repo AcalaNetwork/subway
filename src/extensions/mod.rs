@@ -13,6 +13,7 @@ pub mod cache;
 pub mod client;
 pub mod event_bus;
 pub mod merge_subscription;
+pub mod prometheus;
 pub mod rate_limit;
 pub mod server;
 pub mod telemetry;
@@ -142,5 +143,6 @@ define_all_extensions! {
     server: server::SubwayServerBuilder,
     event_bus: event_bus::EventBus,
     rate_limit: rate_limit::RateLimitBuilder,
+    prometheus: prometheus::Prometheus,
     validator: validator::Validator,
 }

@@ -19,14 +19,14 @@ enum Message {
     Request {
         method: String,
         params: Vec<JsonValue>,
-        response: tokio::sync::oneshot::Sender<Result<JsonValue, jsonrpsee::core::Error>>,
+        response: tokio::sync::oneshot::Sender<Result<JsonValue, jsonrpsee::core::client::Error>>,
         timeout: Duration,
     },
     Subscribe {
         subscribe: String,
         params: Vec<JsonValue>,
         unsubscribe: String,
-        response: tokio::sync::oneshot::Sender<Result<Subscription<JsonValue>, jsonrpsee::core::Error>>,
+        response: tokio::sync::oneshot::Sender<Result<Subscription<JsonValue>, jsonrpsee::core::client::Error>>,
         timeout: Duration,
     },
     Reconnect,
@@ -211,7 +211,7 @@ impl Endpoint {
                                     Err(_) => {
                                         tracing::warn!("Endpoint {url} request timeout: {method} timeout: {timeout:?}");
                                         health.update(Event::RequestTimeout);
-                                        Err(jsonrpsee::core::Error::RequestTimeout)
+                                        Err(jsonrpsee::core::client::Error::RequestTimeout)
                                     }
                                 };
                                 if let Err(err) = &resp {
@@ -251,7 +251,7 @@ impl Endpoint {
                                     Err(_) => {
                                         tracing::warn!("Endpoint {url} subscription timeout: {subscribe}");
                                         health.update(Event::RequestTimeout);
-                                        Err(jsonrpsee::core::Error::RequestTimeout)
+                                        Err(jsonrpsee::core::client::Error::RequestTimeout)
                                     }
                                 };
                                 if let Err(err) = &resp {
@@ -330,7 +330,7 @@ impl Endpoint {
                     Ok(resp) => resp,
                     Err(err) => {
                         tracing::error!("{url} Unexpected error in response channel: {err}");
-                        Err(jsonrpsee::core::Error::Custom("Internal server error".into()))
+                        Err(jsonrpsee::core::client::Error::Custom("Internal server error".into()))
                     }
                 };
 
@@ -382,7 +382,7 @@ impl Endpoint {
         method: &str,
         params: Vec<serde_json::Value>,
         timeout: Duration,
-    ) -> Result<serde_json::Value, jsonrpsee::core::Error> {
+    ) -> Result<serde_json::Value, jsonrpsee::core::client::Error> {
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
         let res = self
             .message_tx
@@ -402,7 +402,7 @@ impl Endpoint {
             Ok(resp) => resp,
             Err(err) => {
                 tracing::error!("Unexpected error in response channel: {err}");
-                Err(jsonrpsee::core::Error::Custom("Internal server error".into()))
+                Err(jsonrpsee::core::client::Error::Custom("Internal server error".into()))
             }
         }
     }
@@ -413,7 +413,7 @@ impl Endpoint {
         params: Vec<serde_json::Value>,
         unsubscribe_method: &str,
         timeout: Duration,
-    ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::Error> {
+    ) -> Result<Subscription<serde_json::Value>, jsonrpsee::core::client::Error> {
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
         let res = self
             .message_tx
@@ -434,7 +434,7 @@ impl Endpoint {
             Ok(resp) => resp,
             Err(err) => {
                 tracing::error!("Unexpected error in response channel: {err}");
-                Err(jsonrpsee::core::Error::Custom("Internal server error".into()))
+                Err(jsonrpsee::core::client::Error::Custom("Internal server error".into()))
             }
         }
     }

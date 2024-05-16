@@ -31,7 +31,7 @@ use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Body, Method, Request, Response, Uri};
 use jsonrpsee::{
-    core::Error as RpcError,
+    core::client::Error as RpcError,
     types::{Id, RequestSer},
 };
 use std::collections::HashMap;
@@ -198,7 +198,7 @@ mod response {
     }
     /// Create a response for json internal error.
     pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
-        let err = ResponsePayload::error(ErrorObjectOwned::from(ErrorCode::InternalError));
+        let err = ResponsePayload::<()>::error(ErrorObjectOwned::from(ErrorCode::InternalError));
         let rp = Response::new(err, Id::Null);
         let error = serde_json::to_string(&rp).expect("built from known-good data; qed");
 
