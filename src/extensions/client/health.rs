@@ -35,7 +35,7 @@ impl Event {
 #[derive(Debug, Default)]
 pub struct Health {
     url: String,
-    config: Option<HealthCheckConfig>,
+    config: HealthCheckConfig,
     score: AtomicU32,
     unhealthy: tokio::sync::Notify,
 }
@@ -44,7 +44,7 @@ const MAX_SCORE: u32 = 100;
 const THRESHOLD: u32 = MAX_SCORE / 2;
 
 impl Health {
-    pub fn new(url: String, config: Option<HealthCheckConfig>) -> Self {
+    pub fn new(url: String, config: HealthCheckConfig) -> Self {
         Self {
             url,
             config,
@@ -104,18 +104,18 @@ impl Health {
         on_client_ready: Arc<tokio::sync::Notify>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
-            let config = match health.config {
-                Some(ref config) => config,
-                None => return,
-            };
+            // no health method
+            if health.config.health_method.is_none() {
+                return;
+            }
 
             // Wait for the client to be ready before starting the health check
             on_client_ready.notified().await;
 
-            let method_name = config.health_method.as_ref().expect("Invalid health config");
-            let health_response = config.response.clone();
-            let interval = Duration::from_secs(config.interval_sec);
-            let healthy_response_time = Duration::from_millis(config.healthy_response_time_ms);
+            let method_name = health.config.health_method.as_ref().expect("checked above");
+            let health_response = health.config.response.clone();
+            let interval = Duration::from_secs(health.config.interval_sec);
+            let healthy_response_time = Duration::from_millis(health.config.healthy_response_time_ms);
 
             let client = match client_rx_.borrow().clone() {
                 Some(client) => client,
