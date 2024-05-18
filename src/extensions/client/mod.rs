@@ -8,12 +8,12 @@ use std::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::FutureExt as _;
+use futures::TryFutureExt;
 use garde::Validate;
 use jsonrpsee::{
     core::{
-        client::{ClientT, Subscription, SubscriptionClientT},
-        Error, JsonValue,
+        client::{ClientT, Error, Subscription, SubscriptionClientT},
+        JsonValue,
     },
     ws_client::{WsClient, WsClientBuilder},
 };
@@ -37,7 +37,7 @@ mod tests;
 const TRACER: utils::telemetry::Tracer = utils::telemetry::Tracer::new("client");
 
 pub struct Client {
-    endpoints: Vec<Arc<Endpoint>>,
+    endpoints: Vec<String>,
     sender: tokio::sync::mpsc::Sender<Message>,
     rotation_notify: Arc<Notify>,
     retries: u32,
@@ -432,8 +432,8 @@ impl Client {
         Self::new(endpoints, None, None, None)
     }
 
-    pub fn endpoints(&self) -> &Vec<Arc<Endpoint>> {
-        self.endpoints.as_ref()
+    pub fn endpoints(&self) -> &Vec<String> {
+        &self.endpoints
     }
 
     pub async fn request(&self, method: &str, params: Vec<JsonValue>) -> CallResult {
