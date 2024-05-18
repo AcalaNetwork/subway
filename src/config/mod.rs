@@ -204,6 +204,8 @@ fn render_template(templated_config_str: &str) -> Result<String, anyhow::Error> 
 }
 
 pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
+    tracing::debug!("Validating config");
+
     // validate use garde::Validate
     config.validate(&())?;
     // since endpoints connection test is async
@@ -214,6 +216,9 @@ pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
             anyhow::bail!("Unable to connect to all endpoints");
         }
     }
+
+    tracing::debug!("Validation completed");
+
     Ok(())
 }
 

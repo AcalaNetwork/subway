@@ -1,6 +1,6 @@
 use jsonrpsee::server::ServerHandle;
 use serde_json::json;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc;
 
 use super::eth::EthApi;
@@ -61,14 +61,7 @@ async fn create_client() -> (
 ) {
     let (addr, server, head_rx, finalized_head_rx, block_hash_rx) = create_server().await;
 
-    let client = Client::new(
-        [format!("ws://{addr}")],
-        Duration::from_secs(1),
-        Duration::from_secs(1),
-        None,
-        None,
-    )
-    .unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
 
     (client, server, head_rx, finalized_head_rx, block_hash_rx)
 }
@@ -175,14 +168,7 @@ async fn rotate_endpoint_on_stale() {
     let (addr, server, mut head_rx, _, mut block_rx) = create_server().await;
     let (addr2, server2, mut head_rx2, _, mut block_rx2) = create_server().await;
 
-    let client = Client::new(
-        [format!("ws://{addr}"), format!("ws://{addr2}")],
-        Duration::from_secs(1),
-        Duration::from_secs(1),
-        None,
-        None,
-    )
-    .unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}"), format!("ws://{addr2}")]).unwrap();
     let api = SubstrateApi::new(Arc::new(client), std::time::Duration::from_millis(100));
 
     let head = api.get_head();
@@ -245,14 +231,7 @@ async fn rotate_endpoint_on_head_mismatch() {
     let (addr1, server1, mut head_rx1, mut finalized_head_rx1, mut block_rx1) = create_server().await;
     let (addr2, server2, mut head_rx2, mut finalized_head_rx2, mut block_rx2) = create_server().await;
 
-    let client = Client::new(
-        [format!("ws://{addr1}"), format!("ws://{addr2}")],
-        Duration::from_secs(1),
-        Duration::from_secs(1),
-        None,
-        None,
-    )
-    .unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr1}"), format!("ws://{addr2}")]).unwrap();
 
     let client = Arc::new(client);
     let api = SubstrateApi::new(client.clone(), std::time::Duration::from_millis(100));
@@ -353,16 +332,7 @@ async fn rotate_endpoint_on_head_mismatch() {
 #[tokio::test]
 async fn substrate_background_tasks_abort_on_drop() {
     let (addr, _server, mut head_rx, mut finalized_head_rx, _) = create_server().await;
-    let client = Arc::new(
-        Client::new(
-            [format!("ws://{addr}")],
-            Duration::from_secs(1),
-            Duration::from_secs(1),
-            None,
-            None,
-        )
-        .unwrap(),
-    );
+    let client = Arc::new(Client::with_endpoints([format!("ws://{addr}")]).unwrap());
     let api = SubstrateApi::new(client, std::time::Duration::from_millis(100));
 
     // background tasks started
@@ -382,16 +352,7 @@ async fn substrate_background_tasks_abort_on_drop() {
 #[tokio::test]
 async fn eth_background_tasks_abort_on_drop() {
     let (addr, _server, mut subscription_rx, mut block_rx) = create_eth_server().await;
-    let client = Arc::new(
-        Client::new(
-            [format!("ws://{addr}")],
-            Duration::from_secs(1),
-            Duration::from_secs(1),
-            None,
-            None,
-        )
-        .unwrap(),
-    );
+    let client = Arc::new(Client::with_endpoints([format!("ws://{addr}")]).unwrap());
 
     let api = EthApi::new(client, std::time::Duration::from_millis(100));
 

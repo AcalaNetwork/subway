@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
     config::{Config, MergeStrategy, MiddlewaresConfig, RpcDefinitions, RpcSubscription},
     extensions::{
@@ -33,7 +31,6 @@ async fn upstream_error_propagate() {
             client: Some(ClientConfig {
                 endpoints: vec![format!("ws://{addr}")],
                 shuffle_endpoints: false,
-                health_check: None,
             }),
             server: Some(ServerConfig {
                 listen_address: "0.0.0.0".to_string(),
@@ -75,14 +72,7 @@ async fn upstream_error_propagate() {
     let subway_server = server::build(config).await.unwrap();
     let addr = subway_server.addr;
 
-    let client = Client::new(
-        [format!("ws://{addr}")],
-        Duration::from_secs(1),
-        Duration::from_secs(1),
-        None,
-        None,
-    )
-    .unwrap();
+    let client = Client::with_endpoints([format!("ws://{addr}")]).unwrap();
     let result = client.subscribe(subscribe_mock, vec![], unsubscribe_mock).await;
 
     assert!(result

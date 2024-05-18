@@ -2,19 +2,18 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::{
-    extensions::{client::Client, validator::Validator},
+    extensions::validator::Validator,
     middlewares::{CallRequest, CallResult, Middleware, MiddlewareBuilder, NextFn, RpcMethod},
     utils::{TypeRegistry, TypeRegistryRef},
 };
 
 pub struct ValidateMiddleware {
     validator: Arc<Validator>,
-    client: Arc<Client>,
 }
 
 impl ValidateMiddleware {
-    pub fn new(validator: Arc<Validator>, client: Arc<Client>) -> Self {
-        Self { validator, client }
+    pub fn new(validator: Arc<Validator>) -> Self {
+        Self { validator }
     }
 }
 
@@ -24,14 +23,13 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for ValidateMiddlewar
         _method: &RpcMethod,
         extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        let validate = extensions.read().await.get::<Validator>().unwrap_or_default();
-
-        let client = extensions
+        let validate = extensions
             .read()
             .await
-            .get::<Client>()
-            .expect("Client extension not found");
-        Some(Box::new(ValidateMiddleware::new(validate, client)))
+            .get::<Validator>()
+            .expect("Validator extension not found");
+
+        Some(Box::new(ValidateMiddleware::new(validate)))
     }
 }
 
@@ -45,7 +43,7 @@ impl Middleware<CallRequest, CallResult> for ValidateMiddleware {
     ) -> CallResult {
         let result = next(request.clone(), context).await;
         if !self.validator.ignore(&request.method) {
-            self.validator.validate(self.client.clone(), request, result.clone());
+            self.validator.validate(request, result.clone());
         }
         result
     }
