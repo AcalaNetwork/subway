@@ -26,7 +26,7 @@ impl Extension for Validator {
         let clients = client
             .endpoints()
             .iter()
-            .map(|e| Arc::new(Client::with_endpoints(&[e]).expect("Unable to create client")))
+            .map(|e| Arc::new(Client::with_endpoints([e]).expect("Unable to create client")))
             .collect();
 
         Ok(Self::new(config.clone(), clients))
