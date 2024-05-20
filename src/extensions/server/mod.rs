@@ -5,7 +5,7 @@ use hyper::service::Service;
 use hyper::service::{make_service_fn, service_fn};
 use jsonrpsee::server::{
     middleware::rpc::RpcServiceBuilder, stop_channel, ws, RandomStringIdProvider, RpcModule, ServerBuilder,
-    ServerHandle,
+    ServerHandle, BatchRequestConfig,
 };
 use jsonrpsee::Methods;
 
@@ -61,6 +61,7 @@ pub struct ServerConfig {
     pub port: u16,
     pub listen_address: String,
     pub max_connections: u32,
+    pub max_batch_size: Option<u32>,
     #[serde(default)]
     pub http_methods: Vec<HttpMethodsConfig>,
     #[serde(default = "default_request_timeout_seconds")]
@@ -176,10 +177,16 @@ impl SubwayServerBuilder {
                                 .map(|(a, b, c)| layer_fn(|s| PrometheusService::new(s, protocol, a, b, c))),
                         );
 
+                    let batch_request_config = match config.max_batch_size {
+                        Some(max_size) => BatchRequestConfig::Limit(max_size),
+                        None => BatchRequestConfig::Unlimited,
+                    };
+
                     let service_builder = ServerBuilder::default()
                         .set_rpc_middleware(rpc_middleware)
                         .set_http_middleware(http_middleware)
                         .max_connections(config.max_connections)
+                        .set_batch_request_config(batch_request_config)
                         .set_id_provider(RandomStringIdProvider::new(16))
                         .to_service_builder();
 
