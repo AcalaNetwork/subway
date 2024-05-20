@@ -4,8 +4,8 @@ use hyper::server::conn::AddrStream;
 use hyper::service::Service;
 use hyper::service::{make_service_fn, service_fn};
 use jsonrpsee::server::{
-    middleware::rpc::RpcServiceBuilder, stop_channel, ws, RandomStringIdProvider, RpcModule, ServerBuilder,
-    ServerHandle, BatchRequestConfig,
+    middleware::rpc::RpcServiceBuilder, stop_channel, ws, BatchRequestConfig, RandomStringIdProvider, RpcModule,
+    ServerBuilder, ServerHandle,
 };
 use jsonrpsee::Methods;
 
