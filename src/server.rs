@@ -225,10 +225,9 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 #[cfg(test)]
 mod tests {
     use jsonrpsee::{
-        core::client::ClientT,
+        core::{client::ClientT, params::BatchRequestBuilder},
         rpc_params,
-        server::ServerBuilder,
-        server::ServerHandle,
+        server::{ServerBuilder, ServerHandle},
         ws_client::{WsClient, WsClientBuilder},
         RpcModule,
     };
@@ -244,7 +243,12 @@ mod tests {
     const PHO: &str = "call_pho";
     const BAR: &str = "bar";
 
-    async fn subway_server(endpoint: String, port: u16, request_timeout_seconds: Option<u64>) -> SubwayServerHandle {
+    async fn subway_server(
+        endpoint: String,
+        port: u16,
+        request_timeout_seconds: Option<u64>,
+        max_batch_size: Option<u32>,
+    ) -> SubwayServerHandle {
         let config = Config {
             extensions: ExtensionsConfig {
                 client: Some(ClientConfig {
@@ -255,7 +259,7 @@ mod tests {
                     listen_address: "127.0.0.1".to_string(),
                     port,
                     max_connections: 1024,
-                    max_batch_size: None,
+                    max_batch_size,
                     request_timeout_seconds: request_timeout_seconds.unwrap_or(10),
                     http_methods: Vec::new(),
                     cors: None,
@@ -338,7 +342,7 @@ mod tests {
     #[tokio::test]
     async fn null_param_works() {
         let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9955").await;
-        let subway_server = subway_server(endpoint, 9944, None).await;
+        let subway_server = subway_server(endpoint, 9944, None, None).await;
         let url = format!("ws://{}", subway_server.addr);
         let client = ws_client(&url).await;
         assert_eq!(BAR, client.request::<String, _>(PHO, rpc_params!()).await.unwrap());
@@ -350,7 +354,7 @@ mod tests {
     async fn request_timeout() {
         let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9956").await;
         // server with 1 second timeout
-        let subway_server = subway_server(endpoint, 9945, Some(1)).await;
+        let subway_server = subway_server(endpoint, 9945, Some(1), None).await;
         let url = format!("ws://{}", subway_server.addr);
         // client with default 60 second timeout
         let client = ws_client(&url).await;
@@ -374,6 +378,85 @@ mod tests {
         }
 
         subway_server.handle.stop().unwrap();
+        upstream_dummy_server_handle.stop().unwrap();
+    }
+
+    #[tokio::test]
+    async fn batch_requests_works() {
+        let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9957").await;
+
+        // Server with max batch size 3
+        let subway_server = subway_server(endpoint, 9946, None, Some(3)).await;
+        let url = format!("ws://{}", subway_server.addr);
+        let client = ws_client(&url).await;
+
+        // Sending 3 request in a batch
+        let mut batch = BatchRequestBuilder::new();
+        batch.insert(PHO, rpc_params!()).unwrap();
+        batch.insert(PHO, rpc_params!()).unwrap();
+        batch.insert(PHO, rpc_params!()).unwrap();
+
+        let res = client.batch_request::<String>(batch).await.unwrap();
+        assert_eq!(res.num_successful_calls(), 3);
+
+        upstream_dummy_server_handle.stop().unwrap();
+    }
+
+    #[tokio::test]
+    async fn batch_requests_exceeds_max_size_errors() {
+        let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9958").await;
+
+        // Server with max batch size 3
+        let subway_server = subway_server(endpoint, 9947, None, Some(3)).await;
+        let url = format!("ws://{}", subway_server.addr);
+        let client = ws_client(&url).await;
+
+        // Sending 4 request in a batch
+        let mut batch = BatchRequestBuilder::new();
+        batch.insert(PHO, rpc_params!()).unwrap();
+        batch.insert(PHO, rpc_params!()).unwrap();
+        batch.insert(PHO, rpc_params!()).unwrap();
+        batch.insert(PHO, rpc_params!()).unwrap();
+
+        // Due to the limitation of jsonrpsee client implementation,
+        // we can't check the error message when response batch id is `null`.
+        // E.g.
+        // Raw response - `{"jsonrpc":"2.0","error":{"code":-32010,"message":"The batch request was too large","data":"Exceeded max limit of 3"},"id":null}`
+        // Jsonrpsee client response - `Err(RestartNeeded(InvalidRequestId(NotPendingRequest("null"))))`
+        //
+        // Checking if error is returned for now.
+        let res = client.batch_request::<String>(batch).await;
+
+        assert_eq!(res.is_err(), true);
+
+        upstream_dummy_server_handle.stop().unwrap();
+    }
+
+    #[tokio::test]
+    async fn batch_requests_disabled_errors() {
+        let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9959").await;
+
+        // Server with max batch size 3
+        let subway_server = subway_server(endpoint, 9948, None, Some(0)).await;
+        let url = format!("ws://{}", subway_server.addr);
+        let client = ws_client(&url).await;
+
+        // Sending 4 request in a batch
+        let mut batch = BatchRequestBuilder::new();
+        batch.insert(PHO, rpc_params!()).unwrap();
+
+        // Due to the limitation of jsonrpsee client implementation,
+        // we can't check the error message when response batch id is `null`.
+        // E.g.
+        // Raw response - `{"jsonrpc":"2.0","error":{"code":-32005,"message":"Batched requests are not supported by this server"},"id":null}`
+        // Jsonrpsee client response - `Err(RestartNeeded(InvalidRequestId(NotPendingRequest("null"))))`
+        //
+        // Checking if error is returned for now.
+        let res = client.batch_request::<String>(batch).await;
+        println!("{:?}", res);
+
+        assert_eq!(res.is_err(), true);
+
         upstream_dummy_server_handle.stop().unwrap();
     }
 }

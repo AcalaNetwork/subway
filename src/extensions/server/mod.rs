@@ -178,6 +178,7 @@ impl SubwayServerBuilder {
                         );
 
                     let batch_request_config = match config.max_batch_size {
+                        Some(0) => BatchRequestConfig::Disabled,
                         Some(max_size) => BatchRequestConfig::Limit(max_size),
                         None => BatchRequestConfig::Unlimited,
                     };
