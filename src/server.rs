@@ -436,12 +436,12 @@ mod tests {
     async fn batch_requests_disabled_errors() {
         let (endpoint, upstream_dummy_server_handle) = upstream_dummy_server("127.0.0.1:9959").await;
 
-        // Server with max batch size 3
+        // Server with max batch size 0 (disabled)
         let subway_server = subway_server(endpoint, 9948, None, Some(0)).await;
         let url = format!("ws://{}", subway_server.addr);
         let client = ws_client(&url).await;
 
-        // Sending 4 request in a batch
+        // Sending 1 request in a batch
         let mut batch = BatchRequestBuilder::new();
         batch.insert(PHO, rpc_params!()).unwrap();
 
