@@ -427,7 +427,7 @@ mod tests {
         // Checking if error is returned for now.
         let res = client.batch_request::<String>(batch).await;
 
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
 
         upstream_dummy_server_handle.stop().unwrap();
     }
@@ -453,9 +453,8 @@ mod tests {
         //
         // Checking if error is returned for now.
         let res = client.batch_request::<String>(batch).await;
-        println!("{:?}", res);
 
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
 
         upstream_dummy_server_handle.stop().unwrap();
     }
