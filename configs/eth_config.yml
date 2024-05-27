@@ -14,6 +14,7 @@ extensions:
     port: 8545
     listen_address: '0.0.0.0'
     max_connections: 2000
+    max_batch_size: 10
     cors: all
 
 middlewares:
