@@ -252,8 +252,7 @@ impl Client {
                                         match err {
                                             Error::RequestTimeout
                                             | Error::Transport(_)
-                                            | Error::RestartNeeded(_)
-                                            | Error::MaxSlotsExceeded => {
+                                            | Error::RestartNeeded(_) => {
                                                 tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                                 // make sure it's still connected
@@ -331,8 +330,7 @@ impl Client {
                                         match err {
                                             Error::RequestTimeout
                                             | Error::Transport(_)
-                                            | Error::RestartNeeded(_)
-                                            | Error::MaxSlotsExceeded => {
+                                            | Error::RestartNeeded(_) => {
                                                 tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                                 // make sure it's still connected
