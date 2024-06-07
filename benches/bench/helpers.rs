@@ -40,7 +40,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle, url: &str) -> (String, js
             SUB_METHOD_NAME,
             SUB_METHOD_NAME,
             UNSUB_METHOD_NAME,
-            |_params, pending, _ctx| async move {
+            |_params, pending, _ctx, _| async move {
                 let sink = pending.accept().await?;
                 let msg = SubscriptionMessage::from_json(&"Hello")?;
                 sink.send(msg).await?;
@@ -53,7 +53,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle, url: &str) -> (String, js
             "chain_subscribeNewHeads",
             "chain_newHead",
             "chain_unsubscribeNewHeads",
-            |_params, pending, _ctx| async move {
+            |_params, pending, _ctx, _| async move {
                 let sink = pending.accept().await?;
                 let msg = SubscriptionMessage::from_json(&serde_json::json!({ "number": "0x4321" }))?;
                 sink.send(msg).await?;
@@ -66,7 +66,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle, url: &str) -> (String, js
             "chain_subscribeFinalizedHeads",
             "chain_finalizedHead",
             "chain_unsubscribeFinalizedHeads",
-            |_params, pending, _ctx| async move {
+            |_params, pending, _ctx, _| async move {
                 let sink = pending.accept().await?;
                 let msg = SubscriptionMessage::from_json(&serde_json::json!({ "number": "0x4321" }))?;
                 sink.send(msg).await?;
@@ -84,47 +84,47 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
     let mut module = jsonrpsee::RpcModule::new(());
 
     module
-        .register_method(SYNC_FAST_CALL, |_, _| Ok::<_, ErrorObjectOwned>("lo"))
+        .register_method(SYNC_FAST_CALL, |_, _, _| Ok::<_, ErrorObjectOwned>("lo"))
         .unwrap();
     module
-        .register_async_method(ASYNC_FAST_CALL, |_, _| async {
+        .register_async_method(ASYNC_FAST_CALL, |_, _, _| async {
             Result::<_, ErrorObjectOwned>::Ok("lo")
         })
         .unwrap();
 
     module
-        .register_method(SYNC_MEM_CALL, |_, _| Ok::<_, ErrorObjectOwned>("A".repeat(MIB)))
+        .register_method(SYNC_MEM_CALL, |_, _, _| Ok::<_, ErrorObjectOwned>("A".repeat(MIB)))
         .unwrap();
 
     module
-        .register_async_method(ASYNC_MEM_CALL, |_, _| async move {
+        .register_async_method(ASYNC_MEM_CALL, |_, _, _| async move {
             Result::<_, ErrorObjectOwned>::Ok("A".repeat(MIB))
         })
         .unwrap();
 
     module
-        .register_method(SYNC_SLOW_CALL, |_, _| {
+        .register_method(SYNC_SLOW_CALL, |_, _, _| {
             std::thread::sleep(SLOW_CALL);
             Ok::<_, ErrorObjectOwned>("slow call")
         })
         .unwrap();
 
     module
-        .register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
+        .register_async_method(ASYNC_SLOW_CALL, |_, _, _| async move {
             tokio::time::sleep(SLOW_CALL).await;
             Result::<_, ErrorObjectOwned>::Ok("slow call async")
         })
         .unwrap();
 
     module
-        .register_async_method(ASYNC_INJECT_CALL, |_, _| async move {
+        .register_async_method(ASYNC_INJECT_CALL, |_, _, _| async move {
             tokio::time::sleep(SLOW_CALL).await;
             Result::<_, ErrorObjectOwned>::Ok("inject call async")
         })
         .unwrap();
 
     module
-        .register_async_method("chain_getBlockHash", |_, _| async move {
+        .register_async_method("chain_getBlockHash", |_, _, _| async move {
             tokio::time::sleep(SLOW_CALL).await;
             Result::<_, ErrorObjectOwned>::Ok("0x42")
         })
