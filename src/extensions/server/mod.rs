@@ -197,7 +197,6 @@ impl SubwayServerBuilder {
                 };
 
                 let per_conn2 = per_conn.clone();
-                // let call_metrics = rpc_metrics.clone().call_metrics();
 
                 // service_fn handle each connection
                 let svc = tower::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -242,7 +241,7 @@ impl SubwayServerBuilder {
                             });
                         }
 
-                        service.clone().call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+                        service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
                     }
                     .boxed()
                 });
