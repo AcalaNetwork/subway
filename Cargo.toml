@@ -48,7 +48,7 @@ tracing-serde = "0.1.3"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 garde = { version = "0.18", features = ["full"] }
 
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "47f9c6c", features = ["full"] }
+jsonrpsee = { version = "0.23", features = ["full"] }
 governor = { path = "./vendor/governor/governor" }
 
 [dev-dependencies]
