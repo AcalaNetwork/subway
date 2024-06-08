@@ -139,6 +139,7 @@ impl SubwayServerBuilder {
         let addr = SocketAddr::new(ip_addr, self.config.port);
 
         let listener = TcpListener::bind(addr).await?;
+        let addr = listener.local_addr()?;
 
         // This state is cloned for every connection
         // all these types based on Arcs and it should
