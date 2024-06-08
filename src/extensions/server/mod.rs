@@ -166,7 +166,7 @@ impl SubwayServerBuilder {
         let per_conn = PerConnection {
             methods: rpc_module.into(),
             stop_handle: stop_handle.clone(),
-            rpc_metrics: rpc_metrics,
+            rpc_metrics,
             svc_builder: jsonrpsee::server::Server::builder()
                 .set_http_middleware(http_middleware)
                 .set_batch_request_config(batch_request_config)
