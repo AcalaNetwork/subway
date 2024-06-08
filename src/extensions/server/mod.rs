@@ -1,13 +1,12 @@
 use async_trait::async_trait;
 use futures::FutureExt;
 use http::header::HeaderValue;
-use tokio::net::TcpListener;
 use jsonrpsee::server::{
-    serve_with_graceful_shutdown, StopHandle, TowerServiceBuilder,
-    middleware::rpc::RpcServiceBuilder, stop_channel, ws, BatchRequestConfig, RandomStringIdProvider, RpcModule,
-    ServerHandle,
+    middleware::rpc::RpcServiceBuilder, serve_with_graceful_shutdown, stop_channel, ws, BatchRequestConfig,
+    RandomStringIdProvider, RpcModule, ServerHandle, StopHandle, TowerServiceBuilder,
 };
 use jsonrpsee::Methods;
+use tokio::net::TcpListener;
 
 use serde::Deserialize;
 
@@ -167,7 +166,7 @@ impl SubwayServerBuilder {
         let per_conn = PerConnection {
             methods: rpc_module.into(),
             stop_handle: stop_handle.clone(),
-            rpc_metrics: rpc_metrics.clone(),
+            rpc_metrics: rpc_metrics,
             svc_builder: jsonrpsee::server::Server::builder()
                 .set_http_middleware(http_middleware)
                 .set_batch_request_config(batch_request_config)
@@ -200,7 +199,14 @@ impl SubwayServerBuilder {
 
                 // service_fn handle each connection
                 let svc = tower::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-                    let PerConnection { methods, stop_handle, rpc_metrics, svc_builder , rate_limit_builder, rpc_method_weights} = per_conn2.clone();
+                    let PerConnection {
+                        methods,
+                        stop_handle,
+                        rpc_metrics,
+                        svc_builder,
+                        rate_limit_builder,
+                        rpc_method_weights,
+                    } = per_conn2.clone();
 
                     let is_websocket = ws::is_upgrade_request(&req);
                     let protocol = if is_websocket { Protocol::Ws } else { Protocol::Http };
@@ -213,24 +219,25 @@ impl SubwayServerBuilder {
                     let call_metrics = rpc_metrics.call_metrics();
 
                     async move {
-                        let rpc_middleware = RpcServiceBuilder::new()
-                        .option_layer(
-                            rate_limit_builder
-                                .as_ref()
-                                .and_then(|r| r.ip_limit(socket_ip, rpc_method_weights.clone())),
-                        )
-                        .option_layer(
-                            rate_limit_builder
-                                .as_ref()
-                                .and_then(|r| r.connection_limit(rpc_method_weights.clone())),
-                        )
-                        .option_layer(
-                            call_metrics
-                                .as_ref()
-                                .map(move |(a, b, c)| layer_fn(move |s| PrometheusService::new(s, protocol, a, b, c))),
-                        );
+                        let rpc_middleware =
+                            RpcServiceBuilder::new()
+                                .option_layer(
+                                    rate_limit_builder
+                                        .as_ref()
+                                        .and_then(|r| r.ip_limit(socket_ip, rpc_method_weights.clone())),
+                                )
+                                .option_layer(
+                                    rate_limit_builder
+                                        .as_ref()
+                                        .and_then(|r| r.connection_limit(rpc_method_weights.clone())),
+                                )
+                                .option_layer(call_metrics.as_ref().map(move |(a, b, c)| {
+                                    layer_fn(move |s| PrometheusService::new(s, protocol, a, b, c))
+                                }));
 
-                        let mut service = svc_builder.set_rpc_middleware(rpc_middleware).build(methods, stop_handle);
+                        let mut service = svc_builder
+                            .set_rpc_middleware(rpc_middleware)
+                            .build(methods, stop_handle);
 
                         if is_websocket {
                             let on_ws_close = service.on_session_closed();
@@ -246,7 +253,6 @@ impl SubwayServerBuilder {
                     .boxed()
                 });
 
-                // tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle.clone().shutdown()));
                 tokio::spawn(serve_with_graceful_shutdown(sock, svc, stop_handle.clone().shutdown()));
             }
         });

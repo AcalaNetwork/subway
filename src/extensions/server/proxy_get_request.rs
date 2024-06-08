@@ -27,17 +27,15 @@
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
 
+use hyper::body::Bytes;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{
-    Method, Uri
-};
-use hyper::body::Bytes;
+use hyper::{Method, Uri};
 use jsonrpsee::{
     core::{
-        BoxError,
+        client::Error as RpcError,
         http_helpers::{Body as HttpBody, Request as HttpRequest, Response as HttpResponse},
-        client::Error as RpcError
+        BoxError,
     },
     types::{Id, RequestSer},
 };
@@ -103,7 +101,6 @@ impl<S> ProxyGetRequest<S> {
     }
 }
 
-
 impl<S, B> Service<HttpRequest<B>> for ProxyGetRequest<S>
 where
     S: Service<HttpRequest, Response = HttpResponse>,
@@ -112,11 +109,11 @@ where
     S::Future: Send + 'static,
     B: http_body::Body<Data = Bytes> + Send + 'static,
     B::Data: Send,
-	B::Error: Into<BoxError>,
+    B::Error: Into<BoxError>,
 {
     type Response = S::Response;
-	type Error = BoxError;
-	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+    type Error = BoxError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -140,12 +137,12 @@ where
             req.headers_mut()
                 .insert(ACCEPT, HeaderValue::from_static("application/json"));
             // Adjust the body to reflect the method call.
-			// let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
-             // .expect("Valid request; qed");
+            // let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
+            // .expect("Valid request; qed");
 
             // let body = HttpBody::from(bytes);
             // Adjust the body to reflect the method call.
-			let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
+            let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
                 .expect("Valid request; qed");
             let body = HttpBody::from(bytes);
 
@@ -190,16 +187,14 @@ where
 
 mod response {
     use jsonrpsee::{
-        types::{error::ErrorCode, ErrorObjectOwned, Id, Response, ResponsePayload},
         core::http_helpers::{Body as HttpBody, Response as HttpResponse},
+        types::{error::ErrorCode, ErrorObjectOwned, Id, Response, ResponsePayload},
     };
 
     const JSON: &str = "application/json; charset=utf-8";
 
     /// Create a response body.
-    fn from_template(
-        status: hyper::StatusCode, body: impl Into<HttpBody>, content_type: &'static str
-    ) -> HttpResponse {
+    fn from_template(status: hyper::StatusCode, body: impl Into<HttpBody>, content_type: &'static str) -> HttpResponse {
         HttpResponse::builder()
             .status(status)
             .header("content-type", hyper::header::HeaderValue::from_static(content_type))
