@@ -81,7 +81,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
                 let method_name = string_to_static_str(method.method.clone());
 
-                module.register_async_method(method_name, move |params, _| {
+                module.register_async_method(method_name, move |params, _, _| {
                     let method_middlewares = method_middlewares.clone();
                     async move {
                         let parsed = params.parse::<JsonValue>()?;
@@ -147,7 +147,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                     subscribe_name,
                     name,
                     unsubscribe_name,
-                    move |params, pending_sink, _| {
+                    move |params, pending_sink, _, _| {
                         let subscription_middlewares = subscription_middlewares.clone();
                         async move {
                             let parsed = params.parse::<JsonValue>()?;
@@ -204,7 +204,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
             rpc_methods.sort();
 
-            module.register_method("rpc_methods", move |_, _| {
+            module.register_method("rpc_methods", move |_, _, _| {
                 Ok::<JsonValue, ErrorObjectOwned>(json!({
                     "version": 1,
                     "methods": rpc_methods
@@ -315,10 +315,10 @@ mod tests {
 
         let mut module = RpcModule::new(());
         module
-            .register_method(PHO, |_, _| Ok::<String, ErrorObjectOwned>(BAR.to_string()))
+            .register_method(PHO, |_, _, _| Ok::<String, ErrorObjectOwned>(BAR.to_string()))
             .unwrap();
         module
-            .register_async_method(TIMEOUT, |_, _| async {
+            .register_async_method(TIMEOUT, |_, _, _| async {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }

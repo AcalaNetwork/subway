@@ -27,15 +27,19 @@
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
 
+use hyper::body::Bytes;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{Body, Method, Request, Response, Uri};
+use hyper::{Method, Uri};
 use jsonrpsee::{
-    core::client::Error as RpcError,
+    core::{
+        client::Error as RpcError,
+        http_helpers::{Body as HttpBody, Request as HttpRequest, Response as HttpResponse},
+        BoxError,
+    },
     types::{Id, RequestSer},
 };
 use std::collections::HashMap;
-use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -97,15 +101,18 @@ impl<S> ProxyGetRequest<S> {
     }
 }
 
-impl<S> Service<Request<Body>> for ProxyGetRequest<S>
+impl<S, B> Service<HttpRequest<B>> for ProxyGetRequest<S>
 where
-    S: Service<Request<Body>, Response = Response<Body>>,
+    S: Service<HttpRequest, Response = HttpResponse>,
     S::Response: 'static,
-    S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
+    S::Error: Into<BoxError> + 'static,
     S::Future: Send + 'static,
+    B: http_body::Body<Data = Bytes> + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<BoxError>,
 {
     type Response = S::Response;
-    type Error = Box<dyn Error + Send + Sync + 'static>;
+    type Error = BoxError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     #[inline]
@@ -113,12 +120,12 @@ where
         self.inner.poll_ready(cx).map_err(Into::into)
     }
 
-    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+    fn call(&mut self, mut req: HttpRequest<B>) -> Self::Future {
         let method = self.methods.get(req.uri().path());
         let modify = method.is_some() && req.method() == Method::GET;
 
         // Proxy the request to the appropriate method call.
-        if modify {
+        let req = if modify {
             // RPC methods are accessed with `POST`.
             *req.method_mut() = Method::POST;
             // Precautionary remove the URI.
@@ -129,14 +136,20 @@ where
                 .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
             req.headers_mut()
                 .insert(ACCEPT, HeaderValue::from_static("application/json"));
-
             // Adjust the body to reflect the method call.
-            let body = Body::from(
-                serde_json::to_string(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
-                    .expect("Valid request; qed"),
-            );
-            req = req.map(|_| body);
-        }
+            // let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
+            // .expect("Valid request; qed");
+
+            // let body = HttpBody::from(bytes);
+            // Adjust the body to reflect the method call.
+            let bytes = serde_json::to_vec(&RequestSer::borrowed(&Id::Number(0), method.unwrap(), None))
+                .expect("Valid request; qed");
+            let body = HttpBody::from(bytes);
+
+            req.map(|_| body)
+        } else {
+            req.map(HttpBody::new)
+        };
 
         // Call the inner service and get a future that resolves to the response.
         let fut = self.inner.call(req);
@@ -151,7 +164,7 @@ where
             }
 
             let body = res.into_body();
-            let bytes = hyper::body::to_bytes(body).await?;
+            let bytes = http_body_util::BodyExt::collect(body).await?.to_bytes();
 
             #[derive(serde::Deserialize, Debug)]
             struct RpcPayload<'a> {
@@ -173,17 +186,16 @@ where
 }
 
 mod response {
-    use jsonrpsee::types::{error::ErrorCode, ErrorObjectOwned, Id, Response, ResponsePayload};
+    use jsonrpsee::{
+        core::http_helpers::{Body as HttpBody, Response as HttpResponse},
+        types::{error::ErrorCode, ErrorObjectOwned, Id, Response, ResponsePayload},
+    };
 
     const JSON: &str = "application/json; charset=utf-8";
 
     /// Create a response body.
-    fn from_template<S: Into<hyper::Body>>(
-        status: hyper::StatusCode,
-        body: S,
-        content_type: &'static str,
-    ) -> hyper::Response<hyper::Body> {
-        hyper::Response::builder()
+    fn from_template(status: hyper::StatusCode, body: impl Into<HttpBody>, content_type: &'static str) -> HttpResponse {
+        HttpResponse::builder()
             .status(status)
             .header("content-type", hyper::header::HeaderValue::from_static(content_type))
             .body(body.into())
@@ -193,11 +205,11 @@ mod response {
     }
 
     /// Create a valid JSON response.
-    pub(crate) fn ok_response(body: String) -> hyper::Response<hyper::Body> {
+    pub(crate) fn ok_response(body: impl Into<HttpBody>) -> HttpResponse {
         from_template(hyper::StatusCode::OK, body, JSON)
     }
     /// Create a response for json internal error.
-    pub(crate) fn internal_error() -> hyper::Response<hyper::Body> {
+    pub(crate) fn internal_error() -> HttpResponse {
         let err = ResponsePayload::<()>::error(ErrorObjectOwned::from(ErrorCode::InternalError));
         let rp = Response::new(err, Id::Null);
         let error = serde_json::to_string(&rp).expect("built from known-good data; qed");

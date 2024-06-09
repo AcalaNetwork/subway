@@ -34,7 +34,7 @@ impl TestServerBuilder {
     pub fn register_method(&mut self, name: &'static str) -> mpsc::Receiver<MockRequest> {
         let (tx, rx) = mpsc::channel::<MockRequest>(100);
         self.module
-            .register_async_method(name, move |params, _| {
+            .register_async_method(name, move |params, _, _| {
                 let tx = tx.clone();
                 let params = params.parse::<JsonValue>().unwrap();
                 async move {
@@ -56,7 +56,7 @@ impl TestServerBuilder {
     ) -> mpsc::Receiver<MockSubscription> {
         let (tx, rx) = mpsc::channel::<MockSubscription>(100);
         self.module
-            .register_subscription(sub_name, method_name, unsub_name, move |params, sink, _| {
+            .register_subscription(sub_name, method_name, unsub_name, move |params, sink, _, _| {
                 let tx = tx.clone();
                 let params = params.parse::<JsonValue>().unwrap();
                 tokio::spawn(async move {
@@ -76,7 +76,7 @@ impl TestServerBuilder {
         unsub_name: &'static str,
     ) {
         self.module
-            .register_subscription(sub_name, method_name, unsub_name, move |_, sink, _| async {
+            .register_subscription(sub_name, method_name, unsub_name, move |_, sink, _, _| async {
                 sink.reject(errors::map_error(Error::Call(ErrorObject::owned(
                     1010,
                     "Invalid Transaction",

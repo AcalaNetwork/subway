@@ -250,10 +250,7 @@ impl Client {
                                     Err(err) => {
                                         tracing::debug!("Request failed: {:?}", err);
                                         match err {
-                                            Error::RequestTimeout
-                                            | Error::Transport(_)
-                                            | Error::RestartNeeded(_)
-                                            | Error::MaxSlotsExceeded => {
+                                            Error::RequestTimeout | Error::Transport(_) | Error::RestartNeeded(_) => {
                                                 tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                                 // make sure it's still connected
@@ -329,10 +326,7 @@ impl Client {
                                     Err(err) => {
                                         tracing::debug!("Subscribe failed: {:?}", err);
                                         match err {
-                                            Error::RequestTimeout
-                                            | Error::Transport(_)
-                                            | Error::RestartNeeded(_)
-                                            | Error::MaxSlotsExceeded => {
+                                            Error::RequestTimeout | Error::Transport(_) | Error::RestartNeeded(_) => {
                                                 tokio::time::sleep(get_backoff_time(&request_backoff_counter)).await;
 
                                                 // make sure it's still connected
