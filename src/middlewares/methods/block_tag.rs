@@ -30,7 +30,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for BlockTagMiddlewar
             .get::<EthApi>()
             .expect("EthApi extension not found");
 
-        Some(Box::new(BlockTagMiddleware::new(eth_api, index)))
+        Some(Box::new(Self::new(eth_api, index)))
     }
 }
 

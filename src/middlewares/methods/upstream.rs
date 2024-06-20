@@ -30,7 +30,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for UpstreamMiddlewar
             .await
             .get::<Client>()
             .expect("Client extension not found");
-        Some(Box::new(UpstreamMiddleware::new(client)))
+        Some(Box::new(Self::new(client)))
     }
 }
 
