@@ -1,5 +1,6 @@
 use crate::extensions::client::Client;
 use crate::middlewares::{CallRequest, CallResult};
+use anyhow::Context;
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -21,15 +22,18 @@ impl Extension for Validator {
     type Config = ValidateConfig;
 
     async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
-        let client = registry.get::<Client>().await.expect("Client extension not found");
+        let client = registry.get::<Client>().await.context("Client extension not found")?;
 
         let clients = client
             .endpoints()
             .iter()
-            .map(|e| Arc::new(Client::with_endpoints([e]).expect("Unable to create client")))
-            .collect();
+            .map(|e| {
+                let client = Client::with_endpoints([e]).context("Failed to connect endpoint")?;
+                Ok(Arc::new(client))
+            })
+            .collect::<Result<Vec<Arc<Client>>, anyhow::Error>>();
 
-        Ok(Self::new(config.clone(), clients))
+        Ok(Self::new(config.clone(), clients?))
     }
 }
 
