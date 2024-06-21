@@ -50,11 +50,11 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_tokio", "html_reports"] }
-pprof = { version = "0.13.0", features = ["flamegraph", "criterion"] }
 futures-util = "0.3.15"
-jsonrpc-ws-server = { version = "18.0.0" }
 jsonrpc-http-server = { version = "18.0.0" }
 jsonrpc-pubsub = { version = "18.0.0" }
+jsonrpc-ws-server = { version = "18.0.0" }
+pprof = { version = "0.13.0", features = ["flamegraph", "criterion"] }
 
 [[bench]]
 name = "bench"
