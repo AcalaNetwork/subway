@@ -36,7 +36,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
             ${{ runner.os }}-cargo-lint-
-           ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-
 
       - name: Run sccache
         uses: mozilla-actions/sccache-action@v0.0.5
