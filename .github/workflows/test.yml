@@ -19,7 +19,7 @@ env:
   SCCACHE_GHA_ENABLED: true
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
