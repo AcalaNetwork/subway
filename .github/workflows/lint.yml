@@ -42,13 +42,10 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.5
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.78.0
-          components: rustfmt, clippy
+        run: make setup
 
       - name: Check format
-        run: cargo fmt --all -- --check
+        run: make fmt-check
 
       - name: Check clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: make clippy
