@@ -51,6 +51,12 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
 
     let rpc_method_weights = MethodWeights::from_config(&config.rpcs.methods);
 
+    // pre-check stage
+    if let Some(r) = &rate_limit_builder {
+        r.pre_check_ip(&rpc_method_weights)?;
+        r.pre_check_connection(&rpc_method_weights)?;
+    }
+
     let request_timeout_seconds = server_builder.config.request_timeout_seconds;
 
     let metrics = get_rpc_metrics(&extensions_registry).await;

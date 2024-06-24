@@ -2,7 +2,7 @@ use crate::config::RpcMethod;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default)]
-pub struct MethodWeights(BTreeMap<String, u32>);
+pub struct MethodWeights(pub(crate) BTreeMap<String, u32>);
 
 impl MethodWeights {
     pub fn add(&mut self, method: &str, weight: u32) {

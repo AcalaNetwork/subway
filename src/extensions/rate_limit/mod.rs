@@ -1,3 +1,4 @@
+use anyhow::bail;
 use governor::{DefaultKeyedRateLimiter, Jitter, Quota, RateLimiter};
 use serde::Deserialize;
 use std::num::NonZeroU32;
@@ -90,6 +91,45 @@ impl RateLimitBuilder {
             }
         }
     }
+
+    pub fn pre_check_connection(&self, method_weights: &MethodWeights) -> anyhow::Result<()> {
+        if let Some(ref rule) = self.config.connection {
+            let burst = NonZeroU32::new(rule.burst).unwrap();
+            let period = Duration::from_secs(rule.period_secs);
+            let quota = build_quota(burst, period);
+            let limiter = RateLimiter::direct(quota);
+
+            for (method, weight) in &method_weights.0 {
+                if let Some(n) = NonZeroU32::new(*weight) {
+                    if limiter.check_n(n).is_err() {
+                        bail!("`{method}` weight config too big for connection rate limit: {}", n);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn pre_check_ip(&self, method_weights: &MethodWeights) -> anyhow::Result<()> {
+        if let Some(ref rule) = self.config.ip {
+            let burst = NonZeroU32::new(rule.burst).unwrap();
+            let period = Duration::from_secs(rule.period_secs);
+            let quota = build_quota(burst, period);
+            let limiter = RateLimiter::direct(quota);
+
+            for (method, weight) in &method_weights.0 {
+                if let Some(n) = NonZeroU32::new(*weight) {
+                    if limiter.check_n(n).is_err() {
+                        bail!("`{method}` weight config too big for ip rate limit: {}", n);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn connection_limit(&self, method_weights: MethodWeights) -> Option<ConnectionRateLimitLayer> {
         if let Some(ref rule) = self.config.connection {
             let burst = NonZeroU32::new(rule.burst).unwrap();
