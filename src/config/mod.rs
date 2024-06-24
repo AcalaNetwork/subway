@@ -1,12 +1,16 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use regex::{Captures, Regex};
 use std::env;
 use std::fs;
+use std::num::NonZeroU32;
 use std::path;
+use std::time::Duration;
 
 use garde::Validate;
+use governor::RateLimiter;
 use serde::Deserialize;
 
+use crate::extensions::rate_limit::build_quota;
 use crate::extensions::ExtensionsConfig;
 pub use rpc::*;
 
@@ -208,6 +212,43 @@ pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
 
     // validate use garde::Validate
     config.validate(&())?;
+
+    if let Some(rate_limit) = config.extensions.rate_limit.as_ref() {
+        if let Some(ref rule) = rate_limit.ip {
+            let burst = NonZeroU32::new(rule.burst).unwrap();
+            let period = Duration::from_secs(rule.period_secs);
+            let quota = build_quota(burst, period);
+            let limiter = RateLimiter::direct(quota);
+
+            for method in &config.rpcs.methods {
+                if let Some(n) = NonZeroU32::new(method.rate_limit_weight) {
+                    if limiter.check_n(n).is_err() {
+                        bail!("`{}` weight config too big for ip rate limit: {}", method.method, n);
+                    }
+                }
+            }
+        }
+
+        if let Some(ref rule) = rate_limit.connection {
+            let burst = NonZeroU32::new(rule.burst).unwrap();
+            let period = Duration::from_secs(rule.period_secs);
+            let quota = build_quota(burst, period);
+            let limiter = RateLimiter::direct(quota);
+
+            for method in &config.rpcs.methods {
+                if let Some(n) = NonZeroU32::new(method.rate_limit_weight) {
+                    if limiter.check_n(n).is_err() {
+                        bail!(
+                            "`{}` weight config too big for connection rate limit: {}",
+                            method.method,
+                            n
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     // since endpoints connection test is async
     // we can't intergrate it into garde::Validate
     // and it's not a static validation like format, length, .etc

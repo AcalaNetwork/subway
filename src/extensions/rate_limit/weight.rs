@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Default)]
-pub struct MethodWeights(pub(crate) Arc<BTreeMap<String, u32>>);
+pub struct MethodWeights(Arc<BTreeMap<String, u32>>);
 
 impl MethodWeights {
     pub fn get(&self, method: &str) -> u32 {
