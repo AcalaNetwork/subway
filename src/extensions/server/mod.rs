@@ -152,10 +152,8 @@ impl SubwayServerBuilder {
             methods: Methods,
             stop_handle: StopHandle,
             rpc_metrics: RpcMetrics,
-            // TODO: this is not cheap.
             svc_builder: TowerServiceBuilder<RpcMiddleware, HttpMiddleware>,
             rate_limit_builder: Option<Arc<RateLimitBuilder>>,
-            // TODO: this is not cheap.
             rpc_method_weights: MethodWeights,
         }
 
