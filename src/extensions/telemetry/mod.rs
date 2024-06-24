@@ -2,6 +2,7 @@ use std::env;
 
 use async_trait::async_trait;
 use opentelemetry::{global, trace::TraceError};
+use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::Tracer;
 use serde::Deserialize;
 
@@ -11,6 +12,8 @@ use super::{Extension, ExtensionRegistry};
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryProvider {
     None,
+    #[serde(rename = "otlp")]
+    OTLP,
     Datadog,
     Jaeger,
 }
@@ -58,7 +61,23 @@ pub fn setup_telemetry(options: &TelemetryConfig) -> Result<Option<Tracer>, Trac
     let service_name = options.service_name.clone().unwrap_or_else(|| "subway".into());
 
     let tracer = match options.provider {
+        TelemetryProvider::OTLP => {
+            let tracer = opentelemetry_otlp::new_pipeline().tracing();
+
+            let mut exporter = opentelemetry_otlp::new_exporter().tonic();
+
+            if let Some(ref agent_endpoint) = options.agent_endpoint {
+                exporter = exporter.with_endpoint(agent_endpoint.clone());
+            }
+
+            let tracer = tracer
+                .with_exporter(exporter)
+                .install_batch(opentelemetry_sdk::runtime::Tokio)?;
+
+            Some(tracer)
+        }
         TelemetryProvider::Jaeger => {
+            #[allow(deprecated)]
             let mut tracer = opentelemetry_jaeger::new_agent_pipeline().with_service_name(service_name);
 
             if let Some(ref agent_endpoint) = options.agent_endpoint {
