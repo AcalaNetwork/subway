@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use regex::{Captures, Regex};
 use std::env;
 use std::fs;
@@ -215,7 +215,7 @@ pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
 
     if let Some(rate_limit) = config.extensions.rate_limit.as_ref() {
         if let Some(ref rule) = rate_limit.ip {
-            let burst = NonZeroU32::new(rule.burst).unwrap();
+            let burst = NonZeroU32::new(rule.burst).ok_or(anyhow!("burst could not be zero"))?;
             let period = Duration::from_secs(rule.period_secs);
             let quota = build_quota(burst, period);
             let limiter = RateLimiter::direct(quota);
@@ -230,7 +230,7 @@ pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
         }
 
         if let Some(ref rule) = rate_limit.connection {
-            let burst = NonZeroU32::new(rule.burst).unwrap();
+            let burst = NonZeroU32::new(rule.burst).ok_or(anyhow!("burst could not be zero"))?;
             let period = Duration::from_secs(rule.period_secs);
             let quota = build_quota(burst, period);
             let limiter = RateLimiter::direct(quota);
