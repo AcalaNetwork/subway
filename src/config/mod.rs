@@ -1,16 +1,12 @@
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use regex::{Captures, Regex};
 use std::env;
 use std::fs;
-use std::num::NonZeroU32;
 use std::path;
-use std::time::Duration;
 
 use garde::Validate;
-use governor::RateLimiter;
 use serde::Deserialize;
 
-use crate::extensions::rate_limit::build_quota;
 use crate::extensions::ExtensionsConfig;
 pub use rpc::*;
 
@@ -215,35 +211,25 @@ pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
 
     if let Some(rate_limit) = config.extensions.rate_limit.as_ref() {
         if let Some(ref rule) = rate_limit.ip {
-            let burst = NonZeroU32::new(rule.burst).ok_or(anyhow!("burst could not be zero"))?;
-            let period = Duration::from_secs(rule.period_secs);
-            let quota = build_quota(burst, period);
-            let limiter = RateLimiter::direct(quota);
-
             for method in &config.rpcs.methods {
-                if let Some(n) = NonZeroU32::new(method.rate_limit_weight) {
-                    if limiter.check_n(n).is_err() {
-                        bail!("`{}` weight config too big for ip rate limit: {}", method.method, n);
-                    }
+                if method.rate_limit_weight > rule.burst {
+                    bail!(
+                        "`{}` rate_limit_weight is too big for ip: {}",
+                        method.method,
+                        method.rate_limit_weight,
+                    );
                 }
             }
         }
 
         if let Some(ref rule) = rate_limit.connection {
-            let burst = NonZeroU32::new(rule.burst).ok_or(anyhow!("burst could not be zero"))?;
-            let period = Duration::from_secs(rule.period_secs);
-            let quota = build_quota(burst, period);
-            let limiter = RateLimiter::direct(quota);
-
             for method in &config.rpcs.methods {
-                if let Some(n) = NonZeroU32::new(method.rate_limit_weight) {
-                    if limiter.check_n(n).is_err() {
-                        bail!(
-                            "`{}` weight config too big for connection rate limit: {}",
-                            method.method,
-                            n
-                        );
-                    }
+                if method.rate_limit_weight > rule.burst {
+                    bail!(
+                        "`{}` rate_limit_weight is too big for connection: {}",
+                        method.method,
+                        method.rate_limit_weight,
+                    );
                 }
             }
         }
@@ -341,5 +327,13 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("Unable to connect to all endpoints"));
+    }
+
+    #[tokio::test]
+    async fn validate_config_fails_for_too_big_rate_limit_weight() {
+        let config = read_config("tests/configs/big_rate_limit_weight.yml").expect("Unable to read config file");
+        let result = validate(&config).await;
+        assert!(result.is_err());
+        assert!(result.err().unwrap().to_string().contains("rate_limit_weight"));
     }
 }
