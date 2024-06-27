@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use regex::{Captures, Regex};
 use std::env;
 use std::fs;
@@ -208,6 +208,33 @@ pub async fn validate(config: &Config) -> Result<(), anyhow::Error> {
 
     // validate use garde::Validate
     config.validate(&())?;
+
+    if let Some(rate_limit) = config.extensions.rate_limit.as_ref() {
+        if let Some(ref rule) = rate_limit.ip {
+            for method in &config.rpcs.methods {
+                if method.rate_limit_weight > rule.burst {
+                    bail!(
+                        "`{}` rate_limit_weight is too big for ip: {}",
+                        method.method,
+                        method.rate_limit_weight,
+                    );
+                }
+            }
+        }
+
+        if let Some(ref rule) = rate_limit.connection {
+            for method in &config.rpcs.methods {
+                if method.rate_limit_weight > rule.burst {
+                    bail!(
+                        "`{}` rate_limit_weight is too big for connection: {}",
+                        method.method,
+                        method.rate_limit_weight,
+                    );
+                }
+            }
+        }
+    }
+
     // since endpoints connection test is async
     // we can't intergrate it into garde::Validate
     // and it's not a static validation like format, length, .etc
@@ -300,5 +327,13 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("Unable to connect to all endpoints"));
+    }
+
+    #[tokio::test]
+    async fn validate_config_fails_for_too_big_rate_limit_weight() {
+        let config = read_config("tests/configs/big_rate_limit_weight.yml").expect("Unable to read config file");
+        let result = validate(&config).await;
+        assert!(result.is_err());
+        assert!(result.err().unwrap().to_string().contains("rate_limit_weight"));
     }
 }

@@ -1,0 +1,5 @@
+methods:
+  - method: eth_chainId
+    cache:
+      size: 1
+    rate_limit_weight: 21

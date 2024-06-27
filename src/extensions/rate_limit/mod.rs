@@ -90,6 +90,7 @@ impl RateLimitBuilder {
             }
         }
     }
+
     pub fn connection_limit(&self, method_weights: MethodWeights) -> Option<ConnectionRateLimitLayer> {
         if let Some(ref rule) = self.config.connection {
             let burst = NonZeroU32::new(rule.burst).unwrap();

@@ -1,4 +1,4 @@
-use crate::{extensions::rate_limit::MethodWeights, utils::errors};
+use crate::extensions::rate_limit::MethodWeights;
 use futures::{future::BoxFuture, FutureExt};
 use governor::{DefaultKeyedRateLimiter, Jitter};
 use jsonrpsee::{
@@ -86,13 +86,10 @@ where
         let weight = self.method_weights.get(req.method_name());
         async move {
             if let Some(n) = NonZeroU32::new(weight) {
-                if limiter
+                limiter
                     .until_key_n_ready_with_jitter(&ip_addr, n, jitter)
                     .await
-                    .is_err()
-                {
-                    return MethodResponse::error(req.id, errors::failed("rate limit exceeded"));
-                }
+                    .expect("check_n have been done during init");
             }
             service.call(req).await
         }
