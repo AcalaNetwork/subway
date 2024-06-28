@@ -21,7 +21,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for CrazyMiddleware {
         method: &RpcMethod,
         _extensions: &TypeRegistryRef,
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
-        Some(Box::new(CrazyMiddleware::new(method.method == "go_crazy")))
+        Some(Box::new(Self::new(method.method == "go_crazy")))
     }
 }
 
