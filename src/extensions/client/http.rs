@@ -16,32 +16,16 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn new(endpoints: Vec<String>) -> Result<(Option<Self>, Vec<String>), Error> {
-        let mut other_urls = vec![];
+    pub fn new(endpoints: &[String]) -> Result<Self, Error> {
         let clients = endpoints
-            .into_iter()
-            .filter_map(|url| {
-                let t_url = url.to_lowercase();
-                if t_url.starts_with("http://") || t_url.starts_with("https://") {
-                    Some(RpcClient::builder().build(url))
-                } else {
-                    other_urls.push(url);
-                    None
-                }
-            })
+            .iter()
+            .map(|url| RpcClient::builder().build(url))
             .collect::<Result<Vec<_>, _>>()?;
 
-        if clients.is_empty() {
-            Ok((None, other_urls))
-        } else {
-            Ok((
-                Some(Self {
-                    clients,
-                    last_sent: AtomicUsize::new(0),
-                }),
-                other_urls,
-            ))
-        }
+        Ok(Self {
+            clients,
+            last_sent: AtomicUsize::new(0),
+        })
     }
 
     /// Sends a request to one of the clients
