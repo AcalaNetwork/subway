@@ -59,6 +59,8 @@ pub struct ServerConfig {
     pub port: u16,
     pub listen_address: String,
     pub max_connections: u32,
+    #[serde(default = "default_max_subscriptions_per_connection")]
+    pub max_subscriptions_per_connection: u32,
     pub max_batch_size: Option<u32>,
     #[serde(default)]
     pub http_methods: Vec<HttpMethodsConfig>,
@@ -70,6 +72,10 @@ pub struct ServerConfig {
 
 fn default_request_timeout_seconds() -> u64 {
     120
+}
+
+fn default_max_subscriptions_per_connection() -> u32 {
+    1024
 }
 
 #[async_trait]
@@ -172,6 +178,7 @@ impl SubwayServerBuilder {
                 .set_http_middleware(http_middleware)
                 .set_batch_request_config(batch_request_config)
                 .max_connections(config.max_connections)
+                .max_subscriptions_per_connection(config.max_subscriptions_per_connection)
                 .set_id_provider(RandomStringIdProvider::new(16))
                 .to_service_builder(),
             rate_limit_builder,

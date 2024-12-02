@@ -36,6 +36,7 @@ async fn upstream_error_propagate() {
                 listen_address: "0.0.0.0".to_string(),
                 port: 0,
                 max_connections: 10,
+                max_subscriptions_per_connection: 1024,
                 max_batch_size: None,
                 request_timeout_seconds: 120,
                 http_methods: Vec::new(),

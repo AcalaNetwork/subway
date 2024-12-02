@@ -259,6 +259,7 @@ mod tests {
                     listen_address: "127.0.0.1".to_string(),
                     port,
                     max_connections: 1024,
+                    max_subscriptions_per_connection: 1024,
                     max_batch_size,
                     request_timeout_seconds: request_timeout_seconds.unwrap_or(10),
                     http_methods: Vec::new(),
