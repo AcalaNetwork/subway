@@ -28,7 +28,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for DelayMiddleware {
     ) -> Option<Box<dyn Middleware<CallRequest, CallResult>>> {
         method
             .delay_ms
-            .map(|delay| Box::new(DelayMiddleware::new(delay)) as Box<dyn Middleware<CallRequest, CallResult>>)
+            .map(|delay| Box::new(Self::new(delay)) as Box<dyn Middleware<CallRequest, CallResult>>)
     }
 }
 
