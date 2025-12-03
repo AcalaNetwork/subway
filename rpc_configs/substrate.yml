@@ -98,6 +98,15 @@ methods:
         optional: true
         inject: true
 
+  - method: state_getReadProof
+    params:
+      - name: keys
+        ty: 'Vec<StorageKey>'
+      - name: at
+        ty: BlockHash
+        optional: true
+        inject: true
+
   - method: childstate_getKeysPaged
     params:
       - name: childStorageKey
