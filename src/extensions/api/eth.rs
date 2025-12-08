@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
@@ -33,7 +34,7 @@ impl Extension for EthApi {
     type Config = EthApiConfig;
 
     async fn from_config(config: &Self::Config, registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
-        let client = registry.get::<Client>().await.expect("Client not found");
+        let client = registry.get::<Client>().await.context("Client not found")?;
 
         Ok(Self::new(client, Duration::from_secs(config.stale_timeout_seconds)))
     }
