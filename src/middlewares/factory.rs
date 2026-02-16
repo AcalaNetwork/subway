@@ -33,7 +33,7 @@ pub async fn create_method_middleware(
         "validate" => validate::ValidateMiddleware::build(method, extensions).await,
         #[cfg(test)]
         "crazy" => testing::CrazyMiddleware::build(method, extensions).await,
-        _ => panic!("Unknown method middleware: {}", name),
+        _ => panic!("Unknown method middleware: {name}"),
     }
 }
 
@@ -58,6 +58,6 @@ pub async fn create_subscription_middleware(
     match name {
         "upstream" => upstream::UpstreamMiddleware::build(method, extensions).await,
         "merge_subscription" => merge_subscription::MergeSubscriptionMiddleware::build(method, extensions).await,
-        _ => panic!("Unknown subscription middleware: {}", name),
+        _ => panic!("Unknown subscription middleware: {name}"),
     }
 }

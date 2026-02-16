@@ -256,7 +256,7 @@ impl SubwayServerBuilder {
                             });
                         }
 
-                        service.call(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+                        service.call(req).await.map_err(|e| anyhow::anyhow!("{e:?}"))
                     }
                     .boxed()
                 });

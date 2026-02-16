@@ -136,7 +136,7 @@ impl<Request: Debug + Send + 'static, Result: Send + 'static> Middlewares<Reques
                 Box::new(move |request, context| async move { middleware.call(request, context, next2).await }.boxed());
         }
 
-        let req = format!("{:?}", request);
+        let req = format!("{request:?}");
 
         let mut task_handle = tokio::spawn(
             async move {

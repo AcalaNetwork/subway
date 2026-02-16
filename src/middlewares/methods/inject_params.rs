@@ -192,7 +192,7 @@ mod tests {
     }
 
     fn bypass_cache(context: &TypeRegistry) -> bool {
-        context.get::<BypassCache>().map_or(false, |x| x.0)
+        context.get::<BypassCache>().is_some_and(|x| x.0)
     }
 
     async fn create_client() -> ExecutionContext {

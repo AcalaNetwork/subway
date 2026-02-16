@@ -75,7 +75,7 @@ pub mod telemetry {
                 span.set_status(Status::error(err.message().to_string()));
                 span.set_attribute(KeyValue::new("error.type", format!("{}", ErrorCode::from(err.code()))));
                 span.set_attribute(KeyValue::new("error.msg", err.message().to_string()));
-                span.set_attribute(KeyValue::new("error.stack", format!("{}", err)));
+                span.set_attribute(KeyValue::new("error.stack", format!("{err}")));
             });
         }
     }

@@ -130,7 +130,7 @@ mod tests {
         batch2.await.unwrap();
         batch3.await.unwrap();
         let duration = start.elapsed().as_millis();
-        println!("duration: {} ms", duration);
+        println!("duration: {duration} ms");
         // should take between 800..900 millis. each 100ms period handles 10 calls
         assert!(duration > 800 && duration < 900);
     }

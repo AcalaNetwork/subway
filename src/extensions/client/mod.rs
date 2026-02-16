@@ -62,7 +62,7 @@ pub struct ClientConfig {
 fn validate_endpoint(endpoint: &str, _context: &()) -> garde::Result {
     endpoint
         .parse::<jsonrpsee::client_transport::ws::Uri>()
-        .map_err(|_| garde::Error::new(format!("Invalid endpoint format: {}", endpoint)))?;
+        .map_err(|_| garde::Error::new(format!("Invalid endpoint format: {endpoint}")))?;
 
     Ok(())
 }

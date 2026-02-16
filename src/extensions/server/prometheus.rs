@@ -18,7 +18,7 @@ impl Display for Protocol {
             Self::Ws => "ws",
             Self::Http => "http",
         };
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 

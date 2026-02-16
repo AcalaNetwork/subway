@@ -110,7 +110,7 @@ impl RequestType {
             RequestType::Sync => "sync",
             RequestType::Async => "async",
         };
-        format!("{}/{}", request_type_name, name)
+        format!("{request_type_name}/{name}")
     }
 }
 
@@ -336,10 +336,10 @@ fn ws_concurrent_conn_calls(
     let fast_call = request.methods()[0];
     assert!(fast_call.starts_with("fast_call"));
 
-    let bench_name = format!("{}/{}", name, fast_call);
+    let bench_name = format!("{name}/{fast_call}");
     let mut group = crit.benchmark_group(request.group_name(&bench_name));
     for conns in concurrent_conns.iter() {
-        group.bench_function(format!("{}", conns), |b| {
+        group.bench_function(format!("{conns}"), |b| {
             b.to_async(rt).iter_with_setup(
                 || {
                     let clients = (0..*conns).map(|_| ws_client(url)).collect::<Vec<_>>();
@@ -378,7 +378,7 @@ fn ws_concurrent_conn_subs(
 ) {
     let mut group = crit.benchmark_group(request.group_name(name));
     for conns in concurrent_conns.iter() {
-        group.bench_function(format!("{}", conns), |b| {
+        group.bench_function(format!("{conns}"), |b| {
             b.to_async(rt).iter_with_setup(
                 || {
                     let clients = (0..*conns).map(|_| ws_client(url)).collect::<Vec<_>>();
@@ -434,7 +434,7 @@ fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &st
 
 fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>, name: &str, request: RequestType) {
     for method in request.methods() {
-        let bench_name = format!("{}/{}", name, method);
+        let bench_name = format!("{name}/{method}");
         crit.bench_function(&request.group_name(&bench_name), |b| {
             b.to_async(rt).iter(|| async {
                 black_box(client.request::<String, _>(method, rpc_params![]).await.unwrap());
@@ -454,7 +454,7 @@ fn batch_round_trip(
     let fast_call = request.methods()[0];
     assert!(fast_call.starts_with("fast_call"));
 
-    let bench_name = format!("{}/{}", name, fast_call);
+    let bench_name = format!("{name}/{fast_call}");
     let mut group = crit.benchmark_group(request.group_name(&bench_name));
     for batch_size in [2, 5, 10, 50, 100usize].iter() {
         let mut batch = BatchRequestBuilder::new();
@@ -534,7 +534,7 @@ fn ws_inject_calls(
     request: RequestType,
 ) {
     let method = ASYNC_INJECT_CALL;
-    let bench_name = format!("{}/{}", name, method);
+    let bench_name = format!("{name}/{method}");
     crit.bench_function(&request.group_name(&bench_name), |b| {
         b.to_async(rt).iter(|| async {
             black_box(client.request::<String, _>(method, rpc_params![0_u64]).await.unwrap());

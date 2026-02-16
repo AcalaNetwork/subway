@@ -26,7 +26,7 @@ impl<T: Clone> ValueHandle<T> {
             tokio::select! {
                 res = write_guard.changed() => {
                     if let Err(e) = res {
-                        panic!("Changed channel closed: {}", e);
+                        panic!("Changed channel closed: {e}");
                     }
                     if let Some(value) = (*write_guard).borrow().to_owned() {
                         return value;

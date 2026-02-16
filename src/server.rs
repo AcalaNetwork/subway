@@ -182,7 +182,7 @@ pub async fn build(config: Config) -> anyhow::Result<SubwayServerHandle> {
                                     tracer.span_ok();
                                 }
                                 Err(err) => {
-                                    tracer.span_error(&errors::failed(format!("{:?}", err)));
+                                    tracer.span_error(&errors::failed(format!("{err:?}")));
                                 }
                             };
 

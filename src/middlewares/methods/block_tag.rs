@@ -50,7 +50,7 @@ impl BlockTagMiddleware {
                     "finalized" => {
                         let finalized_head = self.api.current_finalized_head();
                         if let Some((_, finalized_number)) = finalized_head {
-                            Some(format!("0x{:x}", finalized_number).into())
+                            Some(format!("0x{finalized_number:x}").into())
                         } else {
                             // cannot determine finalized
                             context.insert(BypassCache(true));
@@ -61,7 +61,7 @@ impl BlockTagMiddleware {
                         // bypass cache for latest block to avoid caching forks
                         context.insert(BypassCache(true));
                         let (_, number) = self.api.get_head().read().await;
-                        Some(format!("0x{:x}", number).into())
+                        Some(format!("0x{number:x}").into())
                     }
                     "earliest" => None, // no need to replace earliest because it's always going to be genesis
                     "pending" | "safe" => {
@@ -153,7 +153,7 @@ mod tests {
     }
 
     fn bypass_cache(context: &TypeRegistry) -> bool {
-        context.get::<BypassCache>().map_or(false, |x| x.0)
+        context.get::<BypassCache>().is_some_and(|x| x.0)
     }
 
     async fn create_client() -> (ExecutionContext, EthApi) {

@@ -56,8 +56,7 @@ fn validate_params_with_name(method_name: &str) -> impl FnOnce(&[MethodParam], &
         // ensure each method has only one param with inject=true
         if params.iter().filter(|x| x.inject).count() > 1 {
             return Err(garde::Error::new(format!(
-                "method {} has more than one inject param",
-                method_name
+                "method {method_name} has more than one inject param"
             )));
         }
         // ensure there is no required param after optional param
@@ -67,8 +66,7 @@ fn validate_params_with_name(method_name: &str) -> impl FnOnce(&[MethodParam], &
                 has_optional = true;
             } else if has_optional {
                 return Err(garde::Error::new(format!(
-                    "method {} has required param after optional param",
-                    method_name
+                    "method {method_name} has required param after optional param"
                 )));
             }
         }
