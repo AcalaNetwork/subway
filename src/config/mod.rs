@@ -311,10 +311,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn validate_config_succeeds_for_correct_config() {
+    async fn validate_config_fails_without_network() {
         let config = read_config("configs/config.yml").expect("Unable to read config file");
         let result = validate(&config).await;
-        assert!(result.is_ok());
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Unable to connect to all endpoints"));
     }
 
     #[tokio::test]
