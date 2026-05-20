@@ -217,6 +217,9 @@ fn config() -> Config {
                     format!("ws://{}", SERVER_TWO_ENDPOINT),
                 ],
                 shuffle_endpoints: false,
+                connection_timeout_seconds: None,
+                request_timeout_seconds: None,
+                retries: None,
             }),
             server: Some(ServerConfig {
                 listen_address: SUBWAY_SERVER_ADDR.to_string(),

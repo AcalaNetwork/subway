@@ -254,6 +254,9 @@ mod tests {
                 client: Some(ClientConfig {
                     endpoints: vec![endpoint],
                     shuffle_endpoints: false,
+                    request_timeout_seconds: None,
+                    connection_timeout_seconds: None,
+                    retries: None,
                 }),
                 server: Some(ServerConfig {
                     listen_address: "127.0.0.1".to_string(),
