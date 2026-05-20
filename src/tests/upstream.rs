@@ -31,6 +31,9 @@ async fn upstream_error_propagate() {
             client: Some(ClientConfig {
                 endpoints: vec![format!("ws://{addr}")],
                 shuffle_endpoints: false,
+                request_timeout_seconds: None,
+                connection_timeout_seconds: None,
+                retries: None,
             }),
             server: Some(ServerConfig {
                 listen_address: "0.0.0.0".to_string(),

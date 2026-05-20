@@ -57,6 +57,18 @@ pub struct ClientConfig {
     pub endpoints: Vec<String>,
     #[serde(default = "bool_true")]
     pub shuffle_endpoints: bool,
+    /// Per-upstream request timeout in seconds. Defaults to 30s if unset.
+    /// Increase when upstream chains may take longer than 30s to respond to
+    /// heavy storage queries.
+    #[serde(default)]
+    pub request_timeout_seconds: Option<u64>,
+    /// Per-upstream connection (handshake) timeout in seconds. Defaults to 30s if unset.
+    #[serde(default)]
+    pub connection_timeout_seconds: Option<u64>,
+    /// Number of retries to apply per upstream call before rotating endpoints.
+    /// Defaults to the internal client default if unset.
+    #[serde(default)]
+    pub retries: Option<u32>,
 }
 
 fn validate_endpoint(endpoint: &str, _context: &()) -> garde::Result {
@@ -134,13 +146,16 @@ impl Extension for Client {
     type Config = ClientConfig;
 
     async fn from_config(config: &Self::Config, _registry: &ExtensionRegistry) -> Result<Self, anyhow::Error> {
-        if config.shuffle_endpoints {
+        let request_timeout = config.request_timeout_seconds.map(Duration::from_secs);
+        let connection_timeout = config.connection_timeout_seconds.map(Duration::from_secs);
+        let endpoints = if config.shuffle_endpoints {
             let mut endpoints = config.endpoints.clone();
             endpoints.shuffle(&mut thread_rng());
-            Ok(Self::new(endpoints, None, None, None)?)
+            endpoints
         } else {
-            Ok(Self::new(config.endpoints.clone(), None, None, None)?)
-        }
+            config.endpoints.clone()
+        };
+        Ok(Self::new(endpoints, request_timeout, connection_timeout, config.retries)?)
     }
 }
 
