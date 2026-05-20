@@ -143,35 +143,18 @@ git push
 git push origin "$TAG_NAME"
 
 # Create GitHub release
-print_info "Creating GitHub release..."
+print_info "Creating GitHub release with auto-generated notes..."
 
-# Prepare release notes with auto-generated content
-RELEASE_NOTES="## $NEW_VERSION
-
-This is the $NEW_VERSION release of subway.
-
-### Installation
-
-\`\`\`bash
-cargo install subway --version $NEW_VERSION
-\`\`\`
-
-Or download the prebuilt binary from the assets below.
-
-### What's Changed
-
-Full changelog: https://github.com/AcalaNetwork/subway/compare/v${CURRENT_VERSION}...v${NEW_VERSION}"
-
-# Create the release
+# Create the release with auto-generated notes
 if [ "$PRE_RELEASE" = true ]; then
     gh release create "$TAG_NAME" \
         --title "$TAG_NAME" \
-        --notes "$RELEASE_NOTES" \
+        --generate-notes \
         --prerelease
 else
     gh release create "$TAG_NAME" \
         --title "$TAG_NAME" \
-        --notes "$RELEASE_NOTES"
+        --generate-notes
 fi
 
 print_info "Release $NEW_VERSION created successfully!"
