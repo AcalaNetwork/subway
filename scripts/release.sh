@@ -127,9 +127,13 @@ if ! grep -q "^version = \"$NEW_VERSION\"" Cargo.toml; then
     exit 1
 fi
 
-# Commit the version bump
-print_info "Committing version bump..."
-git add Cargo.toml
+# Run cargo check to update Cargo.lock
+print_info "Running cargo check to update Cargo.lock..."
+cargo check
+
+# Commit the version bump and Cargo.lock
+print_info "Committing version bump and Cargo.lock..."
+git add Cargo.toml Cargo.lock
 git commit -m "Bump version to $NEW_VERSION"
 
 # Create git tag
