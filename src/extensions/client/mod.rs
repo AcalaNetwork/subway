@@ -155,7 +155,12 @@ impl Extension for Client {
         } else {
             config.endpoints.clone()
         };
-        Ok(Self::new(endpoints, request_timeout, connection_timeout, config.retries)?)
+        Ok(Self::new(
+            endpoints,
+            request_timeout,
+            connection_timeout,
+            config.retries,
+        )?)
     }
 }
 
