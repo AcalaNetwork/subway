@@ -1,6 +1,6 @@
 [package]
 name = "subway"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Acala Developers <hello@acala.network>"]
 repository = "https://github.com/AcalaNetwork/subway"
 description = "Substrate JSON RPC gateway"
