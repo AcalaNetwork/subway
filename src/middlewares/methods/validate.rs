@@ -29,7 +29,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for ValidateMiddlewar
             .get::<Validator>()
             .expect("Validator extension not found");
 
-        Some(Box::new(ValidateMiddleware::new(validate)))
+        Some(Box::new(Self::new(validate)))
     }
 }
 

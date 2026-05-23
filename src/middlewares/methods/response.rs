@@ -25,7 +25,7 @@ impl MiddlewareBuilder<RpcMethod, CallRequest, CallResult> for ResponseMiddlewar
         method
             .response
             .as_ref()
-            .map(|resp| Box::new(ResponseMiddleware::new(resp.clone())) as Box<dyn Middleware<CallRequest, CallResult>>)
+            .map(|resp| Box::new(Self::new(resp.clone())) as Box<dyn Middleware<CallRequest, CallResult>>)
     }
 }
 
